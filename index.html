@@ -126,11 +126,13 @@ async function sendMessage() {
 
     chatbox.scrollTop = chatbox.scrollHeight;
 
-    let response = await fetch(`http://127.0.0.1:8000/chat?prompt=${encodeURIComponent(message)}`);
+    let response = await fetch(`/chat?prompt=${encodeURIComponent(message)}`);
     let data = await response.json();
 
     // Bot message
-    chatbox.innerHTML += `<div class="message bot">${data}</div>`;
+    let reply = typeof data === "string" ? data : data.error || JSON.stringify(data);
+    
+    chatbox.innerHTML += `<div class="message bot">${reply}</div>`;
 
     chatbox.scrollTop = chatbox.scrollHeight;
 }
