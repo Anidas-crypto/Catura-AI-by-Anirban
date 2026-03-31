@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi.responses import FileResponse
 import requests
 import os
 
@@ -8,7 +8,7 @@ HF_API_KEY = os.getenv("HF_API_KEY")
 
 @app.get("/")
 def home():
-    return {"status": "AI running 🚀"}
+    return FileResponse("index.html")
 
 @app.get("/chat")
 def chat(prompt: str):
