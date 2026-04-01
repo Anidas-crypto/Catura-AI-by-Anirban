@@ -1,9 +1,12 @@
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 import requests
 import os
 
 app = FastAPI()
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 HF_API_KEY = os.getenv("HF_API_KEY")
 
