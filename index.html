@@ -1,144 +1,18 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<title>Drache AI</title>
-<link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drache AI</title>
+    <link rel="stylesheet" a href="style.css">
 </head>
 <body>
-
-<!-- HOME SCREEN -->
-<div class="home-screen" id="homeScreen">
-
-  <nav class="nav">
-    <div class="nav-brand">
-      <div class="brand-dot">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-          <path d="M22 2L11 13" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="white" fill-opacity="0.3"/>
-        </svg>
-      </div>
-      Drache AI
+    <div class="header">Drache AI</div>
+    <div id="chatbox"></div>
+    <div class="input-area">
+        <input id="input" placeholder="Type a message..." />
+        <button onclick="sendMessage()">➤</button>
     </div>
-  </nav>
-
-  <div class="home-main">
-
-    <div class="hero">
-      <div class="hero-greeting" id="dateDisplay"></div>
-      <div class="hero-title">What can I <span>help you with?</span></div>
-      <div class="hero-sub">Search the web, write code, analyze docs, or just chat.</div>
-    </div>
-
-    <!-- Home search bar (triggers chat) -->
-    <div class="search-wrap">
-      <div class="search-box">
-        <div class="search-input-row">
-          <svg class="search-icon" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-            <circle cx="7" cy="7" r="5"/><path d="M11 11l3 3"/>
-          </svg>
-          <input class="search-input" id="homeInput" placeholder="Ask anything..." />
-          <button class="send-btn" id="homeSendBtn" title="Send">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-              <path d="M22 2L11 13" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" fill="white" fill-opacity="0.25"/>
-            </svg>
-          </button>
-        </div>
-        <div class="search-footer">
-          <div class="search-pills">
-            <button class="pill active" data-pill>
-              <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="8" r="6"/><path d="M8 3v5l3 3"/></svg>
-              Web search
-            </button>
-            <button class="pill" data-pill>
-              <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="12" height="10" rx="1"/><path d="M5 7h6M5 10h4"/></svg>
-              Docs
-            </button>
-            <button class="pill" data-pill>
-              <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><polyline points="2,12 5,8 8,10 11,5 14,7"/></svg>
-              Deep research
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Quick Prompt Cards -->
-    <div class="prompts-row">
-      <div class="prompt-card" data-prompt="Summarize today's top AI news">
-        <div class="prompt-icon" style="background:rgba(0,247,255,0.08)">📰</div>
-        <div class="prompt-text">
-          <div class="prompt-title">Today's AI news</div>
-          <div class="prompt-sub">Latest headlines, summarized</div>
-        </div>
-      </div>
-      <div class="prompt-card" data-prompt="Write a Python script to scrape a website">
-        <div class="prompt-icon" style="background:rgba(106,0,255,0.08)">💻</div>
-        <div class="prompt-text">
-          <div class="prompt-title">Write some code</div>
-          <div class="prompt-sub">Python, JS, Bash and more</div>
-        </div>
-      </div>
-      <div class="prompt-card" data-prompt="Analyze this data and give me insights">
-        <div class="prompt-icon" style="background:rgba(0,247,255,0.08)">📊</div>
-        <div class="prompt-text">
-          <div class="prompt-title">Analyze data</div>
-          <div class="prompt-sub">Charts, stats, insights</div>
-        </div>
-      </div>
-      <div class="prompt-card" data-prompt="Help me brainstorm startup ideas in fintech">
-        <div class="prompt-icon" style="background:rgba(255,0,255,0.08)">✨</div>
-        <div class="prompt-text">
-          <div class="prompt-title">Brainstorm ideas</div>
-          <div class="prompt-sub">Startups, writing, plans</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Recent / Pinned -->
-    <div class="bottom-section">
-      <div class="section-tabs">
-        <button class="section-tab active" data-tab="recent">Recent</button>
-        <button class="section-tab" data-tab="pinned">Pinned</button>
-      </div>
-      <div class="recent-list" id="recentList"></div>
-    </div>
-
-  </div>
-</div>
-
-<!-- ═══════════════════════════════════════════
-     CHAT SCREEN  — ALL ORIGINAL ELEMENTS KEPT
-     ═══════════════════════════════════════════ -->
-<div class="chat-screen" id="chatScreen">
-
-  <!-- ORIGINAL: .header -->
-  <div class="header">
-    <button class="back-btn" id="backBtn" title="Back to Home">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M19 12H5M12 5l-7 7 7 7"/>
-      </svg>
-    </button>
-    Drache AI
-  </div>
-
-  <!-- ORIGINAL: #chatbox -->
-  <div id="chatbox"></div>
-
-  <!-- ORIGINAL: .input-area with original input#input and button onclick="sendMessage()" -->
-  <div class="input-area">
-    <input id="input" placeholder="Type a message..." />
-    <button onclick="sendMessage()">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-        <path d="M22 2L11 13" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-        <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="white" fill-opacity="0.3"/>
-      </svg>
-    </button>
-  </div>
-
-</div>
-
-<script src="logic.js"></script>
-<script src="home.js"></script>
+    <script src="logic.js"></script>
 </body>
 </html>
