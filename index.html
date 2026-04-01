@@ -4,42 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Drache AI</title>
-    <link rel="stylesheet" a href="static/style.css">
+    <link rel="stylesheet" href="static/style.css">
 </head>
 <body>
-    <div class="header">Drache AI</div>
-    <div id="chatbox"></div>
-    <div class="input-area">
-        <input id="input" placeholder="Type a message..." />
-        <button onclick="sendMessage()">➤</button>
+    <div class="app">
+        <div class="header">Drache AI</div>
+        <div id="chatbox"></div>
+        <div class="input-area center" id="inputArea">
+            <input id="input" placeholder="Message Drache AI..." />
+            <button onclick="sendMessage()">➤</button>
+        </div>
     </div>
-
-<script>
-async function sendMessage() {
-    let input = document.getElementById("input");
-    let message = input.value;
-
-    if (!message) return;
-
-    let chatbox = document.getElementById("chatbox");
-
-    chatbox.innerHTML += `<div class="message user">${message}</div>`;
-    input.value = "";
-    chatbox.scrollTop = chatbox.scrollHeight;
-
-    try {
-        let response = await fetch(`/chat?prompt=${encodeURIComponent(message)}`);
-        let data = await response.json();
-
-        let reply = typeof data === "string" ? data : data.error || JSON.stringify(data);
-
-        chatbox.innerHTML += `<div class="message bot">${reply}</div>`;
-    } catch (err) {
-        chatbox.innerHTML += `<div class="message bot">❌ Server error</div>`;
-    }
-
-    chatbox.scrollTop = chatbox.scrollHeight;
-}
-</script>
+<script src="static/logic.js"></script>
 </body>
 </html>
