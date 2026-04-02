@@ -8,15 +8,31 @@ app = FastAPI()
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-HF_API_KEY = os.getenv("HF_API_KEY")
+# 🧠 MEMORY STORAGE
+user_memory = {}
+
 
 @app.get("/")
 def home():
     return FileResponse("index.html")
 
+
 @app.get("/chat")
-def chat(prompt: str):
+def chat(prompt: str, user: str = "guest"):
     try:
+        # 🧠 initialize memory
+        if user not in user_memory:
+            user_memory[user] = []
+
+        # ➕ add user message
+        user_memory[user].append({
+            "role": "user",
+            "content": prompt
+        })
+
+        # 🧠 keep last 10 messages
+        messages = user_memory[user][-10:]
+
         response = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={
@@ -25,21 +41,25 @@ def chat(prompt: str):
             },
             json={
                 "model": "openai/gpt-3.5-turbo",
-                "messages": [
-                    {"role": "user", "content": prompt}
-                ]
+                "messages": messages
             }
         )
 
         data = response.json()
 
-        print("RAW:", data)  # 🔍 debug
+        print("RAW:", data)
 
-        # ✅ Handle success
         if "choices" in data:
-            return data["choices"][0]["message"]["content"]
+            reply = data["choices"][0]["message"]["content"]
 
-        # ❌ Handle error
+            # ➕ save AI reply
+            user_memory[user].append({
+                "role": "assistant",
+                "content": reply
+            })
+
+            return reply
+
         elif "error" in data:
             return {"error": data["error"]["message"]}
 

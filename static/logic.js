@@ -24,7 +24,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
         try {
             // ✅ API call
-            let response = await fetch(`/chat?prompt=${encodeURIComponent(message)}`);
+            let user = localStorage.getItem("user") || "guest";
+            let response = await fetch(`/chat?prompt=${encodeURIComponent(message)}&user=${user}`);
             let data = await response.json();
 
             let reply = typeof data === "string"
