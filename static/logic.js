@@ -24,13 +24,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
         try {
             // ✅ API call
-            let user = localStorage.getItem("user") || "guest";
-            let response = await fetch(`/chat?prompt=${encodeURIComponent(message)}&user=${user}`);
+            let response = await fetch(`/chat?prompt=${encodeURIComponent(message)}`);
             let data = await response.json();
 
-            let reply = typeof data === "string"
-                ? data
-                : data.error || JSON.stringify(data);
+            let reply = data.reply || data.error || "Error";
 
             // ✅ Show bot reply
             const botMsg = document.createElement("div");

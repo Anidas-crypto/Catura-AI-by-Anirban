@@ -1,8 +1,9 @@
-from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi import FastAPI,Request
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 import requests
 import os
+import uuid
 
 app = FastAPI()
 
@@ -18,50 +19,63 @@ def home():
 
 
 @app.get("/chat")
-def chat(prompt: str, user: str = "guest"):
+def chat(request: Request, prompt: str):
     try:
+        # 🆔 GET SESSION ID
+        session_id = request.cookies.get("session_id")
+
+        # 🆕 CREATE IF NOT EXISTS
+        if not session_id:
+            session_id = str(uuid.uuid4())
+
         prompt_lower = prompt.lower()
-        # 🔥 HARD CONTROL (ADD HERE)
+
+        # 🔥 HARD CONTROL
         if any(q in prompt_lower for q in [
             "who created you",
             "who is your developer",
-            "who made you",
             "who made you",
             "who built you",
             "your creator",
             "your developer"
         ]):
-            return "I was created by Anirban."
+            return JSONResponse(
+                content={"reply": "I was created by Anirban."},
+                headers={"Set-Cookie": f"session_id={session_id}; Path=/"}
+            )
+
         if any(q in prompt_lower for q in [
             "what is your name",
             "who are you"
         ]):
-            return "I am Drache AI, created by Anirban."
-        # 🧠 initialize memory
-        if user not in user_memory:
-            user_memory[user] = []
+            return JSONResponse(
+                content={"reply": "I am Drache AI, created by Anirban."},
+                headers={"Set-Cookie": f"session_id={session_id}; Path=/"}
+            )
 
-        # ➕ add user message
-        user_memory[user].append({
+        # 🧠 INIT MEMORY PER SESSION
+        if session_id not in user_memory:
+            user_memory[session_id] = []
+
+        # ➕ USER MESSAGE
+        user_memory[session_id].append({
             "role": "user",
             "content": prompt
         })
 
-        # 🧠 add system + memory
+        # 🧠 CONTEXT
         messages = [
             {
                 "role": "system",
                 "content": (
-                    "You are Drache AI, created and developed by Anirban. "
-                    "If anyone asks who created you, who is your developer, or anything similar, "
-                    "you MUST always reply: 'I was created by Anirban.' "
-                    "Never mention OpenAI, developers, or any company. "
-                    "Always give clear, helpful answers and remember conversation context."
+                    "You are Drache AI, created by Anirban. "
+                    "Always remember context and give helpful answers."
                 )
             }
-        ] + user_memory[user][-20:]
+        ] + user_memory[session_id][-20:]
 
-        response = requests.post(
+        # 🔗 API CALL
+        response_api = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={
                 "Authorization": f"Bearer {os.getenv('OPENROUTER_API_KEY')}",
@@ -73,20 +87,25 @@ def chat(prompt: str, user: str = "guest"):
             }
         )
 
-        data = response.json()
-
-        print("RAW:", data)
+        data = response_api.json()
 
         if "choices" in data:
             reply = data["choices"][0]["message"]["content"]
 
-            # ➕ save AI reply
-            user_memory[user].append({
+            # ➕ SAVE AI REPLY
+            user_memory[session_id].append({
                 "role": "assistant",
                 "content": reply
             })
 
-            return reply
+            # 🧹 LIMIT MEMORY
+            if len(user_memory[session_id]) > 40:
+                user_memory[session_id] = user_memory[session_id][-40:]
+
+            return JSONResponse(
+                content={"reply": reply},
+                headers={"Set-Cookie": f"session_id={session_id}; Path=/"}
+            )
 
         elif "error" in data:
             return {"error": data["error"]["message"]}
