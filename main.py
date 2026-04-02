@@ -20,8 +20,9 @@ def home():
 @app.get("/chat")
 def chat(prompt: str, user: str = "guest"):
     try:
+        prompt_lower = prompt.lower()
         # 🔥 HARD CONTROL (ADD HERE)
-        if any(q in prompt_lower() for q in [
+        if any(q in prompt_lower for q in [
             "who created you",
             "who is your developer",
             "who made you",
