@@ -24,7 +24,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
         try {
             // ✅ API call
-            let response = await fetch(`/chat?prompt=${encodeURIComponent(message)}`);
+            let response = await fetch(`/chat?prompt=${encodeURIComponent(message)}`, {
+                credentials: "same-origin"
+            });
             let data = await response.json();
 
             let reply = data.reply || data.error || "Error";
