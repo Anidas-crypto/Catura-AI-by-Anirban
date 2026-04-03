@@ -18,6 +18,11 @@ def home():
     return FileResponse("index.html")
 
 
+@app.get("/google5869a60ba00ea65a.html")
+def google_verify():
+    return FileResponse("google5869a60ba00ea65a.html")
+
+
 @app.get("/chat")
 def chat(request: Request, prompt: str):
     try:
