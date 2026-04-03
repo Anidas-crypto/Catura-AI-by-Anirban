@@ -49,7 +49,7 @@ def chat(request: Request, prompt: str):
             "who are you"
         ]):
             return JSONResponse(
-                content={"reply": "I am Drache AI, created by Anirban."},
+                content={"reply": "I am Catura AI, created by Anirban."},
                 headers={"Set-Cookie": f"session_id={session_id}; Path=/"}
             )
 
@@ -68,7 +68,7 @@ def chat(request: Request, prompt: str):
             {
                 "role": "system",
                 "content": (
-                    "You are Drache AI, created by Anirban. "
+                    "You are Catura AI, created by Anirban. "
                     "Always remember context and give helpful answers."
                 )
             }
