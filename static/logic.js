@@ -1,6 +1,24 @@
 document.addEventListener("DOMContentLoaded", function () {
 
     const input = document.getElementById("input");
+    function autoResize() {
+        input.style.height = "auto";
+        const computed = window.getComputedStyle(input);
+        const lineHeight = parseFloat(computed.lineHeight);
+        const padding =
+            parseFloat(computed.paddingTop) +
+            parseFloat(computed.paddingBottom);
+        const singleLineHeight = lineHeight + padding;
+
+        if (input.scrollHeight > singleLineHeight + 2) {
+            input.style.height = input.scrollHeight + "px";
+        } else {
+            input.style.height = singleLineHeight + "px";
+        }
+    }
+
+    input.addEventListener("input", autoResize);
+
     const chatbox = document.getElementById("chatbox");
     const inputArea = document.getElementById("inputArea");
     const welcome = document.getElementById("welcome");
@@ -28,6 +46,7 @@ document.addEventListener("DOMContentLoaded", function () {
         chatbox.appendChild(userMsg);
 
         input.value = "";
+        input.style.height = "auto";
         chatbox.scrollTo({
             top: chatbox.scrollHeight,
             behavior: "smooth"
@@ -95,7 +114,7 @@ document.addEventListener("DOMContentLoaded", function () {
     };
     // ✅ Enter key support
     input.addEventListener("keydown", function (e) {
-        if (e.key === "Enter") {
+        if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
             sendMessage();
         }

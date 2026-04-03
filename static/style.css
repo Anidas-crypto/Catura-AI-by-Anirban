@@ -34,7 +34,7 @@ html {
 /* Chat area */
 #chatbox {
     flex: 1;
-    overflow-y: auto;
+    overflow-y: hidden;
 
     width: 100%;
     max-width: 800px;   /* 🔥 controls chat width */
@@ -76,10 +76,19 @@ html {
 /* Input area (base) */
 .input-area {
     display: flex;
-    padding: 12px;
-    background: #121212;
-    transition: all 0.4s ease;
     align-items: center;
+    gap: 8px;                 /* 🔥 spacing like ChatGPT */
+
+    padding: 8px;             /* 🔥 smaller */
+    background: #121212;
+
+    border: 1px solid #2a2a2a;
+    border-radius: 14px;      /* 🔥 smooth container */
+
+    max-width: 700px;
+    width: 95%;
+    margin: 0 auto;
+    backdrop-filter: blur(10px);
 }
 
 /* Centered input (initial state) */
@@ -95,48 +104,54 @@ html {
 }
 
 .input-area.bottom {
-    position: sticky;   /* 🔥 key change */
-    bottom: 0;
+    position: sticky;
+    bottom: 10px;   /* 🔥 little floating feel */
 
-    width: 100%;
-    display: flex;
-    justify-content: center;
-
-    border-top: 1px solid #222;
-    background: #121212;
+    background: transparent;
+    border: none;
 }
 
-.input-area.bottom input {
+.input-area.bottom textarea {
     max-width: 700px;
 }
 
 /* Input */
-input {
+#input {
     flex: 1;
-    padding: 12px;
-    border-radius: 8px;
+    padding: 8px 12px;   /* 🔥 smaller padding */
+    border-radius: 10px;
     border: 1px solid #2a2a2a;
     outline: none;
     font-size: 14px;
+    font-family: inherit;
     background: #1e1e1e;
     color: #e5e5e5;
-}
 
-input::placeholder {
+    resize: none;
+    overflow-y: hidden;
+
+    min-height: 22px;     /* 🔥 smaller */
+    max-height: 120px;    /* 🔥 slightly reduced */
+
+    line-height: 1.4;
+
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+#input::placeholder {
     color: #888;
 }
 
 /* Button */
 .input-area button {
-    margin-left: 10px;
-    padding: 0 16px;
-    border: none;
-    border-radius: 8px;
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
     background: #10a37f;
-    color: white;
-    cursor: pointer;
-    font-size: 16px;
-    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
 }
 
 button:hover {
@@ -289,7 +304,7 @@ button:hover {
         top: 70%;
     }
 
-    .input-area.bottom input {
+    .input-area.bottom textarea {
         max-width: 100%;
     }
 
