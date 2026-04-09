@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI,Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 import requests
@@ -7,52 +7,42 @@ import uuid
 
 app = FastAPI()
 
-# ✅ Serve static files (CSS, JS, images)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# 🧠 In-memory chat memory
+# 🧠 MEMORY STORAGE
 user_memory = {}
 
-# ============================
-# ✅ ROUTES (IMPORTANT FIX)
-# ============================
 
-# Homepage
 @app.get("/")
 def home():
     return FileResponse("index.html")
 
-# ✅ FIX: Serve auth page (THIS WAS MISSING)
-@app.get("/auth.html")
-def auth_page():
-    return FileResponse("auth.html")
 
-# Optional: Google verification (keep if needed)
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
     return FileResponse("google5869a60ba00ea65a.html")
 
-# ============================
-# 🤖 CHAT API
-# ============================
+
 @app.get("/chat")
 def chat(request: Request, prompt: str):
     try:
-        # 🆔 Get session from cookie
+        # 🆔 GET SESSION ID
         session_id = request.cookies.get("session_id")
 
-        # 🆕 Create session if not exists
+        # 🆕 CREATE IF NOT EXISTS
         if not session_id:
             session_id = str(uuid.uuid4())
 
         prompt_lower = prompt.lower()
 
-        # 🔥 Hard responses
+        # 🔥 HARD CONTROL
         if any(q in prompt_lower for q in [
             "who created you",
             "who is your developer",
             "who made you",
-            "who built you"
+            "who built you",
+            "your creator",
+            "your developer"
         ]):
             return JSONResponse(
                 content={"reply": "I was created by Anirban."},
@@ -68,25 +58,28 @@ def chat(request: Request, prompt: str):
                 headers={"Set-Cookie": f"session_id={session_id}; Path=/"}
             )
 
-        # 🧠 Initialize memory
+        # 🧠 INIT MEMORY PER SESSION
         if session_id not in user_memory:
             user_memory[session_id] = []
 
-        # ➕ Save user message
+        # ➕ USER MESSAGE
         user_memory[session_id].append({
             "role": "user",
             "content": prompt
         })
 
-        # 🧠 Build context
+        # 🧠 CONTEXT
         messages = [
             {
                 "role": "system",
-                "content": "You are Catura AI, created by Anirban. Be helpful and remember context."
+                "content": (
+                    "You are Catura AI, created by Anirban. "
+                    "Always remember context and give helpful answers."
+                )
             }
         ] + user_memory[session_id][-20:]
 
-        # 🔗 Call OpenRouter
+        # 🔗 API CALL
         response_api = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={
@@ -101,17 +94,16 @@ def chat(request: Request, prompt: str):
 
         data = response_api.json()
 
-        # ✅ Success
         if "choices" in data:
             reply = data["choices"][0]["message"]["content"]
 
-            # ➕ Save AI reply
+            # ➕ SAVE AI REPLY
             user_memory[session_id].append({
                 "role": "assistant",
                 "content": reply
             })
 
-            # 🧹 Limit memory
+            # 🧹 LIMIT MEMORY
             if len(user_memory[session_id]) > 40:
                 user_memory[session_id] = user_memory[session_id][-40:]
 
@@ -120,7 +112,6 @@ def chat(request: Request, prompt: str):
                 headers={"Set-Cookie": f"session_id={session_id}; Path=/"}
             )
 
-        # ❌ API error
         elif "error" in data:
             return {"error": data["error"]["message"]}
 
