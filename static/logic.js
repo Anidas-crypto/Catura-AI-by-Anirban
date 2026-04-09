@@ -202,67 +202,69 @@ document.addEventListener("DOMContentLoaded", async function () {
         // ============================
         // 🤖 FETCH AI RESPONSE (STREAMING)
         // ============================
-        try {
-            const res = await fetch(`/chat?prompt=${encodeURIComponent(message)}`);
-            if (!res.ok) throw new Error("Server error " + res.status);
+        // ============================
+    // 🤖 FETCH AI RESPONSE (STREAMING)
+    // ============================
+    try {
+        const res = await fetch(`/chat?prompt=${encodeURIComponent(message)}`);
+        if (!res.ok) throw new Error("Server error " + res.status);
 
-            typing.remove();
+        typing.remove();
 
-            const botMsg = document.createElement("div");
-            botMsg.classList.add("message", "bot");
-            chatbox.appendChild(botMsg);
+        const botMsg = document.createElement("div");
+        botMsg.classList.add("message", "bot");
+        chatbox.appendChild(botMsg);
 
-            const reader = res.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = "";
-            let fullReply = "";
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let fullReply = "";
 
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
 
-                buffer += decoder.decode(value, { stream: true });
+            buffer += decoder.decode(value, { stream: true });
 
-                const lines = buffer.split("\n");
-                buffer = lines.pop(); // keep incomplete line
+            const lines = buffer.split("\n");
+            buffer = lines.pop();
 
-                for (const line of lines) {
-                    if (!line.startsWith("data: ")) continue;
-                    const payload = line.slice(6).trim();
-                    if (payload === "[DONE]") break;
+            for (const line of lines) {
+                if (!line.startsWith("data: ")) continue;
+                const payload = line.slice(6).trim();
+                if (payload === "[DONE]") break;
 
-                    try {
-                        const chunk = JSON.parse(payload);
-                        if (chunk.error) {
-                            botMsg.innerText = "⚠️ Error: " + chunk.error;
-                            break;
-                        }
-                        if (chunk.token) {
-                            fullReply += chunk.token;
-                            botMsg.innerHTML = formatMessage(fullReply);
-                            chatbox.scrollTop = chatbox.scrollHeight;
-                        }
-                    } catch { continue; }
-                }
+                try {
+                    const chunk = JSON.parse(payload);
+                    if (chunk.error) {
+                        botMsg.innerText = "⚠️ Error: " + chunk.error;
+                        break;
+                    }
+                    if (chunk.token) {
+                        fullReply += chunk.token;
+                        botMsg.innerHTML = formatMessage(fullReply);
+                        chatbox.scrollTop = chatbox.scrollHeight;
+                    }
+                } catch { continue; }
             }
-
-            // ✅ SAVE BOT MESSAGE TO SUPABASE
-            const { error: botError } = await supabaseClient.from("messages").insert([{
-                role: "bot",
-                content: fullReply,
-                session_id: currentSessionId,
-                user_id: currentUser.id
-            }]);
-            if (botError) console.error("❌ Bot message save failed:", botError.message);
-
-        } catch (err) {
-            typing.remove();
-            console.error("❌ AI fetch failed:", err);
-            const errMsg = document.createElement("div");
-            errMsg.classList.add("message", "bot");
-            errMsg.innerText = "⚠️ Failed to get a response. Please try again.";
-            chatbox.appendChild(errMsg);
         }
+
+        const { error: botError } = await supabaseClient.from("messages").insert([{
+            role: "bot",
+            content: fullReply,
+            session_id: currentSessionId,
+            user_id: currentUser.id
+        }]);
+        if (botError) console.error("❌ Bot message save failed:", botError.message);
+
+    } catch (err) {
+        typing.remove();
+        console.error("❌ AI fetch failed:", err);
+        const errMsg = document.createElement("div");
+        errMsg.classList.add("message", "bot");
+        errMsg.innerText = "⚠️ Failed to get a response. Please try again.";
+        chatbox.appendChild(errMsg);
+    }
     };
 
     // ============================
