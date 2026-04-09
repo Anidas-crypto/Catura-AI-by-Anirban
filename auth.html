@@ -4,8 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Catura AI — Login</title>
+
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
       font-family: system-ui, -apple-system, sans-serif;
       background: #0d0d0d;
@@ -16,6 +18,7 @@
       justify-content: center;
       padding: 1rem;
     }
+
     .card {
       background: #1a1a1a;
       border: 1px solid #2a2a2a;
@@ -24,20 +27,35 @@
       width: 100%;
       max-width: 390px;
     }
+
     .logo-area {
       text-align: center;
       margin-bottom: 1.75rem;
     }
+
     .logo-box {
-      width: 46px; height: 46px;
+      width: 46px;
+      height: 46px;
       background: #10a37f;
       border-radius: 10px;
-      display: flex; align-items: center; justify-content: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       margin: 0 auto 12px;
-      font-size: 22px; color: white; font-weight: 600;
+      font-size: 22px;
+      color: white;
+      font-weight: 600;
     }
-    .logo-area h1 { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
-    .logo-area p  { font-size: 13px; color: #888; }
+
+    .logo-area h1 {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .logo-area p {
+      font-size: 13px;
+      color: #888;
+    }
 
     .tabs {
       display: flex;
@@ -47,245 +65,225 @@
       gap: 3px;
       margin-bottom: 1.5rem;
     }
+
     .tab {
-      flex: 1; padding: 8px;
-      border-radius: 8px; border: none;
-      font-size: 13px; font-weight: 500;
-      cursor: pointer; transition: 0.2s;
-      background: transparent; color: #888;
+      flex: 1;
+      padding: 8px;
+      border-radius: 8px;
+      border: none;
+      font-size: 13px;
+      cursor: pointer;
+      background: transparent;
+      color: #888;
     }
-    .tab.active { background: #10a37f; color: white; }
+
+    .tab.active {
+      background: #10a37f;
+      color: white;
+    }
 
     .oauth-btn {
-      display: flex; align-items: center; gap: 10px;
-      padding: 10px 14px;
       width: 100%;
-      background: #111; border: 1px solid #2a2a2a;
-      border-radius: 10px; color: #e5e5e5;
-      font-size: 13px; cursor: pointer;
-      transition: background 0.15s;
+      padding: 10px;
       margin-bottom: 8px;
+      background: #111;
+      border: 1px solid #2a2a2a;
+      border-radius: 10px;
+      color: white;
+      cursor: pointer;
     }
-    .oauth-btn:hover { background: #222; }
-    .oauth-btn svg { flex-shrink: 0; }
 
     .divider {
-      display: flex; align-items: center; gap: 10px;
-      margin: 1rem 0; color: #444; font-size: 12px;
-    }
-    .divider::before, .divider::after {
-      content: ''; flex: 1;
-      height: 1px; background: #2a2a2a;
+      text-align: center;
+      margin: 12px 0;
+      color: #555;
     }
 
-    label { display: block; font-size: 12px; color: #aaa; margin-bottom: 5px; }
-    .field { margin-bottom: 10px; }
-    .field-row {
-      display: flex; justify-content: space-between; align-items: center;
-      margin-bottom: 5px;
+    input {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 10px;
+      background: #111;
+      border: 1px solid #2a2a2a;
+      border-radius: 10px;
+      color: white;
     }
-    .forgot { font-size: 12px; color: #10a37f; cursor: pointer; background: none; border: none; padding: 0; }
-    .forgot:hover { text-decoration: underline; }
-
-    input[type="email"],
-    input[type="password"],
-    input[type="text"] {
-      width: 100%; padding: 10px 13px;
-      background: #111; border: 1px solid #2a2a2a;
-      border-radius: 10px; color: #e5e5e5;
-      font-size: 13px; outline: none;
-      transition: border 0.2s;
-    }
-    input:focus { border-color: #10a37f; }
 
     .submit {
-      width: 100%; padding: 11px;
-      background: #10a37f; border: none;
-      border-radius: 10px; color: white;
-      font-size: 14px; font-weight: 600;
-      cursor: pointer; margin-top: 12px;
-      transition: background 0.2s;
+      width: 100%;
+      padding: 10px;
+      background: #10a37f;
+      border: none;
+      border-radius: 10px;
+      color: white;
+      cursor: pointer;
     }
-    .submit:hover  { background: #0d8c6d; }
-    .submit:disabled { background: #1a4a3a; cursor: not-allowed; }
 
     .msg {
-      margin-top: 12px; padding: 10px 13px;
-      border-radius: 8px; font-size: 13px;
-      text-align: center; display: none;
+      margin-top: 10px;
+      text-align: center;
     }
-    .msg.error   { background: #2a1a1a; color: #ff6b6b; border: 1px solid #3a1a1a; display: block; }
-    .msg.success { background: #1a2a1a; color: #6bff9e; border: 1px solid #1a3a1a; display: block; }
 
-    .switch-row {
-      text-align: center; font-size: 12px;
-      color: #888; margin-top: 14px;
-    }
-    .switch-row span { color: #10a37f; cursor: pointer; }
-    .switch-row span:hover { text-decoration: underline; }
+    .error { color: red; }
+    .success { color: lightgreen; }
   </style>
 </head>
+
 <body>
-  <div class="card">
 
-    <div class="logo-area">
-      <div class="logo-box">C</div>
-      <h1>Log in to Catura AI</h1>
-      <p>Your AI assistant, always there for you</p>
-    </div>
+<div class="card">
 
-    <div class="tabs">
-      <button class="tab active" id="tab-login" onclick="switchTab('login')">Login</button>
-      <button class="tab"        id="tab-signup" onclick="switchTab('signup')">Sign up</button>
-    </div>
-
-    <!-- GitHub -->
-    <button class="oauth-btn" onclick="doGitHub()">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.2 11.38.6.11.82-.26.82-.58 0-.28-.01-1.03-.02-2.02-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.2.08 1.84 1.24 1.84 1.24 1.07 1.83 2.8 1.3 3.49 1 .11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 3-.4c1.02.005 2.04.14 3 .4 2.28-1.55 3.29-1.23 3.29-1.23.66 1.66.24 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.63-5.48 5.92.43.37.81 1.1.81 2.22 0 1.6-.01 2.9-.01 3.29 0 .32.21.7.82.58C20.56 21.8 24 17.3 24 12c0-6.63-5.37-12-12-12z"/>
-      </svg>
-      Continue with GitHub
-    </button>
-
-    <!-- Google -->
-    <button class="oauth-btn" onclick="doGoogle()">
-      <svg width="16" height="16" viewBox="0 0 48 48">
-        <path fill="#EA4335" d="M24 9.5c3.1 0 5.6 1.1 7.6 2.9l5.6-5.6C33.6 3.5 29.1 1.5 24 1.5 14.9 1.5 7.2 7.1 4 14.9l6.6 5.1C12.3 13.7 17.6 9.5 24 9.5z"/>
-        <path fill="#4285F4" d="M46.5 24c0-1.6-.1-3.1-.4-4.5H24v8.5h12.7c-.6 3-2.3 5.5-4.9 7.2l7.6 5.9C43.8 37 46.5 31 46.5 24z"/>
-        <path fill="#FBBC05" d="M10.6 28.6A14.6 14.6 0 0 1 9.5 24c0-1.6.3-3.2.8-4.6L3.7 14.3A22.5 22.5 0 0 0 1.5 24c0 3.6.9 7.1 2.5 10.1l6.6-5.5z"/>
-        <path fill="#34A853" d="M24 46.5c5.1 0 9.4-1.7 12.5-4.6l-7.6-5.9c-1.7 1.1-3.8 1.8-4.9 1.8-6.4 0-11.7-4.3-13.6-10l-6.6 5.1C7.2 40.9 14.9 46.5 24 46.5z"/>
-      </svg>
-      Continue with Google
-    </button>
-
-    <div class="divider">or</div>
-
-    <!-- Email + Password -->
-    <div class="field">
-      <label>Email address</label>
-      <input type="email" id="email" placeholder="you@example.com">
-    </div>
-
-    <div class="field">
-      <div class="field-row">
-        <label style="margin:0">Password</label>
-        <button class="forgot" id="forgotBtn" onclick="doForgot()">I forgot my password</button>
-      </div>
-      <input type="password" id="password" placeholder="••••••••">
-    </div>
-
-    <div class="field" id="confirmField" style="display:none">
-      <label>Confirm password</label>
-      <input type="password" id="confirm" placeholder="Repeat password">
-    </div>
-
-    <button class="submit" id="submitBtn" onclick="doSubmit()">Log in</button>
-    <div class="msg" id="msg"></div>
-
-    <div class="switch-row" id="switchRow">
-      Don't have an account? <span id="switchLink" onclick="switchTab('signup')">Sign up</span>
-    </div>
-
+  <div class="logo-area">
+    <div class="logo-box">C</div>
+    <h1>Catura AI</h1>
+    <p>Login or create account</p>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script>
-    const SUPABASE_URL = "https://zhrjmnrfklzuxmfbdqhg.supabase.co";
-    const SUPABASE_KEY = "sb_publishable_aIbByN1rFc9V3AH41Kyz6A_e1XppA1Z";
-    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('login')">Login</button>
+    <button class="tab" onclick="switchTab('signup')">Sign Up</button>
+  </div>
 
-    let currentTab = "login";
+  <button class="oauth-btn" onclick="doGoogle()">Continue with Google</button>
+  <button class="oauth-btn" onclick="doGitHub()">Continue with GitHub</button>
 
-    // Redirect to chat if already logged in
-    sb.auth.getSession().then(({ data }) => {
-      if (data.session) window.location.href = "/";
-    });
+  <div class="divider">or</div>
 
-    function switchTab(tab) {
-      currentTab = tab;
-      const isLogin = tab === "login";
-      document.getElementById("tab-login").className  = "tab" + (isLogin ? " active" : "");
-      document.getElementById("tab-signup").className = "tab" + (!isLogin ? " active" : "");
-      document.getElementById("confirmField").style.display = isLogin ? "none" : "block";
-      document.getElementById("forgotBtn").style.display    = isLogin ? "inline" : "none";
-      document.getElementById("submitBtn").textContent      = isLogin ? "Log in" : "Create account";
-      document.getElementById("switchRow").innerHTML        = isLogin
-        ? 'Don\'t have an account? <span onclick="switchTab(\'signup\')">Sign up</span>'
-        : 'Already have an account? <span onclick="switchTab(\'login\')">Log in</span>';
-      clearMsg();
+  <input type="email" id="email" placeholder="Email">
+  <input type="password" id="password" placeholder="Password">
+  <input type="password" id="confirm" placeholder="Confirm Password" style="display:none;">
+
+  <button class="submit" onclick="doSubmit()" id="submitBtn">Login</button>
+
+  <div class="msg" id="msg"></div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SUPABASE_URL = "https://zhrjmnrfklzuxmfbdqhg.supabase.co";
+const SUPABASE_KEY = "sb_publishable_aIbByN1rFc9V3AH41Kyz6A_e1XppA1Z";
+
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true
+  }
+});
+
+// ✅ FIX: Handle OAuth return
+sb.auth.onAuthStateChange((event, session) => {
+  if (session?.user) {
+    window.location.href = "/";
+  }
+});
+
+// ✅ FIX: redirect if already logged in
+sb.auth.getSession().then(({ data }) => {
+  if (data.session) {
+    window.location.href = "/";
+  }
+});
+
+let currentTab = "login";
+
+function switchTab(tab) {
+  currentTab = tab;
+  const isLogin = tab === "login";
+
+  document.getElementById("tab-login").className  = "tab" + (isLogin ? " active" : "");
+  document.getElementById("tab-signup").className = "tab" + (!isLogin ? " active" : "");
+
+  document.getElementById("confirmField").style.display = isLogin ? "none" : "block";
+  document.getElementById("forgotBtn").style.display = isLogin ? "inline" : "none";
+
+  document.getElementById("submitBtn").textContent =
+    isLogin ? "Log in" : "Create account";
+
+  clearMsg();
+}
+
+function showMsg(text, type) {
+  const el = document.getElementById("msg");
+  el.textContent = text;
+  el.className = "msg " + type;
+}
+
+function clearMsg() {
+  document.getElementById("msg").className = "msg";
+}
+
+// ============================
+// EMAIL LOGIN / SIGNUP
+// ============================
+async function doSubmit() {
+  const email = document.getElementById("email").value.trim();
+  const password = document.getElementById("password").value;
+
+  if (!email || !password) {
+    return showMsg("Please fill all fields", "error");
+  }
+
+  if (currentTab === "signup") {
+    const confirm = document.getElementById("confirm").value;
+
+    if (password !== confirm) {
+      return showMsg("Passwords do not match", "error");
     }
 
-    function showMsg(text, type) {
-      const el = document.getElementById("msg");
-      el.textContent = text;
-      el.className = "msg " + type;
+    const { error } = await sb.auth.signUp({ email, password });
+
+    if (error) return showMsg(error.message, "error");
+
+    showMsg("Check email to confirm account", "success");
+
+  } else {
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+
+    if (error) return showMsg(error.message, "error");
+
+    window.location.href = "/";
+  }
+}
+
+// ============================
+// 🔥 OAUTH FIX (VERY IMPORTANT)
+// ============================
+async function doGoogle() {
+  await sb.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: "https://my-ai-assistant-9bbd.onrender.com/"
     }
-    function clearMsg() {
-      document.getElementById("msg").className = "msg";
+  });
+}
+
+async function doGitHub() {
+  await sb.auth.signInWithOAuth({
+    provider: "github",
+    options: {
+      redirectTo: "https://my-ai-assistant-9bbd.onrender.com/"
     }
+  });
+}
 
-    async function doSubmit() {
-      const email    = document.getElementById("email").value.trim();
-      const password = document.getElementById("password").value;
-      const btn      = document.getElementById("submitBtn");
+// ============================
+// 🔥 RESET PASSWORD FIX
+// ============================
+async function doForgot() {
+  const email = document.getElementById("email").value.trim();
 
-      if (!email || !password) return showMsg("Please fill in all fields.", "error");
+  if (!email) return showMsg("Enter email first", "error");
 
-      if (currentTab === "signup") {
-        const confirm = document.getElementById("confirm").value;
-        if (password !== confirm) return showMsg("Passwords do not match.", "error");
-        if (password.length < 6) return showMsg("Password must be at least 6 characters.", "error");
+  const { error } = await sb.auth.resetPasswordForEmail(email, {
+    redirectTo: "https://my-ai-assistant-9bbd.onrender.com/auth.html"
+  });
 
-        btn.disabled = true; btn.textContent = "Creating account...";
-        const { error } = await sb.auth.signUp({ email, password });
-        if (error) {
-          showMsg(error.message, "error");
-          btn.disabled = false; btn.textContent = "Create account";
-        } else {
-          showMsg("✅ Account created! Check your email to confirm, then log in.", "success");
-          btn.disabled = false; btn.textContent = "Create account";
-        }
+  if (error) showMsg(error.message, "error");
+  else showMsg("Reset email sent", "success");
+}
 
-      } else {
-        btn.disabled = true; btn.textContent = "Logging in...";
-        const { error } = await sb.auth.signInWithPassword({ email, password });
-        if (error) {
-          showMsg(error.message, "error");
-          btn.disabled = false; btn.textContent = "Log in";
-        } else {
-          window.location.href = "/";
-        }
-      }
-    }
-
-    async function doGitHub() {
-      await sb.auth.signInWithOAuth({
-        provider: "github",
-        options: { redirectTo: window.location.origin + "/" }
-      });
-    }
-
-    async function doGoogle() {
-      await sb.auth.signInWithOAuth({
-        provider: "google",
-        options: { redirectTo: window.location.origin + "/" }
-      });
-    }
-
-    async function doForgot() {
-      const email = document.getElementById("email").value.trim();
-      if (!email) return showMsg("Enter your email above first.", "error");
-      const { error } = await sb.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin + "/auth"
-      });
-      if (error) showMsg(error.message, "error");
-      else showMsg("✅ Password reset email sent! Check your inbox.", "success");
-    }
-
-    // Enter key support
-    document.addEventListener("keydown", e => {
-      if (e.key === "Enter") doSubmit();
-    });
-  </script>
-</body>
-</html>
+document.addEventListener("keydown", e => {
+  if (e.key === "Enter") doSubmit();
+});
+</script>
