@@ -195,8 +195,13 @@
     const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
     let currentTab = "login";
+    // Handle OAuth callback token in URL hash
+    sb.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_IN" && session) {
+        window.location.href = "/";
+      }
+    });
 
-    // Redirect to chat if already logged in
     sb.auth.getSession().then(({ data }) => {
       if (data.session) window.location.href = "/";
     });
