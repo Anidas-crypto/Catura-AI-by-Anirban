@@ -1,9 +1,10 @@
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 import requests
 import os
 import uuid
+import json
 
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -36,21 +37,24 @@ def chat(request: Request, prompt: str):
 
         prompt_lower = prompt.lower()
 
+        # Identity overrides — stream a single token instantly
         if any(q in prompt_lower for q in [
             "who created you", "who is your developer",
             "who made you", "who built you",
             "your creator", "your developer"
         ]):
-            return JSONResponse(
-                content={"reply": "I was created by Anirban."},
-                headers={"Set-Cookie": f"session_id={session_id}; Path=/; SameSite=Lax"}
-            )
+            def quick():
+                yield f"data: {json.dumps({'token': 'I was created by Anirban.'})}\n\n"
+                yield "data: [DONE]\n\n"
+            return StreamingResponse(quick(), media_type="text/event-stream",
+                headers={"Set-Cookie": f"session_id={session_id}; Path=/; SameSite=Lax"})
 
         if any(q in prompt_lower for q in ["what is your name", "who are you"]):
-            return JSONResponse(
-                content={"reply": "I am Catura AI, created by Anirban."},
-                headers={"Set-Cookie": f"session_id={session_id}; Path=/; SameSite=Lax"}
-            )
+            def quick():
+                yield f"data: {json.dumps({'token': 'I am Catura AI, created by Anirban.'})}\n\n"
+                yield "data: [DONE]\n\n"
+            return StreamingResponse(quick(), media_type="text/event-stream",
+                headers={"Set-Cookie": f"session_id={session_id}; Path=/; SameSite=Lax"})
 
         if session_id not in user_memory:
             user_memory[session_id] = []
@@ -68,35 +72,61 @@ def chat(request: Request, prompt: str):
             }
         ] + user_memory[session_id][-20:]
 
-        response_api = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
+        def generate():
+            full_reply = ""
+            try:
+                resp = requests.post(
+                    "https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {os.getenv('OPENROUTER_API_KEY')}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": "openai/gpt-3.5-turbo",
+                        "messages": messages,
+                        "stream": True
+                    },
+                    stream=True,
+                    timeout=60
+                )
+
+                for line in resp.iter_lines():
+                    if not line:
+                        continue
+                    decoded = line.decode("utf-8")
+                    if decoded.startswith("data: "):
+                        payload = decoded[6:]
+                        if payload.strip() == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(payload)
+                            delta = chunk["choices"][0].get("delta", {})
+                            token = delta.get("content", "")
+                            if token:
+                                full_reply += token
+                                yield f"data: {json.dumps({'token': token})}\n\n"
+                        except Exception:
+                            continue
+
+                # Save to memory after full reply
+                user_memory[session_id].append({"role": "assistant", "content": full_reply})
+                if len(user_memory[session_id]) > 40:
+                    user_memory[session_id] = user_memory[session_id][-40:]
+
+                yield "data: [DONE]\n\n"
+
+            except Exception as e:
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+                yield "data: [DONE]\n\n"
+
+        return StreamingResponse(
+            generate(),
+            media_type="text/event-stream",
             headers={
-                "Authorization": f"Bearer {os.getenv('OPENROUTER_API_KEY')}",
-                "Content-Type": "application/json"
-            },
-            json={
-                "model": "openai/gpt-3.5-turbo",
-                "messages": messages
+                "Cache-Control": "no-cache",
+                "Set-Cookie": f"session_id={session_id}; Path=/; SameSite=Lax"
             }
         )
-
-        data = response_api.json()
-
-        if "choices" in data:
-            reply = data["choices"][0]["message"]["content"]
-            user_memory[session_id].append({"role": "assistant", "content": reply})
-
-            if len(user_memory[session_id]) > 40:
-                user_memory[session_id] = user_memory[session_id][-40:]
-
-            return JSONResponse(
-                content={"reply": reply},
-                headers={"Set-Cookie": f"session_id={session_id}; Path=/; SameSite=Lax"}
-            )
-        elif "error" in data:
-            return JSONResponse(content={"error": data["error"]["message"]})
-        else:
-            return JSONResponse(content={"error": "Unknown response", "data": data})
 
     except Exception as e:
         return JSONResponse(content={"error": str(e)})

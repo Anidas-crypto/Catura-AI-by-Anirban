@@ -65,7 +65,6 @@ function showSettings() {
 // 🧾 FORMAT MESSAGE (markdown + code blocks)
 // ============================
 function formatMessage(text) {
-    // Escape HTML first
     function escapeHtml(str) {
         return str
             .replace(/&/g, "&amp;")
@@ -102,7 +101,7 @@ function formatMessage(text) {
     // Bullet lists
     text = text.replace(/^[-•]\s(.+)$/gm, '<li>$1</li>');
 
-    // Newlines to <br> (but not inside code blocks)
+    // Newlines to <br>
     text = text.replace(/\n/g, "<br>");
 
     return text;
@@ -201,33 +200,56 @@ document.addEventListener("DOMContentLoaded", async function () {
         chatbox.scrollTop = chatbox.scrollHeight;
 
         // ============================
-        // 🤖 FETCH AI RESPONSE
+        // 🤖 FETCH AI RESPONSE (STREAMING)
         // ============================
         try {
             const res = await fetch(`/chat?prompt=${encodeURIComponent(message)}`);
-            const data = await res.json();
+            if (!res.ok) throw new Error("Server error " + res.status);
+
             typing.remove();
-
-            if (data.error) {
-                const errMsg = document.createElement("div");
-                errMsg.classList.add("message", "bot");
-                errMsg.innerText = "⚠️ Error: " + data.error;
-                chatbox.appendChild(errMsg);
-                return;
-            }
-
-            const reply = data.reply || "No response";
 
             const botMsg = document.createElement("div");
             botMsg.classList.add("message", "bot");
-            botMsg.innerHTML = formatMessage(reply);
             chatbox.appendChild(botMsg);
-            chatbox.scrollTop = chatbox.scrollHeight;
+
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = "";
+            let fullReply = "";
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+
+                const lines = buffer.split("\n");
+                buffer = lines.pop(); // keep incomplete line
+
+                for (const line of lines) {
+                    if (!line.startsWith("data: ")) continue;
+                    const payload = line.slice(6).trim();
+                    if (payload === "[DONE]") break;
+
+                    try {
+                        const chunk = JSON.parse(payload);
+                        if (chunk.error) {
+                            botMsg.innerText = "⚠️ Error: " + chunk.error;
+                            break;
+                        }
+                        if (chunk.token) {
+                            fullReply += chunk.token;
+                            botMsg.innerHTML = formatMessage(fullReply);
+                            chatbox.scrollTop = chatbox.scrollHeight;
+                        }
+                    } catch { continue; }
+                }
+            }
 
             // ✅ SAVE BOT MESSAGE TO SUPABASE
             const { error: botError } = await supabaseClient.from("messages").insert([{
                 role: "bot",
-                content: reply,
+                content: fullReply,
                 session_id: currentSessionId,
                 user_id: currentUser.id
             }]);
@@ -285,7 +307,6 @@ document.addEventListener("DOMContentLoaded", async function () {
 
         chatbox.scrollTop = chatbox.scrollHeight;
 
-        // Close sidebar on mobile after selecting session
         if (window.innerWidth <= 768) closeSidebar();
     }
 
