@@ -25,11 +25,11 @@ def auth_page():
 # ✅ Add these two NEW routes below
 @app.get("/manifest.json")
 async def serve_manifest():
-    return FileResponse("manifest.json")
+    return FileResponse(os.path.join(os.path.dirname(__file__), "manifest.json"))
 
 @app.get("/service-worker.js")
 async def serve_sw():
-    return FileResponse("service-worker.js")
+    return FileResponse(os.path.join(os.path.dirname(__file__), "service-worker.js"))
 
 
 @app.get("/ping")
