@@ -20,6 +20,18 @@ def home():
 def auth_page():
     return FileResponse("auth.html")
 
+
+
+# ✅ Add these two NEW routes below
+@app.get("/manifest.json")
+async def serve_manifest():
+    return FileResponse("manifest.json")
+
+@app.get("/service-worker.js")
+async def serve_sw():
+    return FileResponse("service-worker.js")
+
+
 @app.get("/ping")
 def ping():
     return {"status": "ok"}
