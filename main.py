@@ -25,12 +25,14 @@ def auth_page():
 # ✅ Add these two NEW routes below
 @app.get("/manifest.json")
 async def serve_manifest():
-    return FileResponse(os.path.join(os.path.dirname(__file__), "manifest.json"))
+    path = os.path.join(os.path.dirname(__file__), "manifest.json")
+    print(f"Looking for manifest at: {path}")
+    print(f"File exists: {os.path.exists(path)}")
+    return FileResponse(path)
 
 @app.get("/service-worker.js")
 async def serve_sw():
     return FileResponse(os.path.join(os.path.dirname(__file__), "service-worker.js"))
-
 
 @app.get("/ping")
 def ping():
