@@ -197,32 +197,50 @@ html {
 /* ============================
    MESSAGES
 ============================ */
-.message {
-    max-width: 75%;
-    width: fit-content;
-    padding: 12px 16px;
-    margin: 8px 0;
-    border-radius: 12px;
-    font-size: 14px;
-    line-height: 1.4;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-    box-sizing: border-box;
-}
 
-.user {
+/* USER bubble — stays as green pill on the right */
+.message.user {
     background: #10a37f;
     color: white;
     align-self: flex-end;
     margin-left: auto;
     margin-right: 0;
+    margin-top: 16px;
+    margin-bottom: 4px;
+    padding: 10px 16px;
+    border-radius: 18px 18px 4px 18px;
+    font-size: 14px;
+    line-height: 1.5;
+    max-width: 75%;
+    width: fit-content;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    box-sizing: border-box;
 }
 
-.bot {
-    background: #1e1e1e;
+/* BOT reply — full width, no bubble, like ChatGPT/Claude */
+.message.bot {
+    background: transparent;
     color: #e5e5e5;
     align-self: flex-start;
-    border: 1px solid #2a2a2a;
+    width: 100%;
+    max-width: 100%;
+    border: none;
+    border-radius: 0;
+    padding: 18px 0 18px 0;
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.75;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    box-sizing: border-box;
+    border-bottom: 1px solid #1e1e1e;
+}
+
+/* Typing indicator keeps a subtle look */
+.message.bot.typing {
+    padding: 12px 0;
+    border-bottom: none;
 }
 
 /* ============================
@@ -487,9 +505,16 @@ html {
         max-width: 100%;
     }
 
-    .message {
-        max-width: 78%;
+    /* User bubble stays compact on mobile */
+    .message.user {
+        max-width: 82%;
         font-size: 13px;
+    }
+
+    /* Bot reply full width on mobile too */
+    .message.bot {
+        font-size: 14px;
+        padding: 14px 0;
     }
 
     .input-area.center {
