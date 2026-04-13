@@ -52,6 +52,13 @@
         </div>
 
         <div class="sidebar-bottom">
+
+            <!-- ✅ User Profile -->
+            <div class="user-profile">
+                <div class="user-avatar" id="userAvatar">?</div>
+                <span class="user-fullname" id="userFullname">Loading...</span>
+            </div>
+
             <div class="sidebar-item logout" onclick="logoutUser()">
                 <span class="sidebar-icon">🚪</span>
                 Logout
@@ -116,7 +123,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="static/logic.js"></script>
-
 
     <script>
         if ('serviceWorker' in navigator) {

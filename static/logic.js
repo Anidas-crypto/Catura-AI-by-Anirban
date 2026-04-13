@@ -14,6 +14,27 @@ async function getUser() {
     const { data, error } = await supabaseClient.auth.getUser();
     if (error) console.error("Auth error:", error.message);
     currentUser = data?.user || null;
+
+    // ✅ Populate user profile in sidebar
+    if (currentUser) {
+        const fullName = (
+            currentUser.user_metadata?.full_name ||
+            currentUser.user_metadata?.name ||
+            currentUser.email?.split("@")[0] ||
+            "User"
+        ).trim();
+
+        // Build initials: first letter of first word + first letter of last word
+        const parts = fullName.split(/\s+/).filter(Boolean);
+        const initials = parts.length >= 2
+            ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+            : parts[0].slice(0, 2).toUpperCase();
+
+        const avatarEl = document.getElementById("userAvatar");
+        const nameEl   = document.getElementById("userFullname");
+        if (avatarEl) avatarEl.textContent = initials;
+        if (nameEl)   nameEl.textContent   = fullName;
+    }
 }
 
 // ============================
@@ -202,69 +223,67 @@ document.addEventListener("DOMContentLoaded", async function () {
         // ============================
         // 🤖 FETCH AI RESPONSE (STREAMING)
         // ============================
-        // ============================
-    // 🤖 FETCH AI RESPONSE (STREAMING)
-    // ============================
-    try {
-        const res = await fetch(`/chat?prompt=${encodeURIComponent(message)}`);
-        if (!res.ok) throw new Error("Server error " + res.status);
+        try {
+            const res = await fetch(`/chat?prompt=${encodeURIComponent(message)}`);
+            if (!res.ok) throw new Error("Server error " + res.status);
 
-        typing.remove();
+            typing.remove();
 
-        const botMsg = document.createElement("div");
-        botMsg.classList.add("message", "bot");
-        chatbox.appendChild(botMsg);
+            const botMsg = document.createElement("div");
+            botMsg.classList.add("message", "bot");
+            chatbox.appendChild(botMsg);
 
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-        let fullReply = "";
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = "";
+            let fullReply = "";
 
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
 
-            buffer += decoder.decode(value, { stream: true });
+                buffer += decoder.decode(value, { stream: true });
 
-            const lines = buffer.split("\n");
-            buffer = lines.pop();
+                const lines = buffer.split("\n");
+                buffer = lines.pop();
 
-            for (const line of lines) {
-                if (!line.startsWith("data: ")) continue;
-                const payload = line.slice(6).trim();
-                if (payload === "[DONE]") break;
+                for (const line of lines) {
+                    if (!line.startsWith("data: ")) continue;
+                    const payload = line.slice(6).trim();
+                    if (payload === "[DONE]") break;
 
-                try {
-                    const chunk = JSON.parse(payload);
-                    if (chunk.error) {
-                        botMsg.innerText = "⚠️ Error: " + chunk.error;
-                        break;
-                    }
-                    if (chunk.token) {
-                        fullReply += chunk.token;
-                        botMsg.innerHTML = formatMessage(fullReply);
-                        chatbox.scrollTop = chatbox.scrollHeight;
-                    }
-                } catch { continue; }
+                    try {
+                        const chunk = JSON.parse(payload);
+                        if (chunk.error) {
+                            botMsg.innerText = "⚠️ Error: " + chunk.error;
+                            break;
+                        }
+                        if (chunk.token) {
+                            fullReply += chunk.token;
+                            botMsg.innerHTML = formatMessage(fullReply);
+                            chatbox.scrollTop = chatbox.scrollHeight;
+                        }
+                    } catch { continue; }
+                }
             }
+
+            // ✅ SAVE BOT MESSAGE TO SUPABASE
+            const { error: botError } = await supabaseClient.from("messages").insert([{
+                role: "bot",
+                content: fullReply,
+                session_id: currentSessionId,
+                user_id: currentUser.id
+            }]);
+            if (botError) console.error("❌ Bot message save failed:", botError.message);
+
+        } catch (err) {
+            typing.remove();
+            console.error("❌ AI fetch failed:", err);
+            const errMsg = document.createElement("div");
+            errMsg.classList.add("message", "bot");
+            errMsg.innerText = "⚠️ Failed to get a response. Please try again.";
+            chatbox.appendChild(errMsg);
         }
-
-        const { error: botError } = await supabaseClient.from("messages").insert([{
-            role: "bot",
-            content: fullReply,
-            session_id: currentSessionId,
-            user_id: currentUser.id
-        }]);
-        if (botError) console.error("❌ Bot message save failed:", botError.message);
-
-    } catch (err) {
-        typing.remove();
-        console.error("❌ AI fetch failed:", err);
-        const errMsg = document.createElement("div");
-        errMsg.classList.add("message", "bot");
-        errMsg.innerText = "⚠️ Failed to get a response. Please try again.";
-        chatbox.appendChild(errMsg);
-    }
     };
 
     // ============================
