@@ -30,12 +30,16 @@
       margin-bottom: 1.75rem;
     }
     .logo-box {
-      width: 46px; height: 46px;
-      background: #10a37f;
-      border-radius: 10px;
+      width: 60px; height: 60px;
+      border-radius: 12px;
       display: flex; align-items: center; justify-content: center;
       margin: 0 auto 12px;
-      font-size: 22px; color: white; font-weight: 600;
+      background: transparent;
+    }
+
+    .logo-box img{
+      width: 100%; height: 100%;
+      object-fit: contain;
     }
     .logo-area h1 { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
     .logo-area p  { font-size: 13px; color: #888; }
@@ -130,7 +134,9 @@
   <div class="card">
 
     <div class="logo-area">
-      <div class="logo-box">C</div>
+      <div class="logo-box">
+        <img src="static/logo.png" alt="cature ai logo">
+      </div>
       <h1>Log in to Catura AI</h1>
       <p>Your AI assistant, always there for you</p>
     </div>
