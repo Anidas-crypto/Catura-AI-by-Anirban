@@ -24,7 +24,6 @@ async function getUser() {
             "User"
         ).trim();
 
-        // Build initials: first letter of first word + first letter of last word
         const parts = fullName.split(/\s+/).filter(Boolean);
         const initials = parts.length >= 2
             ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
@@ -76,14 +75,7 @@ function useSuggestion(el) {
 }
 
 // ============================
-// ⚙️ SETTINGS (placeholder)
-// ============================
-function showSettings() {
-    alert("Settings coming soon!");
-}
-
-// ============================
-// 🧾 FORMAT MESSAGE (markdown + code blocks)
+// 🧾 FORMAT MESSAGE
 // ============================
 function formatMessage(text) {
     function escapeHtml(str) {
@@ -93,7 +85,6 @@ function formatMessage(text) {
             .replace(/>/g, "&gt;");
     }
 
-    // Handle fenced code blocks ```lang\n...\n```
     text = text.replace(/```(\w*)\n?([\s\S]*?)```/g, function (_, lang, code) {
         const language = lang || "code";
         const escaped = escapeHtml(code.trimEnd());
@@ -106,23 +97,12 @@ function formatMessage(text) {
         </div>`;
     });
 
-    // Inline code `...`
     text = text.replace(/`([^`]+)`/g, '<code style="background:#0d0d0d;padding:2px 6px;border-radius:4px;font-family:monospace;font-size:13px;">$1</code>');
-
-    // Bold **text**
     text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-
-    // Italic *text*
     text = text.replace(/\*(.*?)\*/g, '<em>$1</em>');
-
-    // Numbered lists
     text = text.replace(/^\d+\.\s(.+)$/gm, '<li>$1</li>');
     text = text.replace(/(<li>.*<\/li>)/s, '<ol>$1</ol>');
-
-    // Bullet lists
     text = text.replace(/^[-•]\s(.+)$/gm, '<li>$1</li>');
-
-    // Newlines to <br>
     text = text.replace(/\n/g, "<br>");
 
     return text;
@@ -137,6 +117,159 @@ function copyCode(btn) {
         btn.textContent = "Copied!";
         setTimeout(() => btn.textContent = "Copy", 2000);
     });
+}
+
+// ============================
+// ⚙️ SETTINGS PANEL
+// ============================
+window.showSettings = function () {
+    const menu = document.querySelector(".sidebar-menu");
+    const email = currentUser?.email || "Not logged in";
+    const fullName = document.getElementById("userFullname")?.textContent || "User";
+    const initials = document.getElementById("userAvatar")?.textContent || "?";
+
+    menu.innerHTML = `
+        <div class="history-header">
+            <button class="back-btn" onclick="showMainMenu()">← Back</button>
+            <span>Settings</span>
+        </div>
+
+        <!-- 1. PROFILE -->
+        <div class="settings-section">
+            <div class="settings-section-title">Profile</div>
+            <div class="settings-profile-card">
+                <div class="settings-avatar">${initials}</div>
+                <div class="settings-profile-info">
+                    <div class="settings-profile-name">${fullName}</div>
+                    <div class="settings-profile-email">${email}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. CHAT SETTINGS -->
+        <div class="settings-section">
+            <div class="settings-section-title">Chat Settings</div>
+
+            <div class="settings-item" onclick="archiveAllChats()">
+                <span class="settings-item-icon">🗂️</span>
+                <div class="settings-item-text">
+                    <div class="settings-item-label">Archive all chats</div>
+                    <div class="settings-item-sub">Hide chats from history</div>
+                </div>
+            </div>
+
+            <div class="settings-item danger" onclick="clearAllChats()">
+                <span class="settings-item-icon">🗑️</span>
+                <div class="settings-item-text">
+                    <div class="settings-item-label">Delete all chats</div>
+                    <div class="settings-item-sub">Permanently remove all history</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. PRIVACY -->
+        <div class="settings-section">
+            <div class="settings-section-title">Privacy</div>
+            <div class="settings-item disabled">
+                <span class="settings-item-icon">🔒</span>
+                <div class="settings-item-text">
+                    <div class="settings-item-label">Privacy controls</div>
+                    <div class="settings-item-sub coming-soon">Coming soon</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. BUG REPORT -->
+        <div class="settings-section">
+            <div class="settings-section-title">Support</div>
+            <div class="settings-item disabled">
+                <span class="settings-item-icon">🐛</span>
+                <div class="settings-item-text">
+                    <div class="settings-item-label">Send bug report</div>
+                    <div class="settings-item-sub coming-soon">Coming soon</div>
+                </div>
+            </div>
+        </div>
+    `;
+};
+
+// ============================
+// 🗂️ ARCHIVE ALL CHATS
+// ============================
+window.archiveAllChats = async function () {
+    const confirmed = confirm("Archive all chats? They will be hidden from your history.");
+    if (!confirmed) return;
+
+    const { error } = await supabaseClient
+        .from("chat_sessions")
+        .update({ archived: true })
+        .eq("user_id", currentUser.id);
+
+    if (error) {
+        // If archive column doesn't exist yet, just show a soft message
+        alert("Archive feature requires an 'archived' column in your chat_sessions table. Add it in Supabase: boolean, default false.");
+    } else {
+        showToast("All chats archived.");
+    }
+};
+
+// ============================
+// 🗑️ DELETE ALL CHATS
+// ============================
+window.clearAllChats = async function () {
+    const confirmed = confirm("Delete ALL chats permanently? This cannot be undone.");
+    if (!confirmed) return;
+
+    // Delete all messages first (FK constraint)
+    const { error: msgError } = await supabaseClient
+        .from("messages")
+        .delete()
+        .eq("user_id", currentUser.id);
+
+    if (msgError) {
+        alert("Failed to delete messages: " + msgError.message);
+        return;
+    }
+
+    // Then delete all sessions
+    const { error: sessError } = await supabaseClient
+        .from("chat_sessions")
+        .delete()
+        .eq("user_id", currentUser.id);
+
+    if (sessError) {
+        alert("Failed to delete sessions: " + sessError.message);
+        return;
+    }
+
+    showToast("All chats deleted.");
+
+    // Reset UI to welcome screen
+    const chatbox   = document.getElementById("chatbox");
+    const inputArea = document.getElementById("inputArea");
+    const welcome   = document.getElementById("welcome");
+    chatbox.innerHTML = "";
+    currentSessionId = generateSessionId();
+    firstMessage = true;
+    if (welcome) welcome.style.display = "block";
+    inputArea.classList.remove("bottom");
+    inputArea.classList.add("center");
+    showMainMenu();
+};
+
+// ============================
+// 🍞 TOAST NOTIFICATION
+// ============================
+function showToast(message) {
+    let toast = document.getElementById("toastNotif");
+    if (!toast) {
+        toast = document.createElement("div");
+        toast.id = "toastNotif";
+        document.body.appendChild(toast);
+    }
+    toast.textContent = message;
+    toast.classList.add("show");
+    setTimeout(() => toast.classList.remove("show"), 3000);
 }
 
 // ============================
@@ -176,15 +309,11 @@ document.addEventListener("DOMContentLoaded", async function () {
         inputArea.classList.remove("center");
         inputArea.classList.add("bottom");
 
-        // USER MESSAGE UI
         const userMsg = document.createElement("div");
         userMsg.classList.add("message", "user");
         userMsg.innerText = message;
         chatbox.appendChild(userMsg);
 
-        // ============================
-        // ✅ CREATE SESSION ON FIRST MESSAGE
-        // ============================
         if (firstMessage) {
             firstMessage = false;
             chatTitle = message.substring(0, 40);
@@ -194,11 +323,9 @@ document.addEventListener("DOMContentLoaded", async function () {
                 title: chatTitle,
                 user_id: currentUser.id
             }]);
-
             if (error) console.error("❌ Session insert failed:", error.message);
         }
 
-        // ✅ SAVE USER MESSAGE TO SUPABASE
         const { error: userError } = await supabaseClient.from("messages").insert([{
             role: "user",
             content: message,
@@ -211,18 +338,12 @@ document.addEventListener("DOMContentLoaded", async function () {
         input.style.height = "auto";
         chatbox.scrollTop = chatbox.scrollHeight;
 
-        // ============================
-        // 🤖 TYPING INDICATOR
-        // ============================
         const typing = document.createElement("div");
         typing.classList.add("message", "bot", "typing");
         typing.innerHTML = `<div class="dots"><span></span><span></span><span></span></div>`;
         chatbox.appendChild(typing);
         chatbox.scrollTop = chatbox.scrollHeight;
 
-        // ============================
-        // 🤖 FETCH AI RESPONSE (STREAMING)
-        // ============================
         try {
             const res = await fetch(`/chat?prompt=${encodeURIComponent(message)}`);
             if (!res.ok) throw new Error("Server error " + res.status);
@@ -243,7 +364,6 @@ document.addEventListener("DOMContentLoaded", async function () {
                 if (done) break;
 
                 buffer += decoder.decode(value, { stream: true });
-
                 const lines = buffer.split("\n");
                 buffer = lines.pop();
 
@@ -254,10 +374,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
                     try {
                         const chunk = JSON.parse(payload);
-                        if (chunk.error) {
-                            botMsg.innerText = "⚠️ Error: " + chunk.error;
-                            break;
-                        }
+                        if (chunk.error) { botMsg.innerText = "⚠️ Error: " + chunk.error; break; }
                         if (chunk.token) {
                             fullReply += chunk.token;
                             botMsg.innerHTML = formatMessage(fullReply);
@@ -267,7 +384,6 @@ document.addEventListener("DOMContentLoaded", async function () {
                 }
             }
 
-            // ✅ SAVE BOT MESSAGE TO SUPABASE
             const { error: botError } = await supabaseClient.from("messages").insert([{
                 role: "bot",
                 content: fullReply,
@@ -312,22 +428,16 @@ document.addEventListener("DOMContentLoaded", async function () {
             .eq("user_id", currentUser.id)
             .order("created_at", { ascending: true });
 
-        if (error) {
-            console.error("❌ Load session failed:", error.message);
-            return;
-        }
+        if (error) { console.error("❌ Load session failed:", error.message); return; }
 
         data.forEach(msg => {
             const div = document.createElement("div");
             div.classList.add("message", msg.role);
-            div.innerHTML = msg.role === "bot"
-                ? formatMessage(msg.content)
-                : msg.content;
+            div.innerHTML = msg.role === "bot" ? formatMessage(msg.content) : msg.content;
             chatbox.appendChild(div);
         });
 
         chatbox.scrollTop = chatbox.scrollHeight;
-
         if (window.innerWidth <= 768) closeSidebar();
     }
 
@@ -341,10 +451,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             .eq("user_id", currentUser.id)
             .order("created_at", { ascending: false });
 
-        if (error) {
-            console.error("❌ History failed:", error.message);
-            return;
-        }
+        if (error) { console.error("❌ History failed:", error.message); return; }
 
         const menu = document.querySelector(".sidebar-menu");
         menu.innerHTML = `
