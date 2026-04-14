@@ -76,67 +76,77 @@ function useSuggestion(el) {
 // ============================
 // 🧾 PREMIUM MARKDOWN RENDERER
 // ============================
-function formatMessage(text) {
+function formatMessage(rawText) {
 
-    function escapeHtml(str) {
-        return str
+    // ✅ STEP 1: Extract ALL code blocks first and replace with placeholders
+    // This prevents any other regex from touching code content
+    const codeBlocks = [];
+    let text = rawText.replace(/```([\w]*)\n?([\s\S]*?)```/g, (match, lang, code) => {
+        const language = lang.trim() || "code";
+        // Preserve the code EXACTLY as-is — no trimming of internal lines
+        const escapedCode = code
             .replace(/&/g, "&amp;")
             .replace(/</g, "&lt;")
             .replace(/>/g, "&gt;");
-    }
-
-    // ── Fenced code blocks ──────────────────────────────
-    text = text.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
-        const language = lang.trim() || "code";
-        const escaped  = escapeHtml(code.trimEnd());
-        return `<div class="code-block">
+        const html = `<div class="code-block">
             <div class="code-header">
                 <span class="lang-label">${language}</span>
                 <button onclick="copyCode(this)">Copy</button>
             </div>
-            <pre><code>${escaped}</code></pre>
+            <pre><code>${escapedCode}</code></pre>
         </div>`;
+        codeBlocks.push(html);
+        return `%%CODEBLOCK_${codeBlocks.length - 1}%%`;
     });
 
-    // ── Tables ───────────────────────────────────────────
-    // Match a markdown table block
+    // ✅ STEP 2: Escape HTML in the remaining non-code text
+    // (only escape in text portions, not in placeholders)
+    const parts = text.split(/(%%CODEBLOCK_\d+%%)/);
+    text = parts.map((part, i) => {
+        if (part.startsWith("%%CODEBLOCK_")) return part;
+        return part
+            .replace(/&(?!amp;|lt;|gt;)/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+    }).join("");
+
+    // ✅ STEP 3: Apply markdown to non-code text
+
+    // Tables
     text = text.replace(/((?:\|.+\|\n?)+)/g, (block) => {
         const rows = block.trim().split("\n").filter(r => r.trim());
         if (rows.length < 2) return block;
         const isSep = r => /^\|[\s\-\|:]+\|$/.test(r.trim());
         if (!isSep(rows[1])) return block;
-
         const parseRow = (row) =>
             row.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim());
-
         const headers = parseRow(rows[0]);
         const body    = rows.slice(2);
-
         const thead = `<thead><tr>${headers.map(h => `<th>${h}</th>`).join("")}</tr></thead>`;
         const tbody = `<tbody>${body.map(r => `<tr>${parseRow(r).map(c => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody>`;
         return `<table>${thead}${tbody}</table>`;
     });
 
-    // ── Headings ─────────────────────────────────────────
+    // Headings
     text = text.replace(/^### (.+)$/gm, "<h3>$1</h3>");
     text = text.replace(/^## (.+)$/gm,  "<h2>$1</h2>");
     text = text.replace(/^# (.+)$/gm,   "<h1>$1</h1>");
 
-    // ── Blockquote ───────────────────────────────────────
-    text = text.replace(/^> (.+)$/gm, "<blockquote>$1</blockquote>");
+    // Blockquote
+    text = text.replace(/^&gt; (.+)$/gm, "<blockquote>$1</blockquote>");
 
-    // ── Horizontal rule ──────────────────────────────────
+    // Horizontal rule
     text = text.replace(/^---+$/gm, "<hr>");
 
-    // ── Bold + Italic ────────────────────────────────────
+    // Bold + Italic
     text = text.replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>");
     text = text.replace(/\*\*(.+?)\*\*/g,     "<strong>$1</strong>");
     text = text.replace(/\*(.+?)\*/g,         "<em>$1</em>");
 
-    // ── Inline code ──────────────────────────────────────
+    // Inline code (only outside code blocks, which are protected)
     text = text.replace(/`([^`]+)`/g, '<span class="inline-code">$1</span>');
 
-    // ── Ordered lists ────────────────────────────────────
+    // Ordered lists
     text = text.replace(/((?:^\d+\. .+\n?)+)/gm, (block) => {
         const items = block.trim().split("\n")
             .map(l => `<li>${l.replace(/^\d+\.\s/, "")}</li>`)
@@ -144,7 +154,7 @@ function formatMessage(text) {
         return `<ol>${items}</ol>`;
     });
 
-    // ── Unordered lists ──────────────────────────────────
+    // Unordered lists
     text = text.replace(/((?:^[-•*] .+\n?)+)/gm, (block) => {
         const items = block.trim().split("\n")
             .map(l => `<li>${l.replace(/^[-•*]\s/, "")}</li>`)
@@ -152,14 +162,14 @@ function formatMessage(text) {
         return `<ul>${items}</ul>`;
     });
 
-    // ── Paragraphs (wrap plain lines) ────────────────────
+    // Paragraphs — wrap plain lines in <p> tags
     const lines = text.split("\n");
     let result = "";
     let para   = "";
 
     for (const line of lines) {
         const trimmed = line.trim();
-        const isBlock = /^<(h[123]|ul|ol|li|blockquote|hr|table|div|pre)/.test(trimmed);
+        const isBlock = /^(<(h[123]|ul|ol|li|blockquote|hr|table|div|pre)|%%CODEBLOCK)/.test(trimmed);
 
         if (!trimmed) {
             if (para.trim()) {
@@ -177,6 +187,9 @@ function formatMessage(text) {
         }
     }
     if (para.trim()) result += `<p>${para.trim()}</p>`;
+
+    // ✅ STEP 4: Restore code blocks from placeholders
+    result = result.replace(/%%CODEBLOCK_(\d+)%%/g, (_, i) => codeBlocks[parseInt(i)]);
 
     return result;
 }
@@ -307,9 +320,7 @@ window.showSettings = function () {
 window.archiveAllChats = async function () {
     if (!confirm("Archive all chats? They will be hidden from your history.")) return;
     const { error } = await supabaseClient
-        .from("chat_sessions")
-        .update({ archived: true })
-        .eq("user_id", currentUser.id);
+        .from("chat_sessions").update({ archived: true }).eq("user_id", currentUser.id);
     if (error) {
         alert("Archive needs an 'archived' boolean column in chat_sessions (default false).");
     } else {
@@ -362,7 +373,6 @@ document.addEventListener("DOMContentLoaded", async function () {
     const inputArea = document.getElementById("inputArea");
     const welcome   = document.getElementById("welcome");
 
-    // ── Auto resize textarea ──────────────────────────────
     window.autoResize = function () {
         input.style.height = "auto";
         input.style.height = input.scrollHeight + "px";
@@ -380,13 +390,11 @@ document.addEventListener("DOMContentLoaded", async function () {
         inputArea.classList.remove("center");
         inputArea.classList.add("bottom");
 
-        // User bubble
         const userMsg = document.createElement("div");
         userMsg.classList.add("message", "user");
         userMsg.innerText = message;
         chatbox.appendChild(userMsg);
 
-        // Session creation on first message
         if (firstMessage) {
             firstMessage = false;
             chatTitle = message.substring(0, 40);
@@ -398,7 +406,6 @@ document.addEventListener("DOMContentLoaded", async function () {
             if (error) console.error("❌ Session insert failed:", error.message);
         }
 
-        // Save user message
         const { error: userError } = await supabaseClient.from("messages").insert([{
             role: "user",
             content: message,
@@ -411,14 +418,10 @@ document.addEventListener("DOMContentLoaded", async function () {
         input.style.height = "auto";
         chatbox.scrollTop = chatbox.scrollHeight;
 
-        // ── Thinking indicator ────────────────────────────
         const thinking = createThinkingIndicator();
         chatbox.appendChild(thinking);
         chatbox.scrollTop = chatbox.scrollHeight;
 
-        // ============================
-        // 🤖 STREAMING RESPONSE
-        // ============================
         try {
             const res = await fetch(`/chat?prompt=${encodeURIComponent(message)}`);
             if (!res.ok) throw new Error("Server error " + res.status);
@@ -426,15 +429,13 @@ document.addEventListener("DOMContentLoaded", async function () {
             thinking.remove();
 
             const botMsg = document.createElement("div");
-            botMsg.classList.add("message", "bot");
-            botMsg.classList.add("cursor-blink"); // blinking cursor while streaming
+            botMsg.classList.add("message", "bot", "cursor-blink");
             chatbox.appendChild(botMsg);
 
             const reader  = res.body.getReader();
             const decoder = new TextDecoder();
             let buffer    = "";
             let fullReply = "";
-            let firstToken = true;
 
             while (true) {
                 const { done, value } = await reader.read();
@@ -457,11 +458,6 @@ document.addEventListener("DOMContentLoaded", async function () {
                         }
                         if (chunk.token) {
                             fullReply += chunk.token;
-                            // Small delay feel on first token
-                            if (firstToken) {
-                                firstToken = false;
-                                await new Promise(r => setTimeout(r, 30));
-                            }
                             botMsg.innerHTML = formatMessage(fullReply);
                             chatbox.scrollTop = chatbox.scrollHeight;
                         }
@@ -469,10 +465,8 @@ document.addEventListener("DOMContentLoaded", async function () {
                 }
             }
 
-            // Remove cursor after done
             botMsg.classList.remove("cursor-blink");
 
-            // Save to Supabase
             const { error: botError } = await supabaseClient.from("messages").insert([{
                 role: "bot",
                 content: fullReply,
@@ -491,7 +485,6 @@ document.addEventListener("DOMContentLoaded", async function () {
         }
     };
 
-    // ── Enter to send ─────────────────────────────────────
     input.addEventListener("keydown", function (e) {
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
@@ -509,8 +502,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         inputArea.classList.add("bottom");
 
         const { data, error } = await supabaseClient
-            .from("messages")
-            .select("*")
+            .from("messages").select("*")
             .eq("session_id", sessionId)
             .eq("user_id", currentUser.id)
             .order("created_at", { ascending: true });
@@ -535,8 +527,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     // ============================
     window.showHistory = async function () {
         const { data, error } = await supabaseClient
-            .from("chat_sessions")
-            .select("*")
+            .from("chat_sessions").select("*")
             .eq("user_id", currentUser.id)
             .order("created_at", { ascending: false });
 

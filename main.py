@@ -20,14 +20,9 @@ def home():
 def auth_page():
     return FileResponse("auth.html")
 
-
-
-# ✅ Add these two NEW routes below
 @app.get("/manifest.json")
 async def serve_manifest():
     path = os.path.join(os.path.dirname(__file__), "manifest.json")
-    print(f"Looking for manifest at: {path}")
-    print(f"File exists: {os.path.exists(path)}")
     return FileResponse(path)
 
 @app.get("/service-worker.js")
@@ -51,21 +46,21 @@ def chat(request: Request, prompt: str):
 
         prompt_lower = prompt.lower()
 
-        # Identity overrides — stream a single token instantly
+        # Identity overrides
         if any(q in prompt_lower for q in [
             "who created you", "who is your developer",
             "who made you", "who built you",
             "your creator", "your developer"
         ]):
             def quick():
-                yield f"data: {json.dumps({'token': 'I was created by Anirban.'})}\n\n"
+                yield f"data: {json.dumps({'token': 'I was created by Anirban.'}, ensure_ascii=False)}\n\n"
                 yield "data: [DONE]\n\n"
             return StreamingResponse(quick(), media_type="text/event-stream",
                 headers={"Set-Cookie": f"session_id={session_id}; Path=/; SameSite=Lax"})
 
         if any(q in prompt_lower for q in ["what is your name", "who are you"]):
             def quick():
-                yield f"data: {json.dumps({'token': 'I am Catura AI, created by Anirban.'})}\n\n"
+                yield f"data: {json.dumps({'token': 'I am Catura AI, created by Anirban.'}, ensure_ascii=False)}\n\n"
                 yield "data: [DONE]\n\n"
             return StreamingResponse(quick(), media_type="text/event-stream",
                 headers={"Set-Cookie": f"session_id={session_id}; Path=/; SameSite=Lax"})
@@ -81,7 +76,11 @@ def chat(request: Request, prompt: str):
                 "content": (
                     "You are Catura AI, a helpful AI assistant created by Anirban. "
                     "Always remember the conversation context and give clear, helpful answers. "
-                    "Format code in markdown code blocks with the language specified."
+                    "When writing code, ALWAYS use proper indentation (4 spaces per level), "
+                    "put each statement on its own line, and wrap ALL code in a fenced "
+                    "markdown code block with the language specified, like:\n"
+                    "```java\n<code here>\n```\n"
+                    "Never compress code onto a single line. Always format code for readability."
                 )
             }
         ] + user_memory[session_id][-20:]
@@ -98,7 +97,10 @@ def chat(request: Request, prompt: str):
                     json={
                         "model": "openai/gpt-3.5-turbo",
                         "messages": messages,
-                        "stream": True
+                        "stream": True,
+                        # ✅ These ensure the model gives properly formatted code
+                        "temperature": 0.3,
+                        "max_tokens": 2048
                     },
                     stream=True,
                     timeout=60
@@ -118,11 +120,11 @@ def chat(request: Request, prompt: str):
                             token = delta.get("content", "")
                             if token:
                                 full_reply += token
-                                yield f"data: {json.dumps({'token': token})}\n\n"
+                                # ✅ ensure_ascii=False preserves all characters exactly
+                                yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
                         except Exception:
                             continue
 
-                # Save to memory after full reply
                 user_memory[session_id].append({"role": "assistant", "content": full_reply})
                 if len(user_memory[session_id]) > 40:
                     user_memory[session_id] = user_memory[session_id][-40:]
@@ -130,7 +132,7 @@ def chat(request: Request, prompt: str):
                 yield "data: [DONE]\n\n"
 
             except Exception as e:
-                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+                yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
                 yield "data: [DONE]\n\n"
 
         return StreamingResponse(
