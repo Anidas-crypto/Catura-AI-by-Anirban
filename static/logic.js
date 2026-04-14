@@ -15,7 +15,6 @@ async function getUser() {
     if (error) console.error("Auth error:", error.message);
     currentUser = data?.user || null;
 
-    // ✅ Populate user profile in sidebar
     if (currentUser) {
         const fullName = (
             currentUser.user_metadata?.full_name ||
@@ -48,7 +47,7 @@ let chatTitle = "New Chat";
 let firstMessage = true;
 
 // ============================
-// 🔀 SIDEBAR FUNCTIONS
+// 🔀 SIDEBAR
 // ============================
 function toggleSidebar() {
     const sidebar = document.getElementById("sidebar");
@@ -65,7 +64,7 @@ function closeSidebar() {
 }
 
 // ============================
-// 💡 SUGGESTION CARDS
+// 💡 SUGGESTIONS
 // ============================
 function useSuggestion(el) {
     const input = document.getElementById("input");
@@ -75,9 +74,10 @@ function useSuggestion(el) {
 }
 
 // ============================
-// 🧾 FORMAT MESSAGE
+// 🧾 PREMIUM MARKDOWN RENDERER
 // ============================
 function formatMessage(text) {
+
     function escapeHtml(str) {
         return str
             .replace(/&/g, "&amp;")
@@ -85,27 +85,100 @@ function formatMessage(text) {
             .replace(/>/g, "&gt;");
     }
 
-    text = text.replace(/```(\w*)\n?([\s\S]*?)```/g, function (_, lang, code) {
-        const language = lang || "code";
-        const escaped = escapeHtml(code.trimEnd());
+    // ── Fenced code blocks ──────────────────────────────
+    text = text.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
+        const language = lang.trim() || "code";
+        const escaped  = escapeHtml(code.trimEnd());
         return `<div class="code-block">
             <div class="code-header">
-                <span>${language}</span>
+                <span class="lang-label">${language}</span>
                 <button onclick="copyCode(this)">Copy</button>
             </div>
             <pre><code>${escaped}</code></pre>
         </div>`;
     });
 
-    text = text.replace(/`([^`]+)`/g, '<code style="background:#0d0d0d;padding:2px 6px;border-radius:4px;font-family:monospace;font-size:13px;">$1</code>');
-    text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-    text = text.replace(/\*(.*?)\*/g, '<em>$1</em>');
-    text = text.replace(/^\d+\.\s(.+)$/gm, '<li>$1</li>');
-    text = text.replace(/(<li>.*<\/li>)/s, '<ol>$1</ol>');
-    text = text.replace(/^[-•]\s(.+)$/gm, '<li>$1</li>');
-    text = text.replace(/\n/g, "<br>");
+    // ── Tables ───────────────────────────────────────────
+    // Match a markdown table block
+    text = text.replace(/((?:\|.+\|\n?)+)/g, (block) => {
+        const rows = block.trim().split("\n").filter(r => r.trim());
+        if (rows.length < 2) return block;
+        const isSep = r => /^\|[\s\-\|:]+\|$/.test(r.trim());
+        if (!isSep(rows[1])) return block;
 
-    return text;
+        const parseRow = (row) =>
+            row.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim());
+
+        const headers = parseRow(rows[0]);
+        const body    = rows.slice(2);
+
+        const thead = `<thead><tr>${headers.map(h => `<th>${h}</th>`).join("")}</tr></thead>`;
+        const tbody = `<tbody>${body.map(r => `<tr>${parseRow(r).map(c => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody>`;
+        return `<table>${thead}${tbody}</table>`;
+    });
+
+    // ── Headings ─────────────────────────────────────────
+    text = text.replace(/^### (.+)$/gm, "<h3>$1</h3>");
+    text = text.replace(/^## (.+)$/gm,  "<h2>$1</h2>");
+    text = text.replace(/^# (.+)$/gm,   "<h1>$1</h1>");
+
+    // ── Blockquote ───────────────────────────────────────
+    text = text.replace(/^> (.+)$/gm, "<blockquote>$1</blockquote>");
+
+    // ── Horizontal rule ──────────────────────────────────
+    text = text.replace(/^---+$/gm, "<hr>");
+
+    // ── Bold + Italic ────────────────────────────────────
+    text = text.replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>");
+    text = text.replace(/\*\*(.+?)\*\*/g,     "<strong>$1</strong>");
+    text = text.replace(/\*(.+?)\*/g,         "<em>$1</em>");
+
+    // ── Inline code ──────────────────────────────────────
+    text = text.replace(/`([^`]+)`/g, '<span class="inline-code">$1</span>');
+
+    // ── Ordered lists ────────────────────────────────────
+    text = text.replace(/((?:^\d+\. .+\n?)+)/gm, (block) => {
+        const items = block.trim().split("\n")
+            .map(l => `<li>${l.replace(/^\d+\.\s/, "")}</li>`)
+            .join("");
+        return `<ol>${items}</ol>`;
+    });
+
+    // ── Unordered lists ──────────────────────────────────
+    text = text.replace(/((?:^[-•*] .+\n?)+)/gm, (block) => {
+        const items = block.trim().split("\n")
+            .map(l => `<li>${l.replace(/^[-•*]\s/, "")}</li>`)
+            .join("");
+        return `<ul>${items}</ul>`;
+    });
+
+    // ── Paragraphs (wrap plain lines) ────────────────────
+    const lines = text.split("\n");
+    let result = "";
+    let para   = "";
+
+    for (const line of lines) {
+        const trimmed = line.trim();
+        const isBlock = /^<(h[123]|ul|ol|li|blockquote|hr|table|div|pre)/.test(trimmed);
+
+        if (!trimmed) {
+            if (para.trim()) {
+                result += `<p>${para.trim()}</p>`;
+                para = "";
+            }
+        } else if (isBlock) {
+            if (para.trim()) {
+                result += `<p>${para.trim()}</p>`;
+                para = "";
+            }
+            result += line + "\n";
+        } else {
+            para += (para ? " " : "") + trimmed;
+        }
+    }
+    if (para.trim()) result += `<p>${para.trim()}</p>`;
+
+    return result;
 }
 
 // ============================
@@ -115,18 +188,59 @@ function copyCode(btn) {
     const code = btn.closest(".code-block").querySelector("code").innerText;
     navigator.clipboard.writeText(code).then(() => {
         btn.textContent = "Copied!";
-        setTimeout(() => btn.textContent = "Copy", 2000);
+        btn.classList.add("copied");
+        setTimeout(() => {
+            btn.textContent = "Copy";
+            btn.classList.remove("copied");
+        }, 2000);
     });
+}
+
+// ============================
+// 🍞 TOAST
+// ============================
+function showToast(message) {
+    let toast = document.getElementById("toastNotif");
+    if (!toast) {
+        toast = document.createElement("div");
+        toast.id = "toastNotif";
+        document.body.appendChild(toast);
+    }
+    toast.textContent = message;
+    toast.classList.add("show");
+    setTimeout(() => toast.classList.remove("show"), 3000);
+}
+
+// ============================
+// 🤔 THINKING INDICATOR
+// ============================
+function createThinkingIndicator() {
+    const div = document.createElement("div");
+    div.classList.add("message", "bot", "typing");
+    div.innerHTML = `
+        <div class="thinking-wrap">
+            <div class="thinking-label">
+                <span class="think-icon"></span>
+                AI is thinking…
+            </div>
+            <div class="skeleton-lines">
+                <div class="skeleton-line"></div>
+                <div class="skeleton-line"></div>
+                <div class="skeleton-line"></div>
+            </div>
+        </div>
+    `;
+    return div;
 }
 
 // ============================
 // ⚙️ SETTINGS PANEL
 // ============================
 window.showSettings = function () {
-    const menu = document.querySelector(".sidebar-menu");
-    const email = currentUser?.email || "Not logged in";
+    const menu     = document.querySelector(".sidebar-menu");
+    const email    = currentUser?.email || "Not logged in";
     const fullName = document.getElementById("userFullname")?.textContent || "User";
-    const initials = document.getElementById("userAvatar")?.textContent || "?";
+    const initials = document.getElementById("userAvatar")?.textContent  || "?";
 
     menu.innerHTML = `
         <div class="history-header">
@@ -134,7 +248,6 @@ window.showSettings = function () {
             <span>Settings</span>
         </div>
 
-        <!-- 1. PROFILE -->
         <div class="settings-section">
             <div class="settings-section-title">Profile</div>
             <div class="settings-profile-card">
@@ -146,10 +259,8 @@ window.showSettings = function () {
             </div>
         </div>
 
-        <!-- 2. CHAT SETTINGS -->
         <div class="settings-section">
             <div class="settings-section-title">Chat Settings</div>
-
             <div class="settings-item" onclick="archiveAllChats()">
                 <span class="settings-item-icon">🗂️</span>
                 <div class="settings-item-text">
@@ -157,7 +268,6 @@ window.showSettings = function () {
                     <div class="settings-item-sub">Hide chats from history</div>
                 </div>
             </div>
-
             <div class="settings-item danger" onclick="clearAllChats()">
                 <span class="settings-item-icon">🗑️</span>
                 <div class="settings-item-text">
@@ -167,7 +277,6 @@ window.showSettings = function () {
             </div>
         </div>
 
-        <!-- 3. PRIVACY -->
         <div class="settings-section">
             <div class="settings-section-title">Privacy</div>
             <div class="settings-item disabled">
@@ -179,7 +288,6 @@ window.showSettings = function () {
             </div>
         </div>
 
-        <!-- 4. BUG REPORT -->
         <div class="settings-section">
             <div class="settings-section-title">Support</div>
             <div class="settings-item disabled">
@@ -197,17 +305,13 @@ window.showSettings = function () {
 // 🗂️ ARCHIVE ALL CHATS
 // ============================
 window.archiveAllChats = async function () {
-    const confirmed = confirm("Archive all chats? They will be hidden from your history.");
-    if (!confirmed) return;
-
+    if (!confirm("Archive all chats? They will be hidden from your history.")) return;
     const { error } = await supabaseClient
         .from("chat_sessions")
         .update({ archived: true })
         .eq("user_id", currentUser.id);
-
     if (error) {
-        // If archive column doesn't exist yet, just show a soft message
-        alert("Archive feature requires an 'archived' column in your chat_sessions table. Add it in Supabase: boolean, default false.");
+        alert("Archive needs an 'archived' boolean column in chat_sessions (default false).");
     } else {
         showToast("All chats archived.");
     }
@@ -217,34 +321,18 @@ window.archiveAllChats = async function () {
 // 🗑️ DELETE ALL CHATS
 // ============================
 window.clearAllChats = async function () {
-    const confirmed = confirm("Delete ALL chats permanently? This cannot be undone.");
-    if (!confirmed) return;
+    if (!confirm("Delete ALL chats permanently? This cannot be undone.")) return;
 
-    // Delete all messages first (FK constraint)
-    const { error: msgError } = await supabaseClient
-        .from("messages")
-        .delete()
-        .eq("user_id", currentUser.id);
+    const { error: msgErr } = await supabaseClient
+        .from("messages").delete().eq("user_id", currentUser.id);
+    if (msgErr) { alert("Failed: " + msgErr.message); return; }
 
-    if (msgError) {
-        alert("Failed to delete messages: " + msgError.message);
-        return;
-    }
-
-    // Then delete all sessions
-    const { error: sessError } = await supabaseClient
-        .from("chat_sessions")
-        .delete()
-        .eq("user_id", currentUser.id);
-
-    if (sessError) {
-        alert("Failed to delete sessions: " + sessError.message);
-        return;
-    }
+    const { error: sessErr } = await supabaseClient
+        .from("chat_sessions").delete().eq("user_id", currentUser.id);
+    if (sessErr) { alert("Failed: " + sessErr.message); return; }
 
     showToast("All chats deleted.");
 
-    // Reset UI to welcome screen
     const chatbox   = document.getElementById("chatbox");
     const inputArea = document.getElementById("inputArea");
     const welcome   = document.getElementById("welcome");
@@ -256,21 +344,6 @@ window.clearAllChats = async function () {
     inputArea.classList.add("center");
     showMainMenu();
 };
-
-// ============================
-// 🍞 TOAST NOTIFICATION
-// ============================
-function showToast(message) {
-    let toast = document.getElementById("toastNotif");
-    if (!toast) {
-        toast = document.createElement("div");
-        toast.id = "toastNotif";
-        document.body.appendChild(toast);
-    }
-    toast.textContent = message;
-    toast.classList.add("show");
-    setTimeout(() => toast.classList.remove("show"), 3000);
-}
 
 // ============================
 // 🚀 APP START
@@ -289,9 +362,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     const inputArea = document.getElementById("inputArea");
     const welcome   = document.getElementById("welcome");
 
-    // ============================
-    // 🔥 AUTO RESIZE TEXTAREA
-    // ============================
+    // ── Auto resize textarea ──────────────────────────────
     window.autoResize = function () {
         input.style.height = "auto";
         input.style.height = input.scrollHeight + "px";
@@ -302,22 +373,23 @@ document.addEventListener("DOMContentLoaded", async function () {
     // 🔥 SEND MESSAGE
     // ============================
     window.sendMessage = async function () {
-        let message = input.value.trim();
+        const message = input.value.trim();
         if (!message) return;
 
         if (welcome) welcome.style.display = "none";
         inputArea.classList.remove("center");
         inputArea.classList.add("bottom");
 
+        // User bubble
         const userMsg = document.createElement("div");
         userMsg.classList.add("message", "user");
         userMsg.innerText = message;
         chatbox.appendChild(userMsg);
 
+        // Session creation on first message
         if (firstMessage) {
             firstMessage = false;
             chatTitle = message.substring(0, 40);
-
             const { error } = await supabaseClient.from("chat_sessions").insert([{
                 session_id: currentSessionId,
                 title: chatTitle,
@@ -326,6 +398,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             if (error) console.error("❌ Session insert failed:", error.message);
         }
 
+        // Save user message
         const { error: userError } = await supabaseClient.from("messages").insert([{
             role: "user",
             content: message,
@@ -338,26 +411,30 @@ document.addEventListener("DOMContentLoaded", async function () {
         input.style.height = "auto";
         chatbox.scrollTop = chatbox.scrollHeight;
 
-        const typing = document.createElement("div");
-        typing.classList.add("message", "bot", "typing");
-        typing.innerHTML = `<div class="dots"><span></span><span></span><span></span></div>`;
-        chatbox.appendChild(typing);
+        // ── Thinking indicator ────────────────────────────
+        const thinking = createThinkingIndicator();
+        chatbox.appendChild(thinking);
         chatbox.scrollTop = chatbox.scrollHeight;
 
+        // ============================
+        // 🤖 STREAMING RESPONSE
+        // ============================
         try {
             const res = await fetch(`/chat?prompt=${encodeURIComponent(message)}`);
             if (!res.ok) throw new Error("Server error " + res.status);
 
-            typing.remove();
+            thinking.remove();
 
             const botMsg = document.createElement("div");
             botMsg.classList.add("message", "bot");
+            botMsg.classList.add("cursor-blink"); // blinking cursor while streaming
             chatbox.appendChild(botMsg);
 
-            const reader = res.body.getReader();
+            const reader  = res.body.getReader();
             const decoder = new TextDecoder();
-            let buffer = "";
+            let buffer    = "";
             let fullReply = "";
+            let firstToken = true;
 
             while (true) {
                 const { done, value } = await reader.read();
@@ -374,9 +451,17 @@ document.addEventListener("DOMContentLoaded", async function () {
 
                     try {
                         const chunk = JSON.parse(payload);
-                        if (chunk.error) { botMsg.innerText = "⚠️ Error: " + chunk.error; break; }
+                        if (chunk.error) {
+                            botMsg.innerHTML = `<p style="color:#e06c6c">⚠️ ${chunk.error}</p>`;
+                            break;
+                        }
                         if (chunk.token) {
                             fullReply += chunk.token;
+                            // Small delay feel on first token
+                            if (firstToken) {
+                                firstToken = false;
+                                await new Promise(r => setTimeout(r, 30));
+                            }
                             botMsg.innerHTML = formatMessage(fullReply);
                             chatbox.scrollTop = chatbox.scrollHeight;
                         }
@@ -384,6 +469,10 @@ document.addEventListener("DOMContentLoaded", async function () {
                 }
             }
 
+            // Remove cursor after done
+            botMsg.classList.remove("cursor-blink");
+
+            // Save to Supabase
             const { error: botError } = await supabaseClient.from("messages").insert([{
                 role: "bot",
                 content: fullReply,
@@ -393,18 +482,16 @@ document.addEventListener("DOMContentLoaded", async function () {
             if (botError) console.error("❌ Bot message save failed:", botError.message);
 
         } catch (err) {
-            typing.remove();
+            thinking.remove();
             console.error("❌ AI fetch failed:", err);
             const errMsg = document.createElement("div");
             errMsg.classList.add("message", "bot");
-            errMsg.innerText = "⚠️ Failed to get a response. Please try again.";
+            errMsg.innerHTML = `<p style="color:#e06c6c">⚠️ Failed to get a response. Please try again.</p>`;
             chatbox.appendChild(errMsg);
         }
     };
 
-    // ============================
-    // ⌨️ ENTER KEY TO SEND
-    // ============================
+    // ── Enter to send ─────────────────────────────────────
     input.addEventListener("keydown", function (e) {
         if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
@@ -413,7 +500,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     });
 
     // ============================
-    // 📂 LOAD EXISTING SESSION
+    // 📂 LOAD SESSION
     // ============================
     async function loadSession(sessionId) {
         chatbox.innerHTML = "";
@@ -433,7 +520,9 @@ document.addEventListener("DOMContentLoaded", async function () {
         data.forEach(msg => {
             const div = document.createElement("div");
             div.classList.add("message", msg.role);
-            div.innerHTML = msg.role === "bot" ? formatMessage(msg.content) : msg.content;
+            div.innerHTML = msg.role === "bot"
+                ? formatMessage(msg.content)
+                : msg.content;
             chatbox.appendChild(div);
         });
 
@@ -442,7 +531,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
 
     // ============================
-    // 📜 SHOW CHAT HISTORY
+    // 📜 SHOW HISTORY
     // ============================
     window.showHistory = async function () {
         const { data, error } = await supabaseClient
