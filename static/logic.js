@@ -79,7 +79,6 @@ function useSuggestion(el) {
 function isHeavyQuery(text) {
     const lower = text.toLowerCase().trim();
 
-    // Always heavy if message is long
     if (lower.length > 80) return true;
 
     const heavyKeywords = [
@@ -99,11 +98,11 @@ function isHeavyQuery(text) {
 }
 
 // ============================
-// 🧾 PREMIUM MARKDOWN RENDERER
+// 🧾 MARKDOWN RENDERER
+// Called ONCE after streaming is fully complete
 // ============================
 function formatMessage(rawText) {
 
-    // ✅ STEP 1: Extract ALL code blocks first and replace with placeholders
     const codeBlocks = [];
     let text = rawText.replace(/```([\w]*)\n?([\s\S]*?)```/g, (match, lang, code) => {
         const language = lang.trim() || "code";
@@ -122,17 +121,14 @@ function formatMessage(rawText) {
         return `%%CODEBLOCK_${codeBlocks.length - 1}%%`;
     });
 
-    // ✅ STEP 2: Escape HTML in the remaining non-code text
     const parts = text.split(/(%%CODEBLOCK_\d+%%)/);
-    text = parts.map((part, i) => {
+    text = parts.map((part) => {
         if (part.startsWith("%%CODEBLOCK_")) return part;
         return part
             .replace(/&(?!amp;|lt;|gt;)/g, "&amp;")
             .replace(/</g, "&lt;")
             .replace(/>/g, "&gt;");
     }).join("");
-
-    // ✅ STEP 3: Apply markdown to non-code text
 
     // Tables
     text = text.replace(/((?:\|.+\|\n?)+)/g, (block) => {
@@ -149,26 +145,16 @@ function formatMessage(rawText) {
         return `<table>${thead}${tbody}</table>`;
     });
 
-    // Headings
     text = text.replace(/^### (.+)$/gm, "<h3>$1</h3>");
     text = text.replace(/^## (.+)$/gm,  "<h2>$1</h2>");
     text = text.replace(/^# (.+)$/gm,   "<h1>$1</h1>");
-
-    // Blockquote
     text = text.replace(/^&gt; (.+)$/gm, "<blockquote>$1</blockquote>");
-
-    // Horizontal rule
     text = text.replace(/^---+$/gm, "<hr>");
-
-    // Bold + Italic
     text = text.replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>");
     text = text.replace(/\*\*(.+?)\*\*/g,     "<strong>$1</strong>");
     text = text.replace(/\*(.+?)\*/g,         "<em>$1</em>");
-
-    // Inline code
     text = text.replace(/`([^`]+)`/g, '<span class="inline-code">$1</span>');
 
-    // Ordered lists
     text = text.replace(/((?:^\d+\. .+\n?)+)/gm, (block) => {
         const items = block.trim().split("\n")
             .map(l => `<li>${l.replace(/^\d+\.\s/, "")}</li>`)
@@ -176,7 +162,6 @@ function formatMessage(rawText) {
         return `<ol>${items}</ol>`;
     });
 
-    // Unordered lists
     text = text.replace(/((?:^[-•*] .+\n?)+)/gm, (block) => {
         const items = block.trim().split("\n")
             .map(l => `<li>${l.replace(/^[-•*]\s/, "")}</li>`)
@@ -184,7 +169,6 @@ function formatMessage(rawText) {
         return `<ul>${items}</ul>`;
     });
 
-    // Paragraphs
     const lines = text.split("\n");
     let result = "";
     let para   = "";
@@ -210,7 +194,6 @@ function formatMessage(rawText) {
     }
     if (para.trim()) result += `<p>${para.trim()}</p>`;
 
-    // ✅ STEP 4: Restore code blocks
     result = result.replace(/%%CODEBLOCK_(\d+)%%/g, (_, i) => codeBlocks[parseInt(i)]);
 
     return result;
@@ -282,6 +265,58 @@ function createLightIndicator() {
         </div>
     `;
     return div;
+}
+
+// ============================
+// ✍️ WORD-BY-WORD STREAM RENDERER
+// Step 1 — show raw text token by token (fast, visible, word-by-word)
+// Step 2 — when done, replace with full markdown render
+// ============================
+async function streamWords(botMsg, reader, decoder, chatbox) {
+    let buffer    = "";
+    let fullReply = "";
+
+    // Live text container shown during streaming
+    const liveSpan = document.createElement("span");
+    liveSpan.style.cssText = "white-space: pre-wrap; word-break: break-word; font-size: 15px; line-height: 1.8; color: #d4d4d4;";
+    botMsg.appendChild(liveSpan);
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop();
+
+        for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            const payload = line.slice(6).trim();
+            if (payload === "[DONE]") break;
+
+            try {
+                const chunk = JSON.parse(payload);
+
+                if (chunk.error) {
+                    botMsg.innerHTML = `<p style="color:#e06c6c">⚠️ ${chunk.error}</p>`;
+                    return "";
+                }
+
+                if (chunk.token) {
+                    fullReply += chunk.token;
+                    // ✅ Append token directly — no markdown, just raw text
+                    // This is what makes it look word-by-word like ChatGPT
+                    liveSpan.textContent = fullReply;
+                    chatbox.scrollTop = chatbox.scrollHeight;
+                }
+            } catch { continue; }
+        }
+    }
+
+    // ✅ Stream complete — swap raw text for rendered markdown
+    botMsg.innerHTML = formatMessage(fullReply);
+
+    return fullReply;
 }
 
 // ============================
@@ -456,7 +491,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         input.style.height = "auto";
         chatbox.scrollTop = chatbox.scrollHeight;
 
-        // ✅ SMART INDICATOR: heavy query = thinking animation, light = dots only
+        // Smart indicator
         const heavy = isHeavyQuery(message);
         const thinking = heavy ? createThinkingIndicator() : createLightIndicator();
         chatbox.appendChild(thinking);
@@ -468,52 +503,26 @@ document.addEventListener("DOMContentLoaded", async function () {
 
             thinking.remove();
 
+            // ✅ Bot message container
             const botMsg = document.createElement("div");
-            botMsg.classList.add("message", "bot", "cursor-blink");
+            botMsg.classList.add("message", "bot");
             chatbox.appendChild(botMsg);
 
             const reader  = res.body.getReader();
             const decoder = new TextDecoder();
-            let buffer    = "";
-            let fullReply = "";
 
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
+            // ✅ Word-by-word stream, markdown rendered at the end
+            const fullReply = await streamWords(botMsg, reader, decoder, chatbox);
 
-                buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split("\n");
-                buffer = lines.pop();
-
-                for (const line of lines) {
-                    if (!line.startsWith("data: ")) continue;
-                    const payload = line.slice(6).trim();
-                    if (payload === "[DONE]") break;
-
-                    try {
-                        const chunk = JSON.parse(payload);
-                        if (chunk.error) {
-                            botMsg.innerHTML = `<p style="color:#e06c6c">⚠️ ${chunk.error}</p>`;
-                            break;
-                        }
-                        if (chunk.token) {
-                            fullReply += chunk.token;
-                            botMsg.innerHTML = formatMessage(fullReply);
-                            chatbox.scrollTop = chatbox.scrollHeight;
-                        }
-                    } catch { continue; }
-                }
+            if (fullReply) {
+                const { error: botError } = await supabaseClient.from("messages").insert([{
+                    role: "bot",
+                    content: fullReply,
+                    session_id: currentSessionId,
+                    user_id: currentUser.id
+                }]);
+                if (botError) console.error("❌ Bot message save failed:", botError.message);
             }
-
-            botMsg.classList.remove("cursor-blink");
-
-            const { error: botError } = await supabaseClient.from("messages").insert([{
-                role: "bot",
-                content: fullReply,
-                session_id: currentSessionId,
-                user_id: currentUser.id
-            }]);
-            if (botError) console.error("❌ Bot message save failed:", botError.message);
 
         } catch (err) {
             thinking.remove();
