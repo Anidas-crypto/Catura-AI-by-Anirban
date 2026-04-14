@@ -159,7 +159,7 @@ function formatMessage(rawText) {
         const items = block.trim().split("\n")
             .map(l => `<li>${l.replace(/^\d+\.\s/, "")}</li>`)
             .join("");
-        return `<ol>${items}</ol>`;
+        return `<ol style="list-style-type: decimal; counter-reset: none;">${items}</ol>`;
     });
 
     text = text.replace(/((?:^[-•*] .+\n?)+)/gm, (block) => {

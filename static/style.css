@@ -1147,3 +1147,11 @@ html {
     color: #10a37f;
     border-color: #10a37f44;
 }
+
+.message.bot ol {
+    list-style-type: decimal;
+}
+
+.message.bot ol li {
+    display: list-item;
+}
