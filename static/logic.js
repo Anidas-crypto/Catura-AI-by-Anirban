@@ -74,16 +74,39 @@ function useSuggestion(el) {
 }
 
 // ============================
+// 🧠 QUERY COMPLEXITY DETECTOR
+// ============================
+function isHeavyQuery(text) {
+    const lower = text.toLowerCase().trim();
+
+    // Always heavy if message is long
+    if (lower.length > 80) return true;
+
+    const heavyKeywords = [
+        "explain", "write", "create", "build",
+        "code", "script", "program", "function",
+        "debug", "fix", "error", "bug",
+        "step by step", "line by line", "breakdown",
+        "compare", "difference between", " vs ",
+        "how does", "how do i", "how to",
+        "generate", "summarize", "analyze",
+        "essay", "give me", "make a",
+        "implement", "refactor", "optimiz",
+        "algorithm", "convert", "translate"
+    ];
+
+    return heavyKeywords.some(kw => lower.includes(kw));
+}
+
+// ============================
 // 🧾 PREMIUM MARKDOWN RENDERER
 // ============================
 function formatMessage(rawText) {
 
     // ✅ STEP 1: Extract ALL code blocks first and replace with placeholders
-    // This prevents any other regex from touching code content
     const codeBlocks = [];
     let text = rawText.replace(/```([\w]*)\n?([\s\S]*?)```/g, (match, lang, code) => {
         const language = lang.trim() || "code";
-        // Preserve the code EXACTLY as-is — no trimming of internal lines
         const escapedCode = code
             .replace(/&/g, "&amp;")
             .replace(/</g, "&lt;")
@@ -100,7 +123,6 @@ function formatMessage(rawText) {
     });
 
     // ✅ STEP 2: Escape HTML in the remaining non-code text
-    // (only escape in text portions, not in placeholders)
     const parts = text.split(/(%%CODEBLOCK_\d+%%)/);
     text = parts.map((part, i) => {
         if (part.startsWith("%%CODEBLOCK_")) return part;
@@ -143,7 +165,7 @@ function formatMessage(rawText) {
     text = text.replace(/\*\*(.+?)\*\*/g,     "<strong>$1</strong>");
     text = text.replace(/\*(.+?)\*/g,         "<em>$1</em>");
 
-    // Inline code (only outside code blocks, which are protected)
+    // Inline code
     text = text.replace(/`([^`]+)`/g, '<span class="inline-code">$1</span>');
 
     // Ordered lists
@@ -162,7 +184,7 @@ function formatMessage(rawText) {
         return `<ul>${items}</ul>`;
     });
 
-    // Paragraphs — wrap plain lines in <p> tags
+    // Paragraphs
     const lines = text.split("\n");
     let result = "";
     let para   = "";
@@ -188,7 +210,7 @@ function formatMessage(rawText) {
     }
     if (para.trim()) result += `<p>${para.trim()}</p>`;
 
-    // ✅ STEP 4: Restore code blocks from placeholders
+    // ✅ STEP 4: Restore code blocks
     result = result.replace(/%%CODEBLOCK_(\d+)%%/g, (_, i) => codeBlocks[parseInt(i)]);
 
     return result;
@@ -225,7 +247,7 @@ function showToast(message) {
 }
 
 // ============================
-// 🤔 THINKING INDICATOR
+// 🤔 HEAVY: THINKING INDICATOR
 // ============================
 function createThinkingIndicator() {
     const div = document.createElement("div");
@@ -241,6 +263,22 @@ function createThinkingIndicator() {
                 <div class="skeleton-line"></div>
                 <div class="skeleton-line"></div>
             </div>
+        </div>
+    `;
+    return div;
+}
+
+// ============================
+// 💬 LIGHT: SIMPLE DOTS INDICATOR
+// ============================
+function createLightIndicator() {
+    const div = document.createElement("div");
+    div.classList.add("message", "bot", "typing");
+    div.innerHTML = `
+        <div class="typing-dots">
+            <span></span>
+            <span></span>
+            <span></span>
         </div>
     `;
     return div;
@@ -418,7 +456,9 @@ document.addEventListener("DOMContentLoaded", async function () {
         input.style.height = "auto";
         chatbox.scrollTop = chatbox.scrollHeight;
 
-        const thinking = createThinkingIndicator();
+        // ✅ SMART INDICATOR: heavy query = thinking animation, light = dots only
+        const heavy = isHeavyQuery(message);
+        const thinking = heavy ? createThinkingIndicator() : createLightIndicator();
         chatbox.appendChild(thinking);
         chatbox.scrollTop = chatbox.scrollHeight;
 
