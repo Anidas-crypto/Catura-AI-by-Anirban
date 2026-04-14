@@ -200,7 +200,7 @@ function formatMessage(rawText) {
 }
 
 // ============================
-// 📋 COPY CODE
+// 📋 COPY CODE (inside code block)
 // ============================
 function copyCode(btn) {
     const code = btn.closest(".code-block").querySelector("code").innerText;
@@ -209,6 +209,63 @@ function copyCode(btn) {
         btn.classList.add("copied");
         setTimeout(() => {
             btn.textContent = "Copy";
+            btn.classList.remove("copied");
+        }, 2000);
+    });
+}
+
+// ============================
+// 📋 COPY FULL BOT ANSWER
+// ============================
+function copyBotAnswer(btn) {
+    // Walk up to the bot message wrapper and grab raw stored text
+    const wrapper = btn.closest(".bot-msg-wrapper");
+    const rawText = wrapper ? wrapper.dataset.raw : "";
+    if (!rawText) return;
+
+    navigator.clipboard.writeText(rawText).then(() => {
+        btn.innerHTML = `
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"/>
+            </svg>
+            Copied!
+        `;
+        btn.classList.add("copied");
+        setTimeout(() => {
+            btn.innerHTML = `
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+                Copy
+            `;
+            btn.classList.remove("copied");
+        }, 2000);
+    });
+}
+
+// ============================
+// 📋 COPY USER MESSAGE
+// ============================
+function copyUserMessage(btn) {
+    const wrapper = btn.closest(".user-msg-wrapper");
+    const text = wrapper ? wrapper.querySelector(".message.user").innerText : "";
+    if (!text) return;
+
+    navigator.clipboard.writeText(text).then(() => {
+        btn.innerHTML = `
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"/>
+            </svg>
+        `;
+        btn.classList.add("copied");
+        setTimeout(() => {
+            btn.innerHTML = `
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+            `;
             btn.classList.remove("copied");
         }, 2000);
     });
@@ -268,15 +325,69 @@ function createLightIndicator() {
 }
 
 // ============================
-// ✍️ WORD-BY-WORD STREAM RENDERER
-// Step 1 — show raw text token by token (fast, visible, word-by-word)
-// Step 2 — when done, replace with full markdown render
+// 📦 CREATE USER MESSAGE BUBBLE
+// With hover-reveal copy button
 // ============================
-async function streamWords(botMsg, reader, decoder, chatbox) {
+function createUserBubble(text) {
+    const wrapper = document.createElement("div");
+    wrapper.classList.add("user-msg-wrapper");
+
+    const bubble = document.createElement("div");
+    bubble.classList.add("message", "user");
+    bubble.innerText = text;
+
+    const copyBtn = document.createElement("button");
+    copyBtn.classList.add("user-copy-btn");
+    copyBtn.title = "Copy message";
+    copyBtn.innerHTML = `
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+        </svg>
+    `;
+    copyBtn.onclick = () => copyUserMessage(copyBtn);
+
+    wrapper.appendChild(copyBtn);
+    wrapper.appendChild(bubble);
+    return wrapper;
+}
+
+// ============================
+// 📦 CREATE BOT MESSAGE WRAPPER
+// With copy button shown below the answer
+// ============================
+function createBotWrapper() {
+    const wrapper = document.createElement("div");
+    wrapper.classList.add("bot-msg-wrapper");
+
+    const botMsg = document.createElement("div");
+    botMsg.classList.add("message", "bot");
+
+    // Copy button row shown below the answer
+    const actionsRow = document.createElement("div");
+    actionsRow.classList.add("bot-actions");
+    actionsRow.innerHTML = `
+        <button class="bot-copy-btn" onclick="copyBotAnswer(this)" title="Copy answer">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+            Copy
+        </button>
+    `;
+
+    wrapper.appendChild(botMsg);
+    wrapper.appendChild(actionsRow);
+    return { wrapper, botMsg };
+}
+
+// ============================
+// ✍️ WORD-BY-WORD STREAM RENDERER
+// ============================
+async function streamWords(botMsg, wrapper, reader, decoder, chatbox) {
     let buffer    = "";
     let fullReply = "";
 
-    // Live text container shown during streaming
     const liveSpan = document.createElement("span");
     liveSpan.style.cssText = "white-space: pre-wrap; word-break: break-word; font-size: 15px; line-height: 1.8; color: #d4d4d4;";
     botMsg.appendChild(liveSpan);
@@ -304,8 +415,6 @@ async function streamWords(botMsg, reader, decoder, chatbox) {
 
                 if (chunk.token) {
                     fullReply += chunk.token;
-                    // ✅ Append token directly — no markdown, just raw text
-                    // This is what makes it look word-by-word like ChatGPT
                     liveSpan.textContent = fullReply;
                     chatbox.scrollTop = chatbox.scrollHeight;
                 }
@@ -313,8 +422,9 @@ async function streamWords(botMsg, reader, decoder, chatbox) {
         }
     }
 
-    // ✅ Stream complete — swap raw text for rendered markdown
+    // ✅ Streaming done — render markdown + store raw text for copy
     botMsg.innerHTML = formatMessage(fullReply);
+    wrapper.dataset.raw = fullReply; // store raw for copy button
 
     return fullReply;
 }
@@ -463,10 +573,9 @@ document.addEventListener("DOMContentLoaded", async function () {
         inputArea.classList.remove("center");
         inputArea.classList.add("bottom");
 
-        const userMsg = document.createElement("div");
-        userMsg.classList.add("message", "user");
-        userMsg.innerText = message;
-        chatbox.appendChild(userMsg);
+        // ✅ User bubble with hover copy button
+        const userBubble = createUserBubble(message);
+        chatbox.appendChild(userBubble);
 
         if (firstMessage) {
             firstMessage = false;
@@ -503,16 +612,15 @@ document.addEventListener("DOMContentLoaded", async function () {
 
             thinking.remove();
 
-            // ✅ Bot message container
-            const botMsg = document.createElement("div");
-            botMsg.classList.add("message", "bot");
-            chatbox.appendChild(botMsg);
+            // ✅ Bot message with copy button below
+            const { wrapper, botMsg } = createBotWrapper();
+            chatbox.appendChild(wrapper);
 
             const reader  = res.body.getReader();
             const decoder = new TextDecoder();
 
-            // ✅ Word-by-word stream, markdown rendered at the end
-            const fullReply = await streamWords(botMsg, reader, decoder, chatbox);
+            // ✅ Word-by-word stream, markdown + raw stored at end
+            const fullReply = await streamWords(botMsg, wrapper, reader, decoder, chatbox);
 
             if (fullReply) {
                 const { error: botError } = await supabaseClient.from("messages").insert([{
@@ -559,12 +667,15 @@ document.addEventListener("DOMContentLoaded", async function () {
         if (error) { console.error("❌ Load session failed:", error.message); return; }
 
         data.forEach(msg => {
-            const div = document.createElement("div");
-            div.classList.add("message", msg.role);
-            div.innerHTML = msg.role === "bot"
-                ? formatMessage(msg.content)
-                : msg.content;
-            chatbox.appendChild(div);
+            if (msg.role === "user") {
+                const bubble = createUserBubble(msg.content);
+                chatbox.appendChild(bubble);
+            } else {
+                const { wrapper, botMsg } = createBotWrapper();
+                botMsg.innerHTML = formatMessage(msg.content);
+                wrapper.dataset.raw = msg.content;
+                chatbox.appendChild(wrapper);
+            }
         });
 
         chatbox.scrollTop = chatbox.scrollHeight;

@@ -1037,3 +1037,113 @@ html {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
 }
+
+/* ============================
+   USER MESSAGE WRAPPER
+   (hover-reveal copy button)
+============================ */
+.user-msg-wrapper {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: flex-end;
+    gap: 6px;
+    margin-top: 20px;
+    margin-bottom: 4px;
+    position: relative;
+}
+
+.user-msg-wrapper .message.user {
+    /* remove the margin/spacing we normally add via .message.user
+       since the wrapper now owns spacing */
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+.user-copy-btn {
+    background: transparent;
+    border: 1px solid #2a2a2a;
+    color: #666;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    opacity: 0;                        /* hidden by default */
+    transition: opacity 0.15s, background 0.15s, color 0.15s;
+    padding: 0;
+    margin-bottom: 2px;
+}
+
+/* Show copy button when hovering the wrapper */
+.user-msg-wrapper:hover .user-copy-btn {
+    opacity: 1;
+}
+
+.user-copy-btn:hover {
+    background: #1e1e1e;
+    color: #fff;
+    border-color: #333;
+}
+
+.user-copy-btn.copied {
+    color: #10a37f;
+    border-color: #10a37f44;
+}
+
+/* ============================
+   BOT MESSAGE WRAPPER
+   (always-visible copy button below answer)
+============================ */
+.bot-msg-wrapper {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    border-bottom: 1px solid #191919;
+    padding-bottom: 4px;
+    margin-bottom: 0;
+}
+
+/* remove the border from .message.bot since wrapper owns it */
+.bot-msg-wrapper .message.bot {
+    border-bottom: none;
+    padding-bottom: 8px;
+}
+
+.bot-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0 12px 0;
+}
+
+.bot-copy-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    border: 1px solid #2a2a2a;
+    color: #666;
+    padding: 5px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 12px;
+    font-family: inherit;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+    width: auto;
+    height: auto;
+}
+
+.bot-copy-btn:hover {
+    background: #1e1e1e;
+    color: #ccc;
+    border-color: #333;
+}
+
+.bot-copy-btn.copied {
+    color: #10a37f;
+    border-color: #10a37f44;
+}
