@@ -49,7 +49,31 @@ let firstMessage = true;
 // ============================
 // 🔀 SIDEBAR
 // ============================
+
+// Desktop: toggle between expanded (open) and collapsed (icon-only)
 function toggleSidebar() {
+    const sidebar = document.getElementById("sidebar");
+    if (window.innerWidth <= 768) {
+        // Mobile: use overlay behavior
+        toggleMobileSidebar();
+        return;
+    }
+    const isOpen = sidebar.classList.contains("open");
+    if (isOpen) {
+        // Expanded → Collapsed
+        sidebar.classList.remove("open");
+        sidebar.classList.add("collapsed");
+        localStorage.setItem("sidebarState", "collapsed");
+    } else {
+        // Collapsed → Expanded
+        sidebar.classList.remove("collapsed");
+        sidebar.classList.add("open");
+        localStorage.setItem("sidebarState", "open");
+    }
+}
+
+// Mobile: open/close sidebar as overlay
+function toggleMobileSidebar() {
     const sidebar = document.getElementById("sidebar");
     const overlay = document.getElementById("sidebarOverlay");
     sidebar.classList.toggle("open");
@@ -62,6 +86,28 @@ function closeSidebar() {
     sidebar.classList.remove("open");
     overlay.classList.remove("show");
 }
+
+// Restore sidebar state on desktop
+function restoreSidebarState() {
+    if (window.innerWidth <= 768) return;
+    const saved = localStorage.getItem("sidebarState");
+    const sidebar = document.getElementById("sidebar");
+    if (saved === "collapsed") {
+        sidebar.classList.remove("open");
+        sidebar.classList.add("collapsed");
+    } else {
+        sidebar.classList.remove("collapsed");
+        sidebar.classList.add("open");
+    }
+}
+
+// Keyboard shortcut: Ctrl+B / Cmd+B to toggle sidebar
+document.addEventListener("keydown", function (e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === "b") {
+        e.preventDefault();
+        toggleSidebar();
+    }
+});
 
 // ============================
 // 💡 SUGGESTIONS
@@ -411,26 +457,26 @@ window.showMainMenu = function () {
     const menu = document.querySelector(".sidebar-menu");
     if (!menu) return;
     menu.innerHTML = `
-        <div class="sidebar-item" onclick="newChat()">
+        <div class="sidebar-item" onclick="newChat()" data-tooltip="New Chat">
             <svg class="sidebar-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                 <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
             </svg>
-            New Chat
+            <span class="sidebar-label">New Chat</span>
         </div>
-        <div class="sidebar-item" onclick="showHistory()">
+        <div class="sidebar-item" onclick="showHistory()" data-tooltip="Chat History">
             <svg class="sidebar-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="10"></circle>
                 <polyline points="12 6 12 12 16 14"></polyline>
             </svg>
-            Chat History
+            <span class="sidebar-label">Chat History</span>
         </div>
-        <div class="sidebar-item" onclick="showSettings()">
+        <div class="sidebar-item" onclick="showSettings()" data-tooltip="Settings">
             <svg class="sidebar-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="3"></circle>
                 <path d="M12 1v6m0 6v6m10.39-9.39l-4.24 4.24m-8.3 0l-4.24-4.24m12.53 8.53l4.24 4.24m-8.3 0l4.24-4.24"></path>
             </svg>
-            Settings
+            <span class="sidebar-label">Settings</span>
         </div>`;
 };
 
@@ -851,6 +897,8 @@ function buildHistoryItem(session, openSessionFn) {
 // 🚀 APP START
 // ============================
 document.addEventListener("DOMContentLoaded", async function () {
+
+    restoreSidebarState();
 
     await getUser();
 
