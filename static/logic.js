@@ -365,6 +365,12 @@ async function streamWords(botMsg, wrapper, reader, decoder, chatbox) {
 // ➕ NEW CHAT  ← FIXED: outside DOMContentLoaded
 // ============================
 window.newChat = function () {
+    // ✅ CLOSE SETTINGS FIRST IF OPEN
+    const overlay = document.getElementById("settingsOverlay");
+    if (overlay && overlay.style.display !== "none") {
+        overlay.style.display = "none";
+    }
+
     currentSessionId = generateSessionId();
     firstMessage = true;
 
@@ -379,6 +385,7 @@ window.newChat = function () {
         inputArea.classList.add("center");
     }
     if (window.innerWidth <= 768) closeSidebar();
+    showMainMenu();
 };
 
 // ============================
@@ -441,24 +448,16 @@ window.showSettings = function () {
 
     showSettingsTab('general', overlay.querySelector('.settings-nav-item.active'));
 
-    // ✅ FIX: Close settings when clicking outside the panel
-    overlay.addEventListener('click', function(e) {
-        if (e.target === overlay) {
-            closeSettings();
-        }
-    }, { once: false });
-
     if (window.innerWidth <= 768) closeSidebar();
 };
 
-// ✅ FIX: REBUILD SIDEBAR MENU AFTER CLOSING SETTINGS
+// ✅ FIX: CLOSE SETTINGS AND DISABLE OVERLAY INTERACTIONS
 window.closeSettings = function () {
     const overlay = document.getElementById("settingsOverlay");
     if (overlay) {
         overlay.style.display = "none";
-        // ✅ CRITICAL FIX: Rebuild the sidebar menu after closing settings
-        showMainMenu();
     }
+    showMainMenu();
 };
 
 window.showSettingsTab = function (tab, clickedEl) {
@@ -710,7 +709,14 @@ function buildHistoryItem(session, openSessionFn) {
 
     info.appendChild(titleEl);
     info.appendChild(dateEl);
-    info.onclick = () => openSessionFn(session.session_id);
+    info.onclick = () => {
+        // ✅ CLOSE SETTINGS FIRST IF OPEN
+        const overlay = document.getElementById("settingsOverlay");
+        if (overlay && overlay.style.display !== "none") {
+            overlay.style.display = "none";
+        }
+        openSessionFn(session.session_id);
+    };
 
     const menuBtn = document.createElement("button");
     menuBtn.classList.add("history-menu-btn");
@@ -913,6 +919,12 @@ document.addEventListener("DOMContentLoaded", async function () {
     // 📜 SHOW HISTORY
     // ============================
     window.showHistory = async function () {
+        // ✅ CLOSE SETTINGS FIRST IF OPEN
+        const overlay = document.getElementById("settingsOverlay");
+        if (overlay && overlay.style.display !== "none") {
+            overlay.style.display = "none";
+        }
+
         const { data, error } = await supabaseClient
             .from("chat_sessions").select("*")
             .eq("user_id", currentUser.id)
