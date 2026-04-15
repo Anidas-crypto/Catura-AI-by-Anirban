@@ -261,7 +261,7 @@ html { scroll-behavior: smooth; }
 
 /* Desktop toggle — REMOVED from header, now inside sidebar */
 .desktop-toggle { display: none !important; }
-.mobile-toggle  { display: flex; }
+.mobile-toggle { display: none; }
 
 /* ============================
    SIDEBAR OVERLAY (mobile)
@@ -288,7 +288,7 @@ html { scroll-behavior: smooth; }
 .header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: center;
     padding: 13px 16px;
     font-weight: 600;
     font-size: 15px;
@@ -918,10 +918,19 @@ html { scroll-behavior: smooth; }
     }
     .sidebar-overlay.show { display: block; }
 
-    .mobile-toggle { display: flex; }
+    /* SHOW mobile hamburger only on mobile */
+    .mobile-toggle { 
+        display: flex !important;
+        position: absolute;
+        left: 12px;
+    }
 
     .app { width: 100%; height: 100dvh; }
-    .header { font-size: 14px; padding: 12px 14px; }
+    .header { 
+        font-size: 14px; 
+        padding: 12px 14px;
+        justify-content: center;
+    }
 
     #chatbox { padding: 16px 12px 130px 12px; max-width: 100%; }
 
