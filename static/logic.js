@@ -441,12 +441,24 @@ window.showSettings = function () {
 
     showSettingsTab('general', overlay.querySelector('.settings-nav-item.active'));
 
+    // ✅ FIX: Close settings when clicking outside the panel
+    overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) {
+            closeSettings();
+        }
+    }, { once: false });
+
     if (window.innerWidth <= 768) closeSidebar();
 };
 
+// ✅ FIX: REBUILD SIDEBAR MENU AFTER CLOSING SETTINGS
 window.closeSettings = function () {
     const overlay = document.getElementById("settingsOverlay");
-    if (overlay) overlay.style.display = "none";
+    if (overlay) {
+        overlay.style.display = "none";
+        // ✅ CRITICAL FIX: Rebuild the sidebar menu after closing settings
+        showMainMenu();
+    }
 };
 
 window.showSettingsTab = function (tab, clickedEl) {
