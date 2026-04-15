@@ -1024,6 +1024,7 @@ html {
 
 /* ============================
    SETTINGS OVERLAY (main body)
+   ✅ CRITICAL FIX: Added pointer-events control
 ============================ */
 .settings-overlay {
     position: absolute;
@@ -1032,6 +1033,18 @@ html {
     z-index: 200;
     animation: fadeUp 0.2s ease;
     overflow: hidden;
+    /* ✅ CRITICAL: Prevent overlay from blocking clicks when hidden */
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+/* ✅ CRITICAL: Enable pointer events only when settings is visible */
+.settings-overlay[style*="display: block"] {
+    pointer-events: auto;
+    opacity: 1;
+    visibility: visible;
 }
 
 .settings-panel-wrap {
