@@ -178,6 +178,8 @@ html {
     background: #0f0f0f;
     flex-shrink: 0;
     letter-spacing: 0.01em;
+    position: relative;
+    z-index: 10;
 }
 
 /* ============================
@@ -197,23 +199,13 @@ html {
     box-sizing: border-box;
 }
 
-/* Scrollbar styling */
-#chatbox::-webkit-scrollbar {
-    width: 4px;
-}
-#chatbox::-webkit-scrollbar-track {
-    background: transparent;
-}
-#chatbox::-webkit-scrollbar-thumb {
-    background: #2a2a2a;
-    border-radius: 4px;
-}
+#chatbox::-webkit-scrollbar { width: 4px; }
+#chatbox::-webkit-scrollbar-track { background: transparent; }
+#chatbox::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 4px; }
 
 /* ============================
    MESSAGES
 ============================ */
-
-/* User bubble */
 .message.user {
     background: #10a37f;
     color: white;
@@ -234,7 +226,6 @@ html {
     animation: msgIn 0.2s ease;
 }
 
-/* Bot reply — full width like ChatGPT/Claude */
 .message.bot {
     background: transparent;
     color: #d4d4d4;
@@ -272,8 +263,6 @@ html {
 /* ============================
    MARKDOWN RENDERING
 ============================ */
-
-/* Headings */
 .message.bot h1,
 .message.bot h2,
 .message.bot h3 {
@@ -286,19 +275,12 @@ html {
 .message.bot h2 { font-size: 17px; }
 .message.bot h3 { font-size: 15px; }
 
-/* Paragraphs */
-.message.bot p {
-    margin: 0 0 12px 0;
-}
-.message.bot p:last-child {
-    margin-bottom: 0;
-}
+.message.bot p { margin: 0 0 12px 0; }
+.message.bot p:last-child { margin-bottom: 0; }
 
-/* Bold & italic */
 .message.bot strong { color: #f0f0f0; font-weight: 600; }
 .message.bot em     { color: #bbb; font-style: italic; }
 
-/* Lists */
 .message.bot ul,
 .message.bot ol {
     margin: 8px 0 12px 0;
@@ -312,7 +294,6 @@ html {
 .message.bot ul li::marker { color: #10a37f; }
 .message.bot ol li::marker { color: #10a37f; font-weight: 600; }
 
-/* Blockquote */
 .message.bot blockquote {
     border-left: 3px solid #10a37f;
     margin: 12px 0;
@@ -323,14 +304,12 @@ html {
     font-style: italic;
 }
 
-/* Horizontal rule */
 .message.bot hr {
     border: none;
     border-top: 1px solid #252525;
     margin: 18px 0;
 }
 
-/* Inline code */
 .message.bot .inline-code {
     background: #1a1a1a;
     border: 1px solid #2a2a2a;
@@ -341,7 +320,6 @@ html {
     font-size: 13px;
 }
 
-/* Tables */
 .message.bot table {
     width: 100%;
     border-collapse: collapse;
@@ -363,12 +341,11 @@ html {
     border-bottom: 1px solid #1e1e1e;
     color: #ccc;
 }
-.message.bot tr:last-child td {
-    border-bottom: none;
-}
-.message.bot tr:nth-child(even) td {
-    background: #131313;
-}
+.message.bot tr:last-child td { border-bottom: none; }
+.message.bot tr:nth-child(even) td { background: #131313; }
+
+.message.bot ol { list-style-type: decimal; }
+.message.bot ol li { display: list-item; }
 
 /* ============================
    CODE BLOCKS
@@ -414,16 +391,8 @@ html {
     height: auto;
 }
 
-.code-header button:hover {
-    background: #222;
-    color: #fff;
-    border-color: #333;
-}
-
-.code-header button.copied {
-    color: #10a37f;
-    border-color: #10a37f44;
-}
+.code-header button:hover { background: #222; color: #fff; border-color: #333; }
+.code-header button.copied { color: #10a37f; border-color: #10a37f44; }
 
 .code-block pre {
     margin: 0;
@@ -478,7 +447,6 @@ html {
     50%       { opacity: 1; }
 }
 
-/* Typing dots (for short responses) */
 .typing-dots {
     display: flex;
     gap: 5px;
@@ -503,7 +471,6 @@ html {
     40%           { transform: scale(1);   background: #10a37f; }
 }
 
-/* Skeleton shimmer lines */
 .skeleton-lines {
     display: flex;
     flex-direction: column;
@@ -529,7 +496,7 @@ html {
 }
 
 /* ============================
-   CURSOR BLINK (streaming)
+   CURSOR BLINK
 ============================ */
 .cursor-blink::after {
     content: '▍';
@@ -562,9 +529,7 @@ html {
     transition: border-color 0.2s;
 }
 
-.input-area:focus-within {
-    border-color: #10a37f55;
-}
+.input-area:focus-within { border-color: #10a37f55; }
 
 .input-area.center {
     position: absolute;
@@ -602,9 +567,7 @@ html {
     box-sizing: border-box;
 }
 
-#input::placeholder {
-    color: #444;
-}
+#input::placeholder { color: #444; }
 
 .input-area button {
     width: 36px;
@@ -623,14 +586,8 @@ html {
     margin-bottom: 1px;
 }
 
-.input-area button:hover {
-    background: #0d8c6d;
-    transform: scale(1.05);
-}
-
-.input-area button:active {
-    transform: scale(0.95);
-}
+.input-area button:hover  { background: #0d8c6d; transform: scale(1.05); }
+.input-area button:active { transform: scale(0.95); }
 
 /* ============================
    WELCOME SCREEN
@@ -689,7 +646,7 @@ html {
 }
 
 /* ============================
-   TYPING DOTS (legacy, kept for safety)
+   TYPING DOTS (legacy)
 ============================ */
 .typing .dots {
     display: flex;
@@ -715,10 +672,7 @@ html {
 ============================ */
 @media (max-width: 768px) {
 
-    body {
-        display: block;
-        overflow: hidden;
-    }
+    body { display: block; overflow: hidden; }
 
     .sidebar {
         position: fixed;
@@ -732,7 +686,6 @@ html {
     }
 
     .sidebar.open { left: 0; }
-
     .close-btn { display: block; }
 
     .sidebar-overlay {
@@ -757,31 +710,16 @@ html {
         max-width: 100%;
     }
 
-    .message.user {
-        max-width: 82%;
-        font-size: 13px;
-    }
+    .message.user { max-width: 82%; font-size: 13px; }
+    .message.bot  { font-size: 14px; padding: 16px 0; }
 
-    .message.bot {
-        font-size: 14px;
-        padding: 16px 0;
-    }
+    .input-area.center { width: 92%; top: 68%; }
 
-    .input-area.center {
-        width: 92%;
-        top: 68%;
-    }
-
-    .welcome {
-        width: 92%;
-        top: 30%;
-    }
-
+    .welcome { width: 92%; top: 30%; }
     .welcome h1 { font-size: 21px; }
     .welcome p  { font-size: 13px; }
 
     .suggestions { grid-template-columns: 1fr; }
-
     .card { font-size: 13px; padding: 12px; }
 }
 
@@ -815,8 +753,10 @@ html {
 .back-btn:hover { background: #0f1f1a; }
 
 .history-item {
-    align-items: flex-start !important;
-    padding: 10px 12px !important;
+    align-items: center !important;
+    padding: 10px 10px !important;
+    gap: 4px !important;
+    position: relative;
 }
 
 .history-info {
@@ -824,6 +764,8 @@ html {
     flex-direction: column;
     gap: 2px;
     overflow: hidden;
+    flex: 1;
+    min-width: 0;
 }
 
 .history-title {
@@ -832,7 +774,7 @@ html {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 170px;
+    max-width: 160px;
 }
 
 .history-date {
@@ -899,118 +841,75 @@ html {
 }
 
 /* ============================
-   SETTINGS PANEL
+   HISTORY ITEM — 3-DOT MENU
 ============================ */
-.settings-section { margin-bottom: 4px; }
+.history-menu-wrap {
+    position: relative;
+    flex-shrink: 0;
+}
 
-.settings-section-title {
-    font-size: 10px;
-    font-weight: 600;
+.history-menu-btn {
+    background: transparent;
+    border: none;
     color: #555;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    padding: 10px 14px 5px 14px;
-}
-
-.settings-profile-card {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 14px;
-    background: #161616;
-    border: 1px solid #222;
-    border-radius: 10px;
-    margin: 0 2px;
-}
-
-.settings-avatar {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    background: #10a37f;
-    color: white;
-    font-size: 13px;
-    font-weight: 700;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: 0;
+    opacity: 0;
+    transition: opacity 0.15s, background 0.15s, color 0.15s;
     flex-shrink: 0;
 }
 
-.settings-profile-info {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    overflow: hidden;
+.history-item:hover .history-menu-btn { opacity: 1; }
+.history-menu-btn:hover { background: #2a2a2a; color: #fff; }
+
+.history-dropdown {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: calc(100% + 4px);
+    background: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    border-radius: 10px;
+    padding: 4px;
+    min-width: 148px;
+    z-index: 9999;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    animation: dropIn 0.12s ease;
 }
 
-.settings-profile-name {
-    font-size: 13px;
-    font-weight: 600;
-    color: #e5e5e5;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+.history-dropdown.open { display: flex; flex-direction: column; }
+
+@keyframes dropIn {
+    from { opacity: 0; transform: translateY(-4px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-.settings-profile-email {
-    font-size: 11px;
-    color: #666;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.settings-item {
+.history-dropdown-item {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 10px 14px;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: background 0.15s;
-    user-select: none;
-}
-
-.settings-item:hover:not(.disabled) { background: #1a1a1a; }
-
-.settings-item.disabled {
-    cursor: default;
-    opacity: 0.45;
-}
-
-.settings-item.danger .settings-item-label { color: #e06c6c; }
-.settings-item.danger:hover { background: #1f1515 !important; }
-
-.settings-item-icon {
-    font-size: 15px;
-    flex-shrink: 0;
-    width: 20px;
-    text-align: center;
-}
-
-.settings-item-text {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    overflow: hidden;
-}
-
-.settings-item-label {
+    gap: 9px;
+    padding: 8px 10px;
+    border-radius: 7px;
+    background: transparent;
+    border: none;
+    color: #ccc;
     font-size: 13px;
-    color: #ddd;
-    white-space: nowrap;
+    font-family: inherit;
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+    transition: background 0.12s, color 0.12s;
 }
 
-.settings-item-sub {
-    font-size: 11px;
-    color: #555;
-}
-
-.coming-soon {
-    color: #10a37f !important;
-    font-style: italic;
-}
+.history-dropdown-item:hover { background: #252525; color: #fff; }
+.history-dropdown-item.danger { color: #e06c6c; }
+.history-dropdown-item.danger:hover { background: #1f1515; color: #ff8080; }
 
 /* ============================
    TOAST NOTIFICATION
@@ -1040,7 +939,6 @@ html {
 
 /* ============================
    USER MESSAGE WRAPPER
-   (hover-reveal copy button)
 ============================ */
 .user-msg-wrapper {
     display: flex;
@@ -1051,123 +949,6 @@ html {
     margin-top: 20px;
     margin-bottom: 4px;
     position: relative;
-}
-
-.user-msg-wrapper .message.user {
-    /* remove the margin/spacing we normally add via .message.user
-       since the wrapper now owns spacing */
-    margin-top: 0;
-    margin-bottom: 0;
-}
-
-.user-copy-btn {
-    background: transparent;
-    border: 1px solid #2a2a2a;
-    color: #666;
-    width: 28px;
-    height: 28px;
-    border-radius: 8px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    opacity: 0;                        /* hidden by default */
-    transition: opacity 0.15s, background 0.15s, color 0.15s;
-    padding: 0;
-    margin-bottom: 2px;
-}
-
-/* Show copy button when hovering the wrapper */
-.user-msg-wrapper:hover .user-copy-btn {
-    opacity: 1;
-}
-
-.user-copy-btn:hover {
-    background: #1e1e1e;
-    color: #fff;
-    border-color: #333;
-}
-
-.user-copy-btn.copied {
-    color: #10a37f;
-    border-color: #10a37f44;
-}
-
-/* ============================
-   BOT MESSAGE WRAPPER
-   (always-visible copy button below answer)
-============================ */
-.bot-msg-wrapper {
-    display: flex;
-    flex-direction: column;
-    width: 100%;
-    border-bottom: 1px solid #191919;
-    padding-bottom: 4px;
-    margin-bottom: 0;
-}
-
-/* remove the border from .message.bot since wrapper owns it */
-.bot-msg-wrapper .message.bot {
-    border-bottom: none;
-    padding-bottom: 8px;
-}
-
-.bot-actions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 0 12px 0;
-}
-
-.bot-copy-btn {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    background: transparent;
-    border: 1px solid #2a2a2a;
-    color: #666;
-    padding: 5px 12px;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 12px;
-    font-family: inherit;
-    transition: background 0.15s, color 0.15s, border-color 0.15s;
-    width: auto;
-    height: auto;
-}
-
-.bot-copy-btn:hover {
-    background: #1e1e1e;
-    color: #ccc;
-    border-color: #333;
-}
-
-.bot-copy-btn.copied {
-    color: #10a37f;
-    border-color: #10a37f44;
-}
-
-.message.bot ol {
-    list-style-type: decimal;
-}
-
-.message.bot ol li {
-    display: list-item;
-}
-
-
-/* ============================
-   USER MESSAGE WRAPPER
-============================ */
-.user-msg-wrapper {
-    display: flex;
-    flex-direction: row;
-    align-items: flex-end;
-    justify-content: flex-end;
-    gap: 6px;
-    margin-top: 20px;
-    margin-bottom: 4px;
 }
 
 .user-msg-wrapper .message.user {
@@ -1206,6 +987,7 @@ html {
     width: 100%;
     border-bottom: 1px solid #191919;
     padding-bottom: 4px;
+    margin-bottom: 0;
 }
 
 .bot-msg-wrapper .message.bot {
@@ -1241,135 +1023,207 @@ html {
 .bot-copy-btn.copied { color: #10a37f; border-color: #10a37f44; }
 
 /* ============================
-   HISTORY ITEM — 3-DOT MENU
+   SETTINGS OVERLAY (main body)
 ============================ */
-.history-item {
-    align-items: center !important;
-    padding: 10px 10px !important;
-    gap: 4px !important;
-    position: relative;
+.settings-overlay {
+    position: absolute;
+    inset: 0;
+    background: #0f0f0f;
+    z-index: 200;
+    animation: fadeUp 0.2s ease;
+    overflow: hidden;
 }
 
-.history-info {
+.settings-panel-wrap {
+    display: flex;
+    height: 100%;
+    overflow: hidden;
+    max-width: 900px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 48px 32px 32px;
+    gap: 40px;
+    box-sizing: border-box;
+}
+
+/* Left nav */
+.settings-nav {
+    width: 200px;
+    flex-shrink: 0;
     display: flex;
     flex-direction: column;
     gap: 2px;
-    overflow: hidden;
-    flex: 1;
-    min-width: 0;
+    padding-top: 4px;
 }
 
-.history-title {
-    font-size: 13px;
-    color: #ddd;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 160px;
+.settings-nav-title {
+    font-size: 20px;
+    font-weight: 600;
+    color: #f0f0f0;
+    margin: 0 0 20px 10px;
+    letter-spacing: -0.01em;
 }
 
-.history-date {
-    font-size: 11px;
-    color: #555;
-}
-
-/* Wrapper that holds the button + dropdown together */
-.history-menu-wrap {
-    position: relative;
-    flex-shrink: 0;
-}
-
-/* 3-dot button */
-.history-menu-btn {
-    background: transparent;
-    border: none;
-    color: #555;
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
+.settings-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    color: #888;
     cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    user-select: none;
+}
+
+.settings-nav-item:hover  { background: #1a1a1a; color: #ddd; }
+.settings-nav-item.active { background: #1e1e1e; color: #fff; }
+
+.sn-icon { font-size: 15px; width: 18px; text-align: center; flex-shrink: 0; }
+
+/* Right content pane */
+.settings-content {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 4px;
+    padding-top: 4px;
+}
+
+.settings-content::-webkit-scrollbar { width: 4px; }
+.settings-content::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 4px; }
+
+/* Close button */
+.settings-close-btn {
+    position: absolute;
+    top: 14px;
+    right: 18px;
+    background: transparent;
+    border: 1px solid #252525;
+    color: #666;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 15px;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 0;
-    opacity: 0;
-    transition: opacity 0.15s, background 0.15s, color 0.15s;
-    flex-shrink: 0;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+    z-index: 10;
 }
 
-/* Show 3-dot button on row hover */
-.history-item:hover .history-menu-btn {
-    opacity: 1;
+.settings-close-btn:hover { background: #1e1e1e; color: #fff; border-color: #333; }
+
+/* Content section blocks */
+.sc-section { margin-bottom: 36px; }
+
+.sc-section-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: #444;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+    padding-left: 2px;
 }
 
-.history-menu-btn:hover {
-    background: #2a2a2a;
-    color: #fff;
-}
-
-/* Dropdown panel */
-.history-dropdown {
-    display: none;
-    position: absolute;
-    right: 0;
-    top: calc(100% + 4px);
-    background: #1a1a1a;
-    border: 1px solid #2a2a2a;
-    border-radius: 10px;
-    padding: 4px;
-    min-width: 148px;
-    z-index: 9999;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-    animation: dropIn 0.12s ease;
-}
-
-.history-dropdown.open {
-    display: flex;
-    flex-direction: column;
-}
-
-@keyframes dropIn {
-    from { opacity: 0; transform: translateY(-4px) scale(0.97); }
-    to   { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-/* Dropdown items */
-.history-dropdown-item {
+/* Profile card */
+.sc-profile-card {
     display: flex;
     align-items: center;
-    gap: 9px;
-    padding: 8px 10px;
-    border-radius: 7px;
-    background: transparent;
-    border: none;
-    color: #ccc;
-    font-size: 13px;
-    font-family: inherit;
+    gap: 14px;
+    padding: 16px 18px;
+    background: #141414;
+    border: 1px solid #222;
+    border-radius: 12px;
+}
+
+.sc-avatar {
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    background: #10a37f;
+    color: white;
+    font-size: 15px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    letter-spacing: 0.5px;
+}
+
+.sc-profile-name  { font-size: 15px; font-weight: 600; color: #e5e5e5; margin: 0 0 3px; }
+.sc-profile-email { font-size: 12px; color: #555; margin: 0; }
+
+/* Action rows */
+.sc-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 13px 16px;
+    background: #141414;
+    border: 1px solid #1e1e1e;
+    border-radius: 10px;
+    margin-bottom: 6px;
     cursor: pointer;
-    text-align: left;
-    width: 100%;
-    transition: background 0.12s, color 0.12s;
+    transition: background 0.15s, border-color 0.15s;
 }
 
-.history-dropdown-item:hover {
-    background: #252525;
-    color: #fff;
+.sc-row:hover:not(.disabled) { background: #1a1a1a; border-color: #2a2a2a; }
+.sc-row.disabled { cursor: default; opacity: 0.4; }
+.sc-row.danger .sc-row-label { color: #e06c6c; }
+.sc-row.danger:hover { background: #1f1515 !important; }
+
+.sc-row-icon  { font-size: 16px; width: 22px; text-align: center; flex-shrink: 0; }
+.sc-row-body  { flex: 1; }
+.sc-row-label { font-size: 14px; color: #ddd; margin: 0 0 2px; }
+.sc-row-sub   { font-size: 12px; color: #555; margin: 0; }
+.sc-row-sub.soon { color: #10a37f; font-style: italic; }
+
+/* Divider inside content */
+.sc-divider {
+    border: none;
+    border-top: 1px solid #1a1a1a;
+    margin: 28px 0;
 }
 
-.history-dropdown-item.danger {
-    color: #e06c6c;
-}
+/* Mobile settings */
+@media (max-width: 768px) {
+    .settings-panel-wrap {
+        flex-direction: column;
+        padding: 52px 16px 20px;
+        gap: 0;
+        overflow-y: auto;
+    }
 
-.history-dropdown-item.danger:hover {
-    background: #1f1515;
-    color: #ff8080;
-}
+    .settings-nav {
+        width: 100%;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        gap: 4px;
+        padding-bottom: 16px;
+        padding-top: 0;
+        border-bottom: 1px solid #1a1a1a;
+        margin-bottom: 20px;
+        scrollbar-width: none;
+    }
 
-/* Fix ordered list numbering */
-.message.bot ol {
-    list-style-type: decimal;
-}
+    .settings-nav::-webkit-scrollbar { display: none; }
 
-.message.bot ol li {
-    display: list-item;
+    .settings-nav-title { display: none; }
+
+    .settings-nav-item {
+        white-space: nowrap;
+        font-size: 13px;
+        padding: 7px 14px;
+        flex-shrink: 0;
+    }
+
+    .settings-content {
+        overflow-y: visible;
+        padding-right: 0;
+    }
 }

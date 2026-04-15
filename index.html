@@ -9,11 +9,8 @@
     <title>Catura AI</title>
     <link rel="icon" type="image/png" href="static/logos.png">
     <link rel="stylesheet" href="static/style.css">
-    <!-- PWA Support -->
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#000000" />
-
-    <!-- iOS Support -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Catura AI" />
@@ -21,57 +18,45 @@
 </head>
 <body>
 
-    <!-- ✅ Overlay (mobile only) -->
     <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
 
-    <!-- ✅ Sidebar -->
     <div class="sidebar open" id="sidebar">
-
         <div class="sidebar-header">
             <span><img src="static/logo.png" alt="Catura AI Logo" class="sidebar-logo"> Catura AI</span>
             <button class="close-btn" onclick="closeSidebar()">✕</button>
         </div>
-
         <div class="sidebar-menu">
-
             <div class="sidebar-item" onclick="newChat()">
                 <span class="sidebar-icon">✏️</span>
                 New Chat
             </div>
-
             <div class="sidebar-item" onclick="showHistory()">
                 <span class="sidebar-icon">🕘</span>
                 Chat History
             </div>
-
             <div class="sidebar-item" onclick="showSettings()">
                 <span class="sidebar-icon">⚙️</span>
                 Settings
             </div>
-
         </div>
-
         <div class="sidebar-bottom">
-
-            <!-- ✅ User Profile -->
             <div class="user-profile">
                 <div class="user-avatar" id="userAvatar">?</div>
                 <span class="user-fullname" id="userFullname">Loading...</span>
             </div>
-
             <div class="sidebar-item logout" onclick="logoutUser()">
                 <span class="sidebar-icon">🚪</span>
                 Logout
             </div>
         </div>
-
     </div>
 
-    <!-- ✅ Main App -->
     <div class="app" id="app">
 
+        <!-- Settings Overlay Panel -->
+        <div id="settingsOverlay" class="settings-overlay" style="display:none;"></div>
+
         <div class="header">
-            <!-- Desktop: sidebar panel icon -->
             <button class="sidebar-toggle desktop-toggle" onclick="toggleSidebar()" title="Toggle Sidebar">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                     <rect x="2" y="3" width="20" height="18" rx="3"/>
@@ -79,8 +64,6 @@
                     <polyline points="12,9 10,12 12,15"/>
                 </svg>
             </button>
-
-            <!-- Mobile: hamburger icon -->
             <button class="sidebar-toggle mobile-toggle" onclick="toggleSidebar()" title="Menu">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                     <line x1="4" y1="7" x2="15" y2="7"/>
@@ -88,7 +71,6 @@
                     <line x1="4" y1="17" x2="20" y2="17"/>
                 </svg>
             </button>
-
             <span>Catura AI</span>
             <div style="width:38px"></div>
         </div>
@@ -97,18 +79,10 @@
             <h1>👋 Welcome to Catura AI</h1>
             <p>How can I help you today?</p>
             <div class="suggestions">
-                <div class="card" onclick="useSuggestion(this)">
-                    Explain quantum computing simply
-                </div>
-                <div class="card" onclick="useSuggestion(this)">
-                    Write a Python script for a chatbot
-                </div>
-                <div class="card" onclick="useSuggestion(this)">
-                    Help me with my homework
-                </div>
-                <div class="card" onclick="useSuggestion(this)">
-                    Give me startup ideas
-                </div>
+                <div class="card" onclick="useSuggestion(this)">Explain quantum computing simply</div>
+                <div class="card" onclick="useSuggestion(this)">Write a Python script for a chatbot</div>
+                <div class="card" onclick="useSuggestion(this)">Help me with my homework</div>
+                <div class="card" onclick="useSuggestion(this)">Give me startup ideas</div>
             </div>
         </div>
 
@@ -127,9 +101,9 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-            navigator.serviceWorker.register('/service-worker.js')
-                .then(() => console.log('✅ Catura AI PWA Ready'))
-                .catch((err) => console.log('❌ SW Error:', err));
+                navigator.serviceWorker.register('/service-worker.js')
+                    .then(() => console.log('✅ Catura AI PWA Ready'))
+                    .catch((err) => console.log('❌ SW Error:', err));
             });
         }
     </script>

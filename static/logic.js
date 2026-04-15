@@ -150,7 +150,6 @@ function formatMessage(rawText) {
     text = text.replace(/\*(.+?)\*/g,         "<em>$1</em>");
     text = text.replace(/`([^`]+)`/g, '<span class="inline-code">$1</span>');
 
-    // ✅ Fixed ordered list — proper 1. 2. 3. numbering
     text = text.replace(/((?:^\d+\. .+\n?)+)/gm, (block) => {
         const items = block.trim().split("\n")
             .map(l => `<li>${l.replace(/^\d+\.\s/, "")}</li>`)
@@ -363,66 +362,176 @@ async function streamWords(botMsg, wrapper, reader, decoder, chatbox) {
 }
 
 // ============================
-// ⚙️ SETTINGS PANEL
+// ⚙️ SETTINGS OVERLAY (main body)
 // ============================
 window.showSettings = function () {
-    const menu     = document.querySelector(".sidebar-menu");
+    const overlay = document.getElementById("settingsOverlay");
+    overlay.style.display = "block";
+
     const email    = currentUser?.email || "Not logged in";
     const fullName = document.getElementById("userFullname")?.textContent || "User";
     const initials = document.getElementById("userAvatar")?.textContent  || "?";
 
-    menu.innerHTML = `
-        <div class="history-header">
-            <button class="back-btn" onclick="showMainMenu()">← Back</button>
-            <span>Settings</span>
-        </div>
-        <div class="settings-section">
-            <div class="settings-section-title">Profile</div>
-            <div class="settings-profile-card">
-                <div class="settings-avatar">${initials}</div>
-                <div class="settings-profile-info">
-                    <div class="settings-profile-name">${fullName}</div>
-                    <div class="settings-profile-email">${email}</div>
+    overlay.innerHTML = `
+        <button class="settings-close-btn" onclick="closeSettings()" title="Close">✕</button>
+        <div class="settings-panel-wrap">
+            <div class="settings-nav">
+                <h2 class="settings-nav-title">Settings</h2>
+                <div class="settings-nav-item active" onclick="showSettingsTab('general', this)">
+                    <span class="sn-icon">⚙️</span> General
+                </div>
+                <div class="settings-nav-item" onclick="showSettingsTab('profile', this)">
+                    <span class="sn-icon">👤</span> Profile
+                </div>
+                <div class="settings-nav-item" onclick="showSettingsTab('chats', this)">
+                    <span class="sn-icon">💬</span> Chats
+                </div>
+                <div class="settings-nav-item" onclick="showSettingsTab('privacy', this)">
+                    <span class="sn-icon">🔒</span> Privacy
                 </div>
             </div>
-        </div>
-        <div class="settings-section">
-            <div class="settings-section-title">Chat Settings</div>
-            <div class="settings-item" onclick="archiveAllChats()">
-                <span class="settings-item-icon">🗂️</span>
-                <div class="settings-item-text">
-                    <div class="settings-item-label">Archive all chats</div>
-                    <div class="settings-item-sub">Hide chats from history</div>
-                </div>
-            </div>
-            <div class="settings-item danger" onclick="clearAllChats()">
-                <span class="settings-item-icon">🗑️</span>
-                <div class="settings-item-text">
-                    <div class="settings-item-label">Delete all chats</div>
-                    <div class="settings-item-sub">Permanently remove all history</div>
-                </div>
-            </div>
-        </div>
-        <div class="settings-section">
-            <div class="settings-section-title">Privacy</div>
-            <div class="settings-item disabled">
-                <span class="settings-item-icon">🔒</span>
-                <div class="settings-item-text">
-                    <div class="settings-item-label">Privacy controls</div>
-                    <div class="settings-item-sub coming-soon">Coming soon</div>
-                </div>
-            </div>
-        </div>
-        <div class="settings-section">
-            <div class="settings-section-title">Support</div>
-            <div class="settings-item disabled">
-                <span class="settings-item-icon">🐛</span>
-                <div class="settings-item-text">
-                    <div class="settings-item-label">Send bug report</div>
-                    <div class="settings-item-sub coming-soon">Coming soon</div>
-                </div>
-            </div>
+            <div class="settings-content" id="settingsContent"></div>
         </div>`;
+
+    // Load default tab
+    showSettingsTab('general', overlay.querySelector('.settings-nav-item.active'));
+
+    if (window.innerWidth <= 768) closeSidebar();
+};
+
+window.closeSettings = function () {
+    const overlay = document.getElementById("settingsOverlay");
+    overlay.style.display = "none";
+};
+
+window.showSettingsTab = function (tab, clickedEl) {
+    document.querySelectorAll(".settings-nav-item").forEach(el => el.classList.remove("active"));
+    if (clickedEl) clickedEl.classList.add("active");
+
+    const content  = document.getElementById("settingsContent");
+    if (!content) return;
+
+    const email    = currentUser?.email || "Not logged in";
+    const fullName = document.getElementById("userFullname")?.textContent || "User";
+    const initials = document.getElementById("userAvatar")?.textContent  || "?";
+
+    const tabs = {
+
+        general: `
+            <div class="sc-section">
+                <div class="sc-section-title">Appearance</div>
+                <div class="sc-row disabled">
+                    <span class="sc-row-icon">🌙</span>
+                    <div class="sc-row-body">
+                        <p class="sc-row-label">Theme</p>
+                        <p class="sc-row-sub soon">Dark mode — more options coming soon</p>
+                    </div>
+                </div>
+                <div class="sc-row disabled">
+                    <span class="sc-row-icon">🔤</span>
+                    <div class="sc-row-body">
+                        <p class="sc-row-label">Font size</p>
+                        <p class="sc-row-sub soon">Coming soon</p>
+                    </div>
+                </div>
+            </div>
+            <div class="sc-section">
+                <div class="sc-section-title">Support</div>
+                <div class="sc-row disabled">
+                    <span class="sc-row-icon">🐛</span>
+                    <div class="sc-row-body">
+                        <p class="sc-row-label">Send bug report</p>
+                        <p class="sc-row-sub soon">Coming soon</p>
+                    </div>
+                </div>
+                <div class="sc-row disabled">
+                    <span class="sc-row-icon">💡</span>
+                    <div class="sc-row-body">
+                        <p class="sc-row-label">Request a feature</p>
+                        <p class="sc-row-sub soon">Coming soon</p>
+                    </div>
+                </div>
+            </div>`,
+
+        profile: `
+            <div class="sc-section">
+                <div class="sc-section-title">Account</div>
+                <div class="sc-profile-card">
+                    <div class="sc-avatar">${initials}</div>
+                    <div>
+                        <p class="sc-profile-name">${fullName}</p>
+                        <p class="sc-profile-email">${email}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="sc-section">
+                <div class="sc-section-title">Actions</div>
+                <div class="sc-row disabled">
+                    <span class="sc-row-icon">✏️</span>
+                    <div class="sc-row-body">
+                        <p class="sc-row-label">Edit display name</p>
+                        <p class="sc-row-sub soon">Coming soon</p>
+                    </div>
+                </div>
+                <div class="sc-row danger" onclick="logoutUser()">
+                    <span class="sc-row-icon">🚪</span>
+                    <div class="sc-row-body">
+                        <p class="sc-row-label">Log out</p>
+                        <p class="sc-row-sub">Sign out of your account</p>
+                    </div>
+                </div>
+            </div>`,
+
+        chats: `
+            <div class="sc-section">
+                <div class="sc-section-title">Manage chats</div>
+                <div class="sc-row" onclick="archiveAllChats()">
+                    <span class="sc-row-icon">🗂️</span>
+                    <div class="sc-row-body">
+                        <p class="sc-row-label">Archive all chats</p>
+                        <p class="sc-row-sub">Hide all chats from your history</p>
+                    </div>
+                </div>
+                <div class="sc-row danger" onclick="clearAllChats()">
+                    <span class="sc-row-icon">🗑️</span>
+                    <div class="sc-row-body">
+                        <p class="sc-row-label">Delete all chats</p>
+                        <p class="sc-row-sub">Permanently remove all history</p>
+                    </div>
+                </div>
+            </div>
+            <div class="sc-section">
+                <div class="sc-section-title">Preferences</div>
+                <div class="sc-row disabled">
+                    <span class="sc-row-icon">💾</span>
+                    <div class="sc-row-body">
+                        <p class="sc-row-label">Export chat history</p>
+                        <p class="sc-row-sub soon">Coming soon</p>
+                    </div>
+                </div>
+            </div>`,
+
+        privacy: `
+            <div class="sc-section">
+                <div class="sc-section-title">Privacy controls</div>
+                <div class="sc-row disabled">
+                    <span class="sc-row-icon">🔒</span>
+                    <div class="sc-row-body">
+                        <p class="sc-row-label">Data & privacy</p>
+                        <p class="sc-row-sub soon">Coming soon</p>
+                    </div>
+                </div>
+                <div class="sc-row disabled">
+                    <span class="sc-row-icon">🛡️</span>
+                    <div class="sc-row-body">
+                        <p class="sc-row-label">Delete my account</p>
+                        <p class="sc-row-sub soon">Coming soon</p>
+                    </div>
+                </div>
+            </div>`
+    };
+
+    content.innerHTML = tabs[tab] || tabs.general;
 };
 
 // ============================
@@ -458,7 +567,7 @@ window.clearAllChats = async function () {
     if (welcome) welcome.style.display = "block";
     inputArea.classList.remove("bottom");
     inputArea.classList.add("center");
-    showMainMenu();
+    closeSettings();
 };
 
 // ============================
@@ -475,7 +584,6 @@ async function deleteSingleChat(sessionId) {
         .eq("session_id", sessionId).eq("user_id", currentUser.id);
     if (sessErr) { showToast("Failed to delete session."); return; }
 
-    // If currently viewing this session, reset to new chat
     if (currentSessionId === sessionId) {
         currentSessionId = generateSessionId();
         firstMessage = true;
@@ -489,7 +597,7 @@ async function deleteSingleChat(sessionId) {
     }
 
     showToast("Chat deleted.");
-    showHistory(); // refresh history list
+    showHistory();
 }
 
 // ============================
@@ -523,7 +631,6 @@ function buildHistoryItem(session, openSessionFn) {
     const item = document.createElement("div");
     item.classList.add("sidebar-item", "history-item");
 
-    // Info section (click to open)
     const info = document.createElement("div");
     info.classList.add("history-info");
     info.style.flex = "1";
@@ -542,7 +649,6 @@ function buildHistoryItem(session, openSessionFn) {
     info.appendChild(dateEl);
     info.onclick = () => openSessionFn(session.session_id);
 
-    // 3-dot menu button
     const menuBtn = document.createElement("button");
     menuBtn.classList.add("history-menu-btn");
     menuBtn.title = "Options";
@@ -553,7 +659,6 @@ function buildHistoryItem(session, openSessionFn) {
             <circle cx="12" cy="19" r="1.5"/>
         </svg>`;
 
-    // Dropdown
     const dropdown = document.createElement("div");
     dropdown.classList.add("history-dropdown");
     dropdown.innerHTML = `
@@ -570,7 +675,6 @@ function buildHistoryItem(session, openSessionFn) {
             Delete chat
         </button>`;
 
-    // Toggle dropdown on 3-dot click
     menuBtn.onclick = (e) => {
         e.stopPropagation();
         const isOpen = dropdown.classList.contains("open");
@@ -578,7 +682,6 @@ function buildHistoryItem(session, openSessionFn) {
         if (!isOpen) dropdown.classList.add("open");
     };
 
-    // Handle dropdown item clicks
     dropdown.querySelectorAll(".history-dropdown-item").forEach(btn => {
         btn.onclick = (e) => {
             e.stopPropagation();
@@ -590,7 +693,6 @@ function buildHistoryItem(session, openSessionFn) {
         };
     });
 
-    // Close when clicking outside
     document.addEventListener("click", closeAllMenus, { once: false });
 
     const menuWrap = document.createElement("div");
