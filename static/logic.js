@@ -206,10 +206,10 @@ function copyBotAnswer(btn) {
     const rawText = wrapper ? wrapper.dataset.raw : "";
     if (!rawText) return;
     navigator.clipboard.writeText(rawText).then(() => {
-        btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Copied!`;
+        btn.innerHTML = `<i class="fa-solid fa-check"></i> Copied!`;
         btn.classList.add("copied");
         setTimeout(() => {
-            btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy`;
+            btn.innerHTML = `<i class="fa-regular fa-copy"></i> Copy`;
             btn.classList.remove("copied");
         }, 2000);
     }).catch(() => {
@@ -225,10 +225,10 @@ function copyUserMessage(btn) {
     const text = wrapper ? wrapper.querySelector(".message.user").innerText : "";
     if (!text) return;
     navigator.clipboard.writeText(text).then(() => {
-        btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+        btn.innerHTML = `<i class="fa-solid fa-check"></i>`;
         btn.classList.add("copied");
         setTimeout(() => {
-            btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
+            btn.innerHTML = `<i class="fa-regular fa-copy"></i>`;
             btn.classList.remove("copied");
         }, 2000);
     }).catch(() => {
@@ -296,7 +296,7 @@ function createUserBubble(text) {
     const copyBtn = document.createElement("button");
     copyBtn.classList.add("user-copy-btn");
     copyBtn.title = "Copy message";
-    copyBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
+    copyBtn.innerHTML = `<i class="fa-regular fa-copy"></i>`;
     copyBtn.onclick = () => copyUserMessage(copyBtn);
 
     wrapper.appendChild(copyBtn);
@@ -318,7 +318,7 @@ function createBotWrapper() {
     actionsRow.classList.add("bot-actions");
     actionsRow.innerHTML = `
         <button class="bot-copy-btn" onclick="copyBotAnswer(this)" title="Copy answer">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <i class="fa-regular fa-copy"></i>
             Copy
         </button>`;
 
@@ -405,20 +405,23 @@ window.logoutUser = async function () {
 };
 
 // ============================
-// 🧭 MAIN MENU
+// 🧭 MAIN MENU - WITH FONT AWESOME ICONS
 // ============================
 window.showMainMenu = function () {
     const menu = document.querySelector(".sidebar-menu");
     if (!menu) return;
     menu.innerHTML = `
         <div class="sidebar-item" onclick="newChat()">
-            <span class="sidebar-icon">✏️</span> New Chat
+            <i class="sidebar-icon fa-regular fa-pen-to-square"></i>
+            New Chat
         </div>
         <div class="sidebar-item" onclick="showHistory()">
-            <span class="sidebar-icon">🕘</span> Chat History
+            <i class="sidebar-icon fa-solid fa-clock-rotate-left"></i>
+            Chat History
         </div>
         <div class="sidebar-item" onclick="showSettings()">
-            <span class="sidebar-icon">⚙️</span> Settings
+            <i class="sidebar-icon fa-solid fa-gear"></i>
+            Settings
         </div>`;
 };
 
@@ -439,16 +442,16 @@ window.showSettings = function () {
             <div class="settings-nav">
                 <h2 class="settings-nav-title">Settings</h2>
                 <div class="settings-nav-item active" onclick="showSettingsTab('general', this)">
-                    <span class="sn-icon">⚙️</span> General
+                    <i class="sn-icon fa-solid fa-gear"></i> General
                 </div>
                 <div class="settings-nav-item" onclick="showSettingsTab('profile', this)">
-                    <span class="sn-icon">👤</span> Profile
+                    <i class="sn-icon fa-solid fa-user"></i> Profile
                 </div>
                 <div class="settings-nav-item" onclick="showSettingsTab('chats', this)">
-                    <span class="sn-icon">💬</span> Chats
+                    <i class="sn-icon fa-solid fa-message"></i> Chats
                 </div>
                 <div class="settings-nav-item" onclick="showSettingsTab('privacy', this)">
-                    <span class="sn-icon">🔒</span> Privacy
+                    <i class="sn-icon fa-solid fa-shield"></i> Privacy
                 </div>
             </div>
             <div class="settings-content" id="settingsContent"></div>
@@ -484,14 +487,14 @@ window.showSettingsTab = function (tab, clickedEl) {
             <div class="sc-section">
                 <div class="sc-section-title">Appearance</div>
                 <div class="sc-row disabled">
-                    <span class="sc-row-icon">🌙</span>
+                    <i class="sc-row-icon fa-solid fa-moon"></i>
                     <div class="sc-row-body">
                         <p class="sc-row-label">Theme</p>
                         <p class="sc-row-sub soon">Dark mode — more options coming soon</p>
                     </div>
                 </div>
                 <div class="sc-row disabled">
-                    <span class="sc-row-icon">🔤</span>
+                    <i class="sc-row-icon fa-solid fa-font"></i>
                     <div class="sc-row-body">
                         <p class="sc-row-label">Font size</p>
                         <p class="sc-row-sub soon">Coming soon</p>
@@ -501,14 +504,14 @@ window.showSettingsTab = function (tab, clickedEl) {
             <div class="sc-section">
                 <div class="sc-section-title">Support</div>
                 <div class="sc-row disabled">
-                    <span class="sc-row-icon">🐛</span>
+                    <i class="sc-row-icon fa-solid fa-bug"></i>
                     <div class="sc-row-body">
                         <p class="sc-row-label">Send bug report</p>
                         <p class="sc-row-sub soon">Coming soon</p>
                     </div>
                 </div>
                 <div class="sc-row disabled">
-                    <span class="sc-row-icon">💡</span>
+                    <i class="sc-row-icon fa-solid fa-lightbulb"></i>
                     <div class="sc-row-body">
                         <p class="sc-row-label">Request a feature</p>
                         <p class="sc-row-sub soon">Coming soon</p>
@@ -530,14 +533,14 @@ window.showSettingsTab = function (tab, clickedEl) {
             <div class="sc-section">
                 <div class="sc-section-title">Actions</div>
                 <div class="sc-row disabled">
-                    <span class="sc-row-icon">✏️</span>
+                    <i class="sc-row-icon fa-solid fa-pen"></i>
                     <div class="sc-row-body">
                         <p class="sc-row-label">Edit display name</p>
                         <p class="sc-row-sub soon">Coming soon</p>
                     </div>
                 </div>
                 <div class="sc-row danger" onclick="logoutUser()">
-                    <span class="sc-row-icon">🚪</span>
+                    <i class="sc-row-icon fa-solid fa-arrow-right-from-bracket"></i>
                     <div class="sc-row-body">
                         <p class="sc-row-label">Log out</p>
                         <p class="sc-row-sub">Sign out of your account</p>
@@ -549,14 +552,14 @@ window.showSettingsTab = function (tab, clickedEl) {
             <div class="sc-section">
                 <div class="sc-section-title">Manage chats</div>
                 <div class="sc-row" onclick="archiveAllChats()">
-                    <span class="sc-row-icon">🗂️</span>
+                    <i class="sc-row-icon fa-solid fa-folder"></i>
                     <div class="sc-row-body">
                         <p class="sc-row-label">Archive all chats</p>
                         <p class="sc-row-sub">Hide all chats from your history</p>
                     </div>
                 </div>
                 <div class="sc-row danger" onclick="clearAllChats()">
-                    <span class="sc-row-icon">🗑️</span>
+                    <i class="sc-row-icon fa-solid fa-trash"></i>
                     <div class="sc-row-body">
                         <p class="sc-row-label">Delete all chats</p>
                         <p class="sc-row-sub">Permanently remove all history</p>
@@ -566,7 +569,7 @@ window.showSettingsTab = function (tab, clickedEl) {
             <div class="sc-section">
                 <div class="sc-section-title">Preferences</div>
                 <div class="sc-row disabled">
-                    <span class="sc-row-icon">💾</span>
+                    <i class="sc-row-icon fa-solid fa-download"></i>
                     <div class="sc-row-body">
                         <p class="sc-row-label">Export chat history</p>
                         <p class="sc-row-sub soon">Coming soon</p>
@@ -578,14 +581,14 @@ window.showSettingsTab = function (tab, clickedEl) {
             <div class="sc-section">
                 <div class="sc-section-title">Privacy controls</div>
                 <div class="sc-row disabled">
-                    <span class="sc-row-icon">🔒</span>
+                    <i class="sc-row-icon fa-solid fa-lock"></i>
                     <div class="sc-row-body">
                         <p class="sc-row-label">Data & privacy</p>
                         <p class="sc-row-sub soon">Coming soon</p>
                     </div>
                 </div>
                 <div class="sc-row disabled">
-                    <span class="sc-row-icon">🛡️</span>
+                    <i class="sc-row-icon fa-solid fa-shield"></i>
                     <div class="sc-row-body">
                         <p class="sc-row-label">Delete my account</p>
                         <p class="sc-row-sub soon">Coming soon</p>
@@ -733,26 +736,21 @@ function buildHistoryItem(session, openSessionFn) {
     const menuBtn = document.createElement("button");
     menuBtn.classList.add("history-menu-btn");
     menuBtn.title = "Options";
-    menuBtn.innerHTML = `
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
-            <circle cx="12" cy="5"  r="1.5"/>
-            <circle cx="12" cy="12" r="1.5"/>
-            <circle cx="12" cy="19" r="1.5"/>
-        </svg>`;
+    menuBtn.innerHTML = `<i class="fa-solid fa-ellipsis-vertical"></i>`;
 
     const dropdown = document.createElement("div");
     dropdown.classList.add("history-dropdown");
     dropdown.innerHTML = `
         <button class="history-dropdown-item" data-action="open">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            <i class="fa-solid fa-up-right-from-square"></i>
             Open chat
         </button>
         <button class="history-dropdown-item" data-action="rename">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            <i class="fa-solid fa-pen"></i>
             Rename
         </button>
         <button class="history-dropdown-item danger" data-action="delete">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+            <i class="fa-solid fa-trash"></i>
             Delete chat
         </button>`;
 
@@ -947,7 +945,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         const menu = document.querySelector(".sidebar-menu");
         menu.innerHTML = `
             <div class="history-header">
-                <button class="back-btn" onclick="showMainMenu()">← Back</button>
+                <button class="back-btn" onclick="showMainMenu()"><i class="fa-solid fa-arrow-left"></i> Back</button>
                 <span>Chat History</span>
             </div>`;
 
