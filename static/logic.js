@@ -78,9 +78,7 @@ function useSuggestion(el) {
 // ============================
 function isHeavyQuery(text) {
     const lower = text.toLowerCase().trim();
-
     if (lower.length > 80) return true;
-
     const heavyKeywords = [
         "explain", "write", "create", "build",
         "code", "script", "program", "function",
@@ -93,16 +91,13 @@ function isHeavyQuery(text) {
         "implement", "refactor", "optimiz",
         "algorithm", "convert", "translate"
     ];
-
     return heavyKeywords.some(kw => lower.includes(kw));
 }
 
 // ============================
 // 🧾 MARKDOWN RENDERER
-// Called ONCE after streaming is fully complete
 // ============================
 function formatMessage(rawText) {
-
     const codeBlocks = [];
     let text = rawText.replace(/```([\w]*)\n?([\s\S]*?)```/g, (match, lang, code) => {
         const language = lang.trim() || "code";
@@ -155,11 +150,12 @@ function formatMessage(rawText) {
     text = text.replace(/\*(.+?)\*/g,         "<em>$1</em>");
     text = text.replace(/`([^`]+)`/g, '<span class="inline-code">$1</span>');
 
+    // ✅ Fixed ordered list — proper 1. 2. 3. numbering
     text = text.replace(/((?:^\d+\. .+\n?)+)/gm, (block) => {
         const items = block.trim().split("\n")
             .map(l => `<li>${l.replace(/^\d+\.\s/, "")}</li>`)
             .join("");
-        return `<ol style="list-style-type: decimal; counter-reset: none;">${items}</ol>`;
+        return `<ol style="list-style-type: decimal;">${items}</ol>`;
     });
 
     text = text.replace(/((?:^[-•*] .+\n?)+)/gm, (block) => {
@@ -172,45 +168,32 @@ function formatMessage(rawText) {
     const lines = text.split("\n");
     let result = "";
     let para   = "";
-
     for (const line of lines) {
         const trimmed = line.trim();
         const isBlock = /^(<(h[123]|ul|ol|li|blockquote|hr|table|div|pre)|%%CODEBLOCK)/.test(trimmed);
-
         if (!trimmed) {
-            if (para.trim()) {
-                result += `<p>${para.trim()}</p>`;
-                para = "";
-            }
+            if (para.trim()) { result += `<p>${para.trim()}</p>`; para = ""; }
         } else if (isBlock) {
-            if (para.trim()) {
-                result += `<p>${para.trim()}</p>`;
-                para = "";
-            }
+            if (para.trim()) { result += `<p>${para.trim()}</p>`; para = ""; }
             result += line + "\n";
         } else {
             para += (para ? " " : "") + trimmed;
         }
     }
     if (para.trim()) result += `<p>${para.trim()}</p>`;
-
     result = result.replace(/%%CODEBLOCK_(\d+)%%/g, (_, i) => codeBlocks[parseInt(i)]);
-
     return result;
 }
 
 // ============================
-// 📋 COPY CODE (inside code block)
+// 📋 COPY CODE (code block)
 // ============================
 function copyCode(btn) {
     const code = btn.closest(".code-block").querySelector("code").innerText;
     navigator.clipboard.writeText(code).then(() => {
         btn.textContent = "Copied!";
         btn.classList.add("copied");
-        setTimeout(() => {
-            btn.textContent = "Copy";
-            btn.classList.remove("copied");
-        }, 2000);
+        setTimeout(() => { btn.textContent = "Copy"; btn.classList.remove("copied"); }, 2000);
     });
 }
 
@@ -218,27 +201,14 @@ function copyCode(btn) {
 // 📋 COPY FULL BOT ANSWER
 // ============================
 function copyBotAnswer(btn) {
-    // Walk up to the bot message wrapper and grab raw stored text
     const wrapper = btn.closest(".bot-msg-wrapper");
     const rawText = wrapper ? wrapper.dataset.raw : "";
     if (!rawText) return;
-
     navigator.clipboard.writeText(rawText).then(() => {
-        btn.innerHTML = `
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="20 6 9 17 4 12"/>
-            </svg>
-            Copied!
-        `;
+        btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Copied!`;
         btn.classList.add("copied");
         setTimeout(() => {
-            btn.innerHTML = `
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                </svg>
-                Copy
-            `;
+            btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy`;
             btn.classList.remove("copied");
         }, 2000);
     });
@@ -251,21 +221,11 @@ function copyUserMessage(btn) {
     const wrapper = btn.closest(".user-msg-wrapper");
     const text = wrapper ? wrapper.querySelector(".message.user").innerText : "";
     if (!text) return;
-
     navigator.clipboard.writeText(text).then(() => {
-        btn.innerHTML = `
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="20 6 9 17 4 12"/>
-            </svg>
-        `;
+        btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
         btn.classList.add("copied");
         setTimeout(() => {
-            btn.innerHTML = `
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                </svg>
-            `;
+            btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
             btn.classList.remove("copied");
         }, 2000);
     });
@@ -303,30 +263,22 @@ function createThinkingIndicator() {
                 <div class="skeleton-line"></div>
                 <div class="skeleton-line"></div>
             </div>
-        </div>
-    `;
+        </div>`;
     return div;
 }
 
 // ============================
-// 💬 LIGHT: SIMPLE DOTS INDICATOR
+// 💬 LIGHT: DOTS INDICATOR
 // ============================
 function createLightIndicator() {
     const div = document.createElement("div");
     div.classList.add("message", "bot", "typing");
-    div.innerHTML = `
-        <div class="typing-dots">
-            <span></span>
-            <span></span>
-            <span></span>
-        </div>
-    `;
+    div.innerHTML = `<div class="typing-dots"><span></span><span></span><span></span></div>`;
     return div;
 }
 
 // ============================
-// 📦 CREATE USER MESSAGE BUBBLE
-// With hover-reveal copy button
+// 📦 USER BUBBLE
 // ============================
 function createUserBubble(text) {
     const wrapper = document.createElement("div");
@@ -339,12 +291,7 @@ function createUserBubble(text) {
     const copyBtn = document.createElement("button");
     copyBtn.classList.add("user-copy-btn");
     copyBtn.title = "Copy message";
-    copyBtn.innerHTML = `
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-        </svg>
-    `;
+    copyBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
     copyBtn.onclick = () => copyUserMessage(copyBtn);
 
     wrapper.appendChild(copyBtn);
@@ -353,8 +300,7 @@ function createUserBubble(text) {
 }
 
 // ============================
-// 📦 CREATE BOT MESSAGE WRAPPER
-// With copy button shown below the answer
+// 📦 BOT MESSAGE WRAPPER
 // ============================
 function createBotWrapper() {
     const wrapper = document.createElement("div");
@@ -363,18 +309,13 @@ function createBotWrapper() {
     const botMsg = document.createElement("div");
     botMsg.classList.add("message", "bot");
 
-    // Copy button row shown below the answer
     const actionsRow = document.createElement("div");
     actionsRow.classList.add("bot-actions");
     actionsRow.innerHTML = `
         <button class="bot-copy-btn" onclick="copyBotAnswer(this)" title="Copy answer">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-            </svg>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
             Copy
-        </button>
-    `;
+        </button>`;
 
     wrapper.appendChild(botMsg);
     wrapper.appendChild(actionsRow);
@@ -382,7 +323,7 @@ function createBotWrapper() {
 }
 
 // ============================
-// ✍️ WORD-BY-WORD STREAM RENDERER
+// ✍️ WORD-BY-WORD STREAMER
 // ============================
 async function streamWords(botMsg, wrapper, reader, decoder, chatbox) {
     let buffer    = "";
@@ -404,15 +345,9 @@ async function streamWords(botMsg, wrapper, reader, decoder, chatbox) {
             if (!line.startsWith("data: ")) continue;
             const payload = line.slice(6).trim();
             if (payload === "[DONE]") break;
-
             try {
                 const chunk = JSON.parse(payload);
-
-                if (chunk.error) {
-                    botMsg.innerHTML = `<p style="color:#e06c6c">⚠️ ${chunk.error}</p>`;
-                    return "";
-                }
-
+                if (chunk.error) { botMsg.innerHTML = `<p style="color:#e06c6c">⚠️ ${chunk.error}</p>`; return ""; }
                 if (chunk.token) {
                     fullReply += chunk.token;
                     liveSpan.textContent = fullReply;
@@ -422,10 +357,8 @@ async function streamWords(botMsg, wrapper, reader, decoder, chatbox) {
         }
     }
 
-    // ✅ Streaming done — render markdown + store raw text for copy
     botMsg.innerHTML = formatMessage(fullReply);
-    wrapper.dataset.raw = fullReply; // store raw for copy button
-
+    wrapper.dataset.raw = fullReply;
     return fullReply;
 }
 
@@ -443,7 +376,6 @@ window.showSettings = function () {
             <button class="back-btn" onclick="showMainMenu()">← Back</button>
             <span>Settings</span>
         </div>
-
         <div class="settings-section">
             <div class="settings-section-title">Profile</div>
             <div class="settings-profile-card">
@@ -454,7 +386,6 @@ window.showSettings = function () {
                 </div>
             </div>
         </div>
-
         <div class="settings-section">
             <div class="settings-section-title">Chat Settings</div>
             <div class="settings-item" onclick="archiveAllChats()">
@@ -472,7 +403,6 @@ window.showSettings = function () {
                 </div>
             </div>
         </div>
-
         <div class="settings-section">
             <div class="settings-section-title">Privacy</div>
             <div class="settings-item disabled">
@@ -483,7 +413,6 @@ window.showSettings = function () {
                 </div>
             </div>
         </div>
-
         <div class="settings-section">
             <div class="settings-section-title">Support</div>
             <div class="settings-item disabled">
@@ -493,8 +422,7 @@ window.showSettings = function () {
                     <div class="settings-item-sub coming-soon">Coming soon</div>
                 </div>
             </div>
-        </div>
-    `;
+        </div>`;
 };
 
 // ============================
@@ -504,11 +432,8 @@ window.archiveAllChats = async function () {
     if (!confirm("Archive all chats? They will be hidden from your history.")) return;
     const { error } = await supabaseClient
         .from("chat_sessions").update({ archived: true }).eq("user_id", currentUser.id);
-    if (error) {
-        alert("Archive needs an 'archived' boolean column in chat_sessions (default false).");
-    } else {
-        showToast("All chats archived.");
-    }
+    if (error) alert("Archive needs an 'archived' boolean column in chat_sessions.");
+    else showToast("All chats archived.");
 };
 
 // ============================
@@ -517,16 +442,13 @@ window.archiveAllChats = async function () {
 window.clearAllChats = async function () {
     if (!confirm("Delete ALL chats permanently? This cannot be undone.")) return;
 
-    const { error: msgErr } = await supabaseClient
-        .from("messages").delete().eq("user_id", currentUser.id);
+    const { error: msgErr } = await supabaseClient.from("messages").delete().eq("user_id", currentUser.id);
     if (msgErr) { alert("Failed: " + msgErr.message); return; }
 
-    const { error: sessErr } = await supabaseClient
-        .from("chat_sessions").delete().eq("user_id", currentUser.id);
+    const { error: sessErr } = await supabaseClient.from("chat_sessions").delete().eq("user_id", currentUser.id);
     if (sessErr) { alert("Failed: " + sessErr.message); return; }
 
     showToast("All chats deleted.");
-
     const chatbox   = document.getElementById("chatbox");
     const inputArea = document.getElementById("inputArea");
     const welcome   = document.getElementById("welcome");
@@ -538,6 +460,148 @@ window.clearAllChats = async function () {
     inputArea.classList.add("center");
     showMainMenu();
 };
+
+// ============================
+// 🗑️ DELETE SINGLE CHAT
+// ============================
+async function deleteSingleChat(sessionId) {
+    if (!confirm("Delete this chat? This cannot be undone.")) return;
+
+    const { error: msgErr } = await supabaseClient.from("messages").delete()
+        .eq("session_id", sessionId).eq("user_id", currentUser.id);
+    if (msgErr) { showToast("Failed to delete messages."); return; }
+
+    const { error: sessErr } = await supabaseClient.from("chat_sessions").delete()
+        .eq("session_id", sessionId).eq("user_id", currentUser.id);
+    if (sessErr) { showToast("Failed to delete session."); return; }
+
+    // If currently viewing this session, reset to new chat
+    if (currentSessionId === sessionId) {
+        currentSessionId = generateSessionId();
+        firstMessage = true;
+        const chatbox   = document.getElementById("chatbox");
+        const inputArea = document.getElementById("inputArea");
+        const welcome   = document.getElementById("welcome");
+        chatbox.innerHTML = "";
+        if (welcome) welcome.style.display = "block";
+        inputArea.classList.remove("bottom");
+        inputArea.classList.add("center");
+    }
+
+    showToast("Chat deleted.");
+    showHistory(); // refresh history list
+}
+
+// ============================
+// ✏️ RENAME CHAT
+// ============================
+async function renameChat(sessionId, currentTitle, titleEl) {
+    const newTitle = prompt("Rename chat:", currentTitle);
+    if (!newTitle || newTitle.trim() === currentTitle) return;
+
+    const { error } = await supabaseClient.from("chat_sessions")
+        .update({ title: newTitle.trim() })
+        .eq("session_id", sessionId)
+        .eq("user_id", currentUser.id);
+
+    if (error) { showToast("Failed to rename."); return; }
+
+    titleEl.textContent = newTitle.trim();
+    showToast("Chat renamed.");
+}
+
+// ============================
+// ⋯ HISTORY ITEM 3-DOT MENU
+// ============================
+function closeAllMenus() {
+    document.querySelectorAll(".history-dropdown.open").forEach(d => d.classList.remove("open"));
+}
+
+function buildHistoryItem(session, openSessionFn) {
+    const date = new Date(session.created_at).toLocaleDateString();
+
+    const item = document.createElement("div");
+    item.classList.add("sidebar-item", "history-item");
+
+    // Info section (click to open)
+    const info = document.createElement("div");
+    info.classList.add("history-info");
+    info.style.flex = "1";
+    info.style.minWidth = "0";
+    info.style.cursor = "pointer";
+
+    const titleEl = document.createElement("span");
+    titleEl.classList.add("history-title");
+    titleEl.textContent = session.title || "Untitled";
+
+    const dateEl = document.createElement("span");
+    dateEl.classList.add("history-date");
+    dateEl.textContent = date;
+
+    info.appendChild(titleEl);
+    info.appendChild(dateEl);
+    info.onclick = () => openSessionFn(session.session_id);
+
+    // 3-dot menu button
+    const menuBtn = document.createElement("button");
+    menuBtn.classList.add("history-menu-btn");
+    menuBtn.title = "Options";
+    menuBtn.innerHTML = `
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+            <circle cx="12" cy="5"  r="1.5"/>
+            <circle cx="12" cy="12" r="1.5"/>
+            <circle cx="12" cy="19" r="1.5"/>
+        </svg>`;
+
+    // Dropdown
+    const dropdown = document.createElement("div");
+    dropdown.classList.add("history-dropdown");
+    dropdown.innerHTML = `
+        <button class="history-dropdown-item" data-action="open">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            Open chat
+        </button>
+        <button class="history-dropdown-item" data-action="rename">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            Rename
+        </button>
+        <button class="history-dropdown-item danger" data-action="delete">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+            Delete chat
+        </button>`;
+
+    // Toggle dropdown on 3-dot click
+    menuBtn.onclick = (e) => {
+        e.stopPropagation();
+        const isOpen = dropdown.classList.contains("open");
+        closeAllMenus();
+        if (!isOpen) dropdown.classList.add("open");
+    };
+
+    // Handle dropdown item clicks
+    dropdown.querySelectorAll(".history-dropdown-item").forEach(btn => {
+        btn.onclick = (e) => {
+            e.stopPropagation();
+            closeAllMenus();
+            const action = btn.dataset.action;
+            if (action === "open")   openSessionFn(session.session_id);
+            if (action === "rename") renameChat(session.session_id, session.title || "Untitled", titleEl);
+            if (action === "delete") deleteSingleChat(session.session_id);
+        };
+    });
+
+    // Close when clicking outside
+    document.addEventListener("click", closeAllMenus, { once: false });
+
+    const menuWrap = document.createElement("div");
+    menuWrap.classList.add("history-menu-wrap");
+    menuWrap.appendChild(menuBtn);
+    menuWrap.appendChild(dropdown);
+
+    item.appendChild(info);
+    item.appendChild(menuWrap);
+    return item;
+}
 
 // ============================
 // 🚀 APP START
@@ -573,7 +637,6 @@ document.addEventListener("DOMContentLoaded", async function () {
         inputArea.classList.remove("center");
         inputArea.classList.add("bottom");
 
-        // ✅ User bubble with hover copy button
         const userBubble = createUserBubble(message);
         chatbox.appendChild(userBubble);
 
@@ -600,7 +663,6 @@ document.addEventListener("DOMContentLoaded", async function () {
         input.style.height = "auto";
         chatbox.scrollTop = chatbox.scrollHeight;
 
-        // Smart indicator
         const heavy = isHeavyQuery(message);
         const thinking = heavy ? createThinkingIndicator() : createLightIndicator();
         chatbox.appendChild(thinking);
@@ -612,14 +674,11 @@ document.addEventListener("DOMContentLoaded", async function () {
 
             thinking.remove();
 
-            // ✅ Bot message with copy button below
             const { wrapper, botMsg } = createBotWrapper();
             chatbox.appendChild(wrapper);
 
             const reader  = res.body.getReader();
             const decoder = new TextDecoder();
-
-            // ✅ Word-by-word stream, markdown + raw stored at end
             const fullReply = await streamWords(botMsg, wrapper, reader, decoder, chatbox);
 
             if (fullReply) {
@@ -658,6 +717,9 @@ document.addEventListener("DOMContentLoaded", async function () {
         inputArea.classList.remove("center");
         inputArea.classList.add("bottom");
 
+        currentSessionId = sessionId;
+        firstMessage = false;
+
         const { data, error } = await supabaseClient
             .from("messages").select("*")
             .eq("session_id", sessionId)
@@ -668,8 +730,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
         data.forEach(msg => {
             if (msg.role === "user") {
-                const bubble = createUserBubble(msg.content);
-                chatbox.appendChild(bubble);
+                chatbox.appendChild(createUserBubble(msg.content));
             } else {
                 const { wrapper, botMsg } = createBotWrapper();
                 botMsg.innerHTML = formatMessage(msg.content);
@@ -680,6 +741,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
         chatbox.scrollTop = chatbox.scrollHeight;
         if (window.innerWidth <= 768) closeSidebar();
+        showMainMenu();
     }
 
     // ============================
@@ -698,8 +760,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             <div class="history-header">
                 <button class="back-btn" onclick="showMainMenu()">← Back</button>
                 <span>Chat History</span>
-            </div>
-        `;
+            </div>`;
 
         if (data.length === 0) {
             menu.innerHTML += `<div class="no-history">No chats yet</div>`;
@@ -707,21 +768,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         }
 
         data.forEach(session => {
-            const date = new Date(session.created_at).toLocaleDateString();
-            const item = document.createElement("div");
-            item.classList.add("sidebar-item", "history-item");
-            item.innerHTML = `
-                <div class="history-info">
-                    <span class="history-title">${session.title || "Untitled"}</span>
-                    <span class="history-date">${date}</span>
-                </div>
-            `;
-            item.onclick = async () => {
-                currentSessionId = session.session_id;
-                firstMessage = false;
-                await loadSession(session.session_id);
-                showMainMenu();
-            };
+            const item = buildHistoryItem(session, loadSession);
             menu.appendChild(item);
         });
     };
@@ -739,8 +786,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             </div>
             <div class="sidebar-item" onclick="showSettings()">
                 <span class="sidebar-icon">⚙️</span> Settings
-            </div>
-        `;
+            </div>`;
     };
 
     // ============================
