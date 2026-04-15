@@ -919,10 +919,12 @@ document.addEventListener("DOMContentLoaded", async function () {
     // 📜 SHOW HISTORY
     // ============================
     window.showHistory = async function () {
-        // ✅ CLOSE SETTINGS FIRST IF OPEN
+        // ✅ CLOSE SETTINGS FIRST IF OPEN (with smooth delay)
         const overlay = document.getElementById("settingsOverlay");
         if (overlay && overlay.style.display !== "none") {
             overlay.style.display = "none";
+            // Small delay for smooth transition
+            await new Promise(resolve => setTimeout(resolve, 100));
         }
 
         const { data, error } = await supabaseClient
