@@ -190,9 +190,11 @@ function formatMessage(rawText) {
 function copyCode(btn) {
     const code = btn.closest(".code-block").querySelector("code").innerText;
     navigator.clipboard.writeText(code).then(() => {
-        btn.textContent = "Copied!";
+        btn.textContent = "✓ Copied!";
         btn.classList.add("copied");
         setTimeout(() => { btn.textContent = "Copy"; btn.classList.remove("copied"); }, 2000);
+    }).catch(() => {
+        showToast("Failed to copy code");
     });
 }
 
@@ -210,6 +212,8 @@ function copyBotAnswer(btn) {
             btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy`;
             btn.classList.remove("copied");
         }, 2000);
+    }).catch(() => {
+        showToast("Failed to copy message");
     });
 }
 
@@ -227,13 +231,15 @@ function copyUserMessage(btn) {
             btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
             btn.classList.remove("copied");
         }, 2000);
+    }).catch(() => {
+        showToast("Failed to copy message");
     });
 }
 
 // ============================
-// 🍞 TOAST
+// 🍞 TOAST - ENHANCED
 // ============================
-function showToast(message) {
+function showToast(message, duration = 3000) {
     let toast = document.getElementById("toastNotif");
     if (!toast) {
         toast = document.createElement("div");
@@ -242,7 +248,7 @@ function showToast(message) {
     }
     toast.textContent = message;
     toast.classList.add("show");
-    setTimeout(() => toast.classList.remove("show"), 3000);
+    setTimeout(() => toast.classList.remove("show"), duration);
 }
 
 // ============================
@@ -362,10 +368,9 @@ async function streamWords(botMsg, wrapper, reader, decoder, chatbox) {
 }
 
 // ============================
-// ➕ NEW CHAT  ← FIXED: outside DOMContentLoaded
+// ➕ NEW CHAT
 // ============================
 window.newChat = function () {
-    // ✅ CLOSE SETTINGS FIRST IF OPEN
     const overlay = document.getElementById("settingsOverlay");
     if (overlay && overlay.style.display !== "none") {
         overlay.style.display = "none";
@@ -386,18 +391,21 @@ window.newChat = function () {
     }
     if (window.innerWidth <= 768) closeSidebar();
     showMainMenu();
+    showToast("New chat started", 2000);
 };
 
 // ============================
-// 🚪 LOGOUT  ← FIXED: outside DOMContentLoaded
+// 🚪 LOGOUT
 // ============================
 window.logoutUser = async function () {
-    await supabaseClient.auth.signOut();
-    window.location.href = "/auth.html";
+    if (confirm("Are you sure you want to logout?")) {
+        await supabaseClient.auth.signOut();
+        window.location.href = "/auth.html";
+    }
 };
 
 // ============================
-// 🧭 MAIN MENU  ← FIXED: outside DOMContentLoaded
+// 🧭 MAIN MENU
 // ============================
 window.showMainMenu = function () {
     const menu = document.querySelector(".sidebar-menu");
@@ -415,7 +423,7 @@ window.showMainMenu = function () {
 };
 
 // ============================
-// ⚙️ SETTINGS OVERLAY  ← FIXED: outside DOMContentLoaded
+// ⚙️ SETTINGS OVERLAY
 // ============================
 window.showSettings = function () {
     const overlay = document.getElementById("settingsOverlay");
@@ -451,7 +459,6 @@ window.showSettings = function () {
     if (window.innerWidth <= 768) closeSidebar();
 };
 
-// ✅ FIX: CLOSE SETTINGS AND DISABLE OVERLAY INTERACTIONS
 window.closeSettings = function () {
     const overlay = document.getElementById("settingsOverlay");
     if (overlay) {
@@ -597,8 +604,11 @@ window.archiveAllChats = async function () {
     if (!confirm("Archive all chats? They will be hidden from your history.")) return;
     const { error } = await supabaseClient
         .from("chat_sessions").update({ archived: true }).eq("user_id", currentUser.id);
-    if (error) alert("Archive needs an 'archived' boolean column in chat_sessions.");
-    else showToast("All chats archived.");
+    if (error) {
+        showToast("❌ Archive failed. Please try again.");
+    } else {
+        showToast("✓ All chats archived successfully");
+    }
 };
 
 // ============================
@@ -608,12 +618,12 @@ window.clearAllChats = async function () {
     if (!confirm("Delete ALL chats permanently? This cannot be undone.")) return;
 
     const { error: msgErr } = await supabaseClient.from("messages").delete().eq("user_id", currentUser.id);
-    if (msgErr) { alert("Failed: " + msgErr.message); return; }
+    if (msgErr) { showToast("❌ Failed to delete messages"); return; }
 
     const { error: sessErr } = await supabaseClient.from("chat_sessions").delete().eq("user_id", currentUser.id);
-    if (sessErr) { alert("Failed: " + sessErr.message); return; }
+    if (sessErr) { showToast("❌ Failed to delete sessions"); return; }
 
-    showToast("All chats deleted.");
+    showToast("✓ All chats deleted successfully");
 
     const chatbox   = document.getElementById("chatbox");
     const inputArea = document.getElementById("inputArea");
@@ -638,11 +648,11 @@ async function deleteSingleChat(sessionId) {
 
     const { error: msgErr } = await supabaseClient.from("messages").delete()
         .eq("session_id", sessionId).eq("user_id", currentUser.id);
-    if (msgErr) { showToast("Failed to delete messages."); return; }
+    if (msgErr) { showToast("❌ Failed to delete messages"); return; }
 
     const { error: sessErr } = await supabaseClient.from("chat_sessions").delete()
         .eq("session_id", sessionId).eq("user_id", currentUser.id);
-    if (sessErr) { showToast("Failed to delete session."); return; }
+    if (sessErr) { showToast("❌ Failed to delete session"); return; }
 
     if (currentSessionId === sessionId) {
         currentSessionId = generateSessionId();
@@ -658,7 +668,7 @@ async function deleteSingleChat(sessionId) {
         }
     }
 
-    showToast("Chat deleted.");
+    showToast("✓ Chat deleted");
     showHistory();
 }
 
@@ -674,10 +684,13 @@ async function renameChat(sessionId, currentTitle, titleEl) {
         .eq("session_id", sessionId)
         .eq("user_id", currentUser.id);
 
-    if (error) { showToast("Failed to rename."); return; }
+    if (error) { 
+        showToast("❌ Failed to rename chat");
+        return;
+    }
 
     titleEl.textContent = newTitle.trim();
-    showToast("Chat renamed.");
+    showToast("✓ Chat renamed");
 }
 
 // ============================
@@ -710,7 +723,6 @@ function buildHistoryItem(session, openSessionFn) {
     info.appendChild(titleEl);
     info.appendChild(dateEl);
     info.onclick = () => {
-        // ✅ CLOSE SETTINGS FIRST IF OPEN
         const overlay = document.getElementById("settingsOverlay");
         if (overlay && overlay.style.display !== "none") {
             overlay.style.display = "none";
@@ -919,11 +931,9 @@ document.addEventListener("DOMContentLoaded", async function () {
     // 📜 SHOW HISTORY
     // ============================
     window.showHistory = async function () {
-        // ✅ CLOSE SETTINGS FIRST IF OPEN (with smooth delay)
         const overlay = document.getElementById("settingsOverlay");
         if (overlay && overlay.style.display !== "none") {
             overlay.style.display = "none";
-            // Small delay for smooth transition
             await new Promise(resolve => setTimeout(resolve, 100));
         }
 
@@ -942,7 +952,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             </div>`;
 
         if (data.length === 0) {
-            menu.innerHTML += `<div class="no-history">No chats yet</div>`;
+            menu.innerHTML += `<div class="no-history">No chats yet. Start a new chat to see history.</div>`;
             return;
         }
 
