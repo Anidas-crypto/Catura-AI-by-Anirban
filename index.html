@@ -22,44 +22,51 @@
 
     <div class="sidebar open" id="sidebar">
         <div class="sidebar-header">
-            <span><img src="static/logo.png" alt="Catura AI Logo" class="sidebar-logo"> Catura AI</span>
+            <span><img src="static/logo.png" alt="Catura AI Logo" class="sidebar-logo"> <span class="sidebar-label">Catura AI</span></span>
+            <button class="sidebar-collapse-btn" onclick="toggleSidebar()" title="Toggle Sidebar">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="3" width="20" height="18" rx="3"/>
+                    <line x1="8" y1="3" x2="8" y2="21"/>
+                    <polyline points="12,9 10,12 12,15"/>
+                </svg>
+            </button>
             <button class="close-btn" onclick="closeSidebar()">✕</button>
         </div>
         <div class="sidebar-menu">
-            <div class="sidebar-item" onclick="newChat()">
+            <div class="sidebar-item" onclick="newChat()" data-tooltip="New Chat">
                 <svg class="sidebar-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                 </svg>
-                New Chat
+                <span class="sidebar-label">New Chat</span>
             </div>
-            <div class="sidebar-item" onclick="showHistory()">
+            <div class="sidebar-item" onclick="showHistory()" data-tooltip="Chat History">
                 <svg class="sidebar-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="10"></circle>
                     <polyline points="12 6 12 12 16 14"></polyline>
                 </svg>
-                Chat History
+                <span class="sidebar-label">Chat History</span>
             </div>
-            <div class="sidebar-item" onclick="showSettings()">
+            <div class="sidebar-item" onclick="showSettings()" data-tooltip="Settings">
                 <svg class="sidebar-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="3"></circle>
                     <path d="M12 1v6m0 6v6m10.39-9.39l-4.24 4.24m-8.3 0l-4.24-4.24m12.53 8.53l4.24 4.24m-8.3 0l4.24-4.24"></path>
                 </svg>
-                Settings
+                <span class="sidebar-label">Settings</span>
             </div>
         </div>
         <div class="sidebar-bottom">
-            <div class="user-profile">
+            <div class="user-profile" data-tooltip="Profile">
                 <div class="user-avatar" id="userAvatar">?</div>
-                <span class="user-fullname" id="userFullname">Loading...</span>
+                <span class="user-fullname sidebar-label" id="userFullname">Loading...</span>
             </div>
-            <div class="sidebar-item logout" onclick="logoutUser()">
+            <div class="sidebar-item logout" onclick="logoutUser()" data-tooltip="Logout">
                 <svg class="sidebar-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
                     <polyline points="16 17 21 12 16 7"></polyline>
                     <line x1="21" y1="12" x2="9" y2="12"></line>
                 </svg>
-                Logout
+                <span class="sidebar-label">Logout</span>
             </div>
         </div>
     </div>
@@ -70,14 +77,7 @@
         <div id="settingsOverlay" class="settings-overlay" style="display:none;"></div>
 
         <div class="header">
-            <button class="sidebar-toggle desktop-toggle" onclick="toggleSidebar()" title="Toggle Sidebar">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="2" y="3" width="20" height="18" rx="3"/>
-                    <line x1="8" y1="3" x2="8" y2="21"/>
-                    <polyline points="12,9 10,12 12,15"/>
-                </svg>
-            </button>
-            <button class="sidebar-toggle mobile-toggle" onclick="toggleSidebar()" title="Menu">
+            <button class="sidebar-toggle mobile-toggle" onclick="toggleMobileSidebar()" title="Menu">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                     <line x1="4" y1="7" x2="15" y2="7"/>
                     <line x1="4" y1="12" x2="20" y2="12"/>

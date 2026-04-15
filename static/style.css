@@ -67,6 +67,113 @@ html {
     box-shadow: 2px 0 10px rgba(0, 0, 0, 0.5);
 }
 
+.sidebar.collapsed {
+    width: 70px;
+    min-width: 70px;
+    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.5);
+}
+
+/* Collapsed state: hide text labels */
+.sidebar.collapsed .sidebar-label {
+    display: none;
+}
+
+/* Collapsed state: center sidebar items as icon-only */
+.sidebar.collapsed .sidebar-item {
+    justify-content: center;
+    padding: 12px 0;
+    gap: 0;
+    position: relative;
+}
+
+.sidebar.collapsed .sidebar-item:hover {
+    padding-left: 0;
+}
+
+/* Collapsed state: tooltip on hover */
+.sidebar.collapsed .sidebar-item[data-tooltip]:hover::after,
+.sidebar.collapsed .user-profile[data-tooltip]:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    left: calc(100% + 10px);
+    top: 50%;
+    transform: translateY(-50%);
+    background: #1a1a1a;
+    color: #e5e5e5;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    white-space: nowrap;
+    z-index: 1000;
+    border: 1px solid #333;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    pointer-events: none;
+    animation: tooltipFadeIn 0.15s ease;
+}
+
+@keyframes tooltipFadeIn {
+    from { opacity: 0; transform: translateY(-50%) translateX(-4px); }
+    to   { opacity: 1; transform: translateY(-50%) translateX(0); }
+}
+
+/* Collapsed state: sidebar header */
+.sidebar.collapsed .sidebar-header {
+    justify-content: center;
+    padding: 16px 8px;
+}
+
+/* Collapsed state: sidebar menu */
+.sidebar.collapsed .sidebar-menu {
+    padding: 12px 4px;
+    align-items: center;
+}
+
+/* Collapsed state: sidebar bottom */
+.sidebar.collapsed .sidebar-bottom {
+    padding: 12px 4px;
+    align-items: center;
+}
+
+/* Collapsed state: user profile */
+.sidebar.collapsed .user-profile {
+    justify-content: center;
+    padding: 10px 8px;
+    position: relative;
+}
+
+/* Collapsed state: collapse button icon flip */
+.sidebar.collapsed .sidebar-collapse-btn svg {
+    transform: scaleX(-1);
+}
+
+/* Internal toggle button */
+.sidebar-collapse-btn {
+    background: transparent;
+    border: none;
+    color: #888;
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.sidebar-collapse-btn:hover {
+    background: #10a37f22;
+    color: #10a37f;
+}
+
+.sidebar-collapse-btn:active {
+    transform: scale(0.92);
+}
+
+.sidebar-collapse-btn svg {
+    transition: transform 0.3s ease;
+}
+
 .sidebar-header {
     display: flex;
     justify-content: space-between;
@@ -160,6 +267,13 @@ html {
     transition: transform 0.3s ease;
 }
 
+.sidebar-label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: opacity 0.2s ease;
+}
+
 .sidebar-item:hover .sidebar-icon {
     transform: scale(1.1);
 }
@@ -212,7 +326,6 @@ html {
     transform: scale(0.95);
 }
 
-.desktop-toggle { display: flex; }
 .mobile-toggle  { display: none; }
 
 /* ============================
@@ -846,10 +959,47 @@ html {
         z-index: 1000;
     }
 
+    .sidebar.open,
+    .sidebar.collapsed {
+        width: 260px !important;
+        min-width: 260px !important;
+    }
+
     .sidebar.open { 
         left: 0;
         box-shadow: 4px 0 20px rgba(0, 0, 0, 0.6);
     }
+
+    /* On mobile, always show labels (no collapsed mode) */
+    .sidebar .sidebar-label {
+        display: inline !important;
+    }
+    .sidebar .sidebar-item {
+        justify-content: flex-start !important;
+        padding: 11px 14px !important;
+        gap: 12px !important;
+    }
+    .sidebar .sidebar-item:hover {
+        padding-left: 16px !important;
+    }
+    .sidebar .sidebar-header {
+        justify-content: space-between !important;
+        padding: 16px 14px !important;
+    }
+    .sidebar .sidebar-menu {
+        padding: 12px 8px !important;
+        align-items: stretch !important;
+    }
+    .sidebar .sidebar-bottom {
+        padding: 12px 8px !important;
+        align-items: stretch !important;
+    }
+    .sidebar .user-profile {
+        justify-content: flex-start !important;
+        padding: 10px 14px !important;
+    }
+
+    .sidebar-collapse-btn { display: none; }
     
     .close-btn { display: block; }
 
@@ -865,7 +1015,6 @@ html {
 
     .sidebar-overlay.show { display: block; }
 
-    .desktop-toggle { display: none; }
     .mobile-toggle  { display: flex; }
 
     .app { width: 100%; height: 100dvh; }
