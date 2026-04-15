@@ -206,10 +206,10 @@ function copyBotAnswer(btn) {
     const rawText = wrapper ? wrapper.dataset.raw : "";
     if (!rawText) return;
     navigator.clipboard.writeText(rawText).then(() => {
-        btn.innerHTML = `<i class="fa-solid fa-check"></i> Copied!`;
+        btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Copied!`;
         btn.classList.add("copied");
         setTimeout(() => {
-            btn.innerHTML = `<i class="fa-regular fa-copy"></i> Copy`;
+            btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy`;
             btn.classList.remove("copied");
         }, 2000);
     }).catch(() => {
@@ -225,10 +225,10 @@ function copyUserMessage(btn) {
     const text = wrapper ? wrapper.querySelector(".message.user").innerText : "";
     if (!text) return;
     navigator.clipboard.writeText(text).then(() => {
-        btn.innerHTML = `<i class="fa-solid fa-check"></i>`;
+        btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
         btn.classList.add("copied");
         setTimeout(() => {
-            btn.innerHTML = `<i class="fa-regular fa-copy"></i>`;
+            btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
             btn.classList.remove("copied");
         }, 2000);
     }).catch(() => {
@@ -296,7 +296,7 @@ function createUserBubble(text) {
     const copyBtn = document.createElement("button");
     copyBtn.classList.add("user-copy-btn");
     copyBtn.title = "Copy message";
-    copyBtn.innerHTML = `<i class="fa-regular fa-copy"></i>`;
+    copyBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
     copyBtn.onclick = () => copyUserMessage(copyBtn);
 
     wrapper.appendChild(copyBtn);
@@ -318,7 +318,7 @@ function createBotWrapper() {
     actionsRow.classList.add("bot-actions");
     actionsRow.innerHTML = `
         <button class="bot-copy-btn" onclick="copyBotAnswer(this)" title="Copy answer">
-            <i class="fa-regular fa-copy"></i>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
             Copy
         </button>`;
 
@@ -405,22 +405,31 @@ window.logoutUser = async function () {
 };
 
 // ============================
-// 🧭 MAIN MENU - WITH FONT AWESOME ICONS
+// 🧭 MAIN MENU - WITH INLINE SVG ICONS
 // ============================
 window.showMainMenu = function () {
     const menu = document.querySelector(".sidebar-menu");
     if (!menu) return;
     menu.innerHTML = `
         <div class="sidebar-item" onclick="newChat()">
-            <i class="sidebar-icon fa-regular fa-pen-to-square"></i>
+            <svg class="sidebar-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+            </svg>
             New Chat
         </div>
         <div class="sidebar-item" onclick="showHistory()">
-            <i class="sidebar-icon fa-solid fa-clock-rotate-left"></i>
+            <svg class="sidebar-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
             Chat History
         </div>
         <div class="sidebar-item" onclick="showSettings()">
-            <i class="sidebar-icon fa-solid fa-gear"></i>
+            <svg class="sidebar-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M12 1v6m0 6v6m10.39-9.39l-4.24 4.24m-8.3 0l-4.24-4.24m12.53 8.53l4.24 4.24m-8.3 0l4.24-4.24"></path>
+            </svg>
             Settings
         </div>`;
 };
@@ -442,16 +451,26 @@ window.showSettings = function () {
             <div class="settings-nav">
                 <h2 class="settings-nav-title">Settings</h2>
                 <div class="settings-nav-item active" onclick="showSettingsTab('general', this)">
-                    <i class="sn-icon fa-solid fa-gear"></i> General
+                    <svg class="sn-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M12 1v6m0 6v6m10.39-9.39l-4.24 4.24m-8.3 0l-4.24-4.24m12.53 8.53l4.24 4.24m-8.3 0l4.24-4.24"></path>
+                    </svg> General
                 </div>
                 <div class="settings-nav-item" onclick="showSettingsTab('profile', this)">
-                    <i class="sn-icon fa-solid fa-user"></i> Profile
+                    <svg class="sn-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                    </svg> Profile
                 </div>
                 <div class="settings-nav-item" onclick="showSettingsTab('chats', this)">
-                    <i class="sn-icon fa-solid fa-message"></i> Chats
+                    <svg class="sn-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                    </svg> Chats
                 </div>
                 <div class="settings-nav-item" onclick="showSettingsTab('privacy', this)">
-                    <i class="sn-icon fa-solid fa-shield"></i> Privacy
+                    <svg class="sn-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                    </svg> Privacy
                 </div>
             </div>
             <div class="settings-content" id="settingsContent"></div>
@@ -487,14 +506,20 @@ window.showSettingsTab = function (tab, clickedEl) {
             <div class="sc-section">
                 <div class="sc-section-title">Appearance</div>
                 <div class="sc-row disabled">
-                    <i class="sc-row-icon fa-solid fa-moon"></i>
+                    <svg class="sc-row-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 12a9 9 0 1 1-9-9c4.6 0 8.5 3.1 9 7.2"></path>
+                    </svg>
                     <div class="sc-row-body">
                         <p class="sc-row-label">Theme</p>
                         <p class="sc-row-sub soon">Dark mode — more options coming soon</p>
                     </div>
                 </div>
                 <div class="sc-row disabled">
-                    <i class="sc-row-icon fa-solid fa-font"></i>
+                    <svg class="sc-row-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="4 7 4 4 20 4 20 7"></polyline>
+                        <rect x="2" y="7" width="20" height="13" rx="2" ry="2"></rect>
+                        <path d="M9 17v-3m6 3v-3"></path>
+                    </svg>
                     <div class="sc-row-body">
                         <p class="sc-row-label">Font size</p>
                         <p class="sc-row-sub soon">Coming soon</p>
@@ -504,14 +529,23 @@ window.showSettingsTab = function (tab, clickedEl) {
             <div class="sc-section">
                 <div class="sc-section-title">Support</div>
                 <div class="sc-row disabled">
-                    <i class="sc-row-icon fa-solid fa-bug"></i>
+                    <svg class="sc-row-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <path d="M8 14s1.5 2 4 2 4-2 4-2"></path>
+                        <line x1="9" y1="9" x2="9.01" y2="9"></line>
+                        <line x1="15" y1="9" x2="15.01" y2="9"></line>
+                    </svg>
                     <div class="sc-row-body">
                         <p class="sc-row-label">Send bug report</p>
                         <p class="sc-row-sub soon">Coming soon</p>
                     </div>
                 </div>
                 <div class="sc-row disabled">
-                    <i class="sc-row-icon fa-solid fa-lightbulb"></i>
+                    <svg class="sc-row-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="1"></circle>
+                        <path d="M12 17v3"></path>
+                        <path d="M12 4v3"></path>
+                    </svg>
                     <div class="sc-row-body">
                         <p class="sc-row-label">Request a feature</p>
                         <p class="sc-row-sub soon">Coming soon</p>
@@ -533,14 +567,21 @@ window.showSettingsTab = function (tab, clickedEl) {
             <div class="sc-section">
                 <div class="sc-section-title">Actions</div>
                 <div class="sc-row disabled">
-                    <i class="sc-row-icon fa-solid fa-pen"></i>
+                    <svg class="sc-row-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                    </svg>
                     <div class="sc-row-body">
                         <p class="sc-row-label">Edit display name</p>
                         <p class="sc-row-sub soon">Coming soon</p>
                     </div>
                 </div>
                 <div class="sc-row danger" onclick="logoutUser()">
-                    <i class="sc-row-icon fa-solid fa-arrow-right-from-bracket"></i>
+                    <svg class="sc-row-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                        <polyline points="16 17 21 12 16 7"></polyline>
+                        <line x1="21" y1="12" x2="9" y2="12"></line>
+                    </svg>
                     <div class="sc-row-body">
                         <p class="sc-row-label">Log out</p>
                         <p class="sc-row-sub">Sign out of your account</p>
@@ -552,14 +593,22 @@ window.showSettingsTab = function (tab, clickedEl) {
             <div class="sc-section">
                 <div class="sc-section-title">Manage chats</div>
                 <div class="sc-row" onclick="archiveAllChats()">
-                    <i class="sc-row-icon fa-solid fa-folder"></i>
+                    <svg class="sc-row-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="5" width="18" height="2"></rect>
+                        <path d="M4 7v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7"></path>
+                    </svg>
                     <div class="sc-row-body">
                         <p class="sc-row-label">Archive all chats</p>
                         <p class="sc-row-sub">Hide all chats from your history</p>
                     </div>
                 </div>
                 <div class="sc-row danger" onclick="clearAllChats()">
-                    <i class="sc-row-icon fa-solid fa-trash"></i>
+                    <svg class="sc-row-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        <line x1="10" y1="11" x2="10" y2="17"></line>
+                        <line x1="14" y1="11" x2="14" y2="17"></line>
+                    </svg>
                     <div class="sc-row-body">
                         <p class="sc-row-label">Delete all chats</p>
                         <p class="sc-row-sub">Permanently remove all history</p>
@@ -569,7 +618,11 @@ window.showSettingsTab = function (tab, clickedEl) {
             <div class="sc-section">
                 <div class="sc-section-title">Preferences</div>
                 <div class="sc-row disabled">
-                    <i class="sc-row-icon fa-solid fa-download"></i>
+                    <svg class="sc-row-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                        <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                        <polyline points="7 3 7 8 15 8"></polyline>
+                    </svg>
                     <div class="sc-row-body">
                         <p class="sc-row-label">Export chat history</p>
                         <p class="sc-row-sub soon">Coming soon</p>
@@ -581,14 +634,19 @@ window.showSettingsTab = function (tab, clickedEl) {
             <div class="sc-section">
                 <div class="sc-section-title">Privacy controls</div>
                 <div class="sc-row disabled">
-                    <i class="sc-row-icon fa-solid fa-lock"></i>
+                    <svg class="sc-row-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                    </svg>
                     <div class="sc-row-body">
                         <p class="sc-row-label">Data & privacy</p>
                         <p class="sc-row-sub soon">Coming soon</p>
                     </div>
                 </div>
                 <div class="sc-row disabled">
-                    <i class="sc-row-icon fa-solid fa-shield"></i>
+                    <svg class="sc-row-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                        <path d="M12 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"></path>
+                    </svg>
                     <div class="sc-row-body">
                         <p class="sc-row-label">Delete my account</p>
                         <p class="sc-row-sub soon">Coming soon</p>
@@ -736,21 +794,26 @@ function buildHistoryItem(session, openSessionFn) {
     const menuBtn = document.createElement("button");
     menuBtn.classList.add("history-menu-btn");
     menuBtn.title = "Options";
-    menuBtn.innerHTML = `<i class="fa-solid fa-ellipsis-vertical"></i>`;
+    menuBtn.innerHTML = `
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+            <circle cx="12" cy="5"  r="1.5"/>
+            <circle cx="12" cy="12" r="1.5"/>
+            <circle cx="12" cy="19" r="1.5"/>
+        </svg>`;
 
     const dropdown = document.createElement("div");
     dropdown.classList.add("history-dropdown");
     dropdown.innerHTML = `
         <button class="history-dropdown-item" data-action="open">
-            <i class="fa-solid fa-up-right-from-square"></i>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
             Open chat
         </button>
         <button class="history-dropdown-item" data-action="rename">
-            <i class="fa-solid fa-pen"></i>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             Rename
         </button>
         <button class="history-dropdown-item danger" data-action="delete">
-            <i class="fa-solid fa-trash"></i>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
             Delete chat
         </button>`;
 
@@ -945,7 +1008,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         const menu = document.querySelector(".sidebar-menu");
         menu.innerHTML = `
             <div class="history-header">
-                <button class="back-btn" onclick="showMainMenu()"><i class="fa-solid fa-arrow-left"></i> Back</button>
+                <button class="back-btn" onclick="showMainMenu()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg> Back</button>
                 <span>Chat History</span>
             </div>`;
 
