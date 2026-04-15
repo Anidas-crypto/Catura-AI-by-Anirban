@@ -70,7 +70,7 @@ function useSuggestion(el) {
     const input = document.getElementById("input");
     input.value = el.innerText.trim();
     input.focus();
-    autoResize();
+    if (typeof autoResize === "function") autoResize();
 }
 
 // ============================
@@ -362,7 +362,53 @@ async function streamWords(botMsg, wrapper, reader, decoder, chatbox) {
 }
 
 // ============================
-// ⚙️ SETTINGS OVERLAY (main body)
+// ➕ NEW CHAT  ← FIXED: outside DOMContentLoaded
+// ============================
+window.newChat = function () {
+    currentSessionId = generateSessionId();
+    firstMessage = true;
+
+    const chatbox   = document.getElementById("chatbox");
+    const inputArea = document.getElementById("inputArea");
+    const welcome   = document.getElementById("welcome");
+
+    if (chatbox)   chatbox.innerHTML = "";
+    if (welcome)   welcome.style.display = "block";
+    if (inputArea) {
+        inputArea.classList.remove("bottom");
+        inputArea.classList.add("center");
+    }
+    if (window.innerWidth <= 768) closeSidebar();
+};
+
+// ============================
+// 🚪 LOGOUT  ← FIXED: outside DOMContentLoaded
+// ============================
+window.logoutUser = async function () {
+    await supabaseClient.auth.signOut();
+    window.location.href = "/auth.html";
+};
+
+// ============================
+// 🧭 MAIN MENU  ← FIXED: outside DOMContentLoaded
+// ============================
+window.showMainMenu = function () {
+    const menu = document.querySelector(".sidebar-menu");
+    if (!menu) return;
+    menu.innerHTML = `
+        <div class="sidebar-item" onclick="newChat()">
+            <span class="sidebar-icon">✏️</span> New Chat
+        </div>
+        <div class="sidebar-item" onclick="showHistory()">
+            <span class="sidebar-icon">🕘</span> Chat History
+        </div>
+        <div class="sidebar-item" onclick="showSettings()">
+            <span class="sidebar-icon">⚙️</span> Settings
+        </div>`;
+};
+
+// ============================
+// ⚙️ SETTINGS OVERLAY  ← FIXED: outside DOMContentLoaded
 // ============================
 window.showSettings = function () {
     const overlay = document.getElementById("settingsOverlay");
@@ -393,7 +439,6 @@ window.showSettings = function () {
             <div class="settings-content" id="settingsContent"></div>
         </div>`;
 
-    // Load default tab
     showSettingsTab('general', overlay.querySelector('.settings-nav-item.active'));
 
     if (window.innerWidth <= 768) closeSidebar();
@@ -401,14 +446,14 @@ window.showSettings = function () {
 
 window.closeSettings = function () {
     const overlay = document.getElementById("settingsOverlay");
-    overlay.style.display = "none";
+    if (overlay) overlay.style.display = "none";
 };
 
 window.showSettingsTab = function (tab, clickedEl) {
     document.querySelectorAll(".settings-nav-item").forEach(el => el.classList.remove("active"));
     if (clickedEl) clickedEl.classList.add("active");
 
-    const content  = document.getElementById("settingsContent");
+    const content = document.getElementById("settingsContent");
     if (!content) return;
 
     const email    = currentUser?.email || "Not logged in";
@@ -558,15 +603,19 @@ window.clearAllChats = async function () {
     if (sessErr) { alert("Failed: " + sessErr.message); return; }
 
     showToast("All chats deleted.");
+
     const chatbox   = document.getElementById("chatbox");
     const inputArea = document.getElementById("inputArea");
     const welcome   = document.getElementById("welcome");
-    chatbox.innerHTML = "";
+
+    if (chatbox) chatbox.innerHTML = "";
     currentSessionId = generateSessionId();
     firstMessage = true;
-    if (welcome) welcome.style.display = "block";
-    inputArea.classList.remove("bottom");
-    inputArea.classList.add("center");
+    if (welcome)   welcome.style.display = "block";
+    if (inputArea) {
+        inputArea.classList.remove("bottom");
+        inputArea.classList.add("center");
+    }
     closeSettings();
 };
 
@@ -590,10 +639,12 @@ async function deleteSingleChat(sessionId) {
         const chatbox   = document.getElementById("chatbox");
         const inputArea = document.getElementById("inputArea");
         const welcome   = document.getElementById("welcome");
-        chatbox.innerHTML = "";
+        if (chatbox) chatbox.innerHTML = "";
         if (welcome) welcome.style.display = "block";
-        inputArea.classList.remove("bottom");
-        inputArea.classList.add("center");
+        if (inputArea) {
+            inputArea.classList.remove("bottom");
+            inputArea.classList.add("center");
+        }
     }
 
     showToast("Chat deleted.");
@@ -873,43 +924,6 @@ document.addEventListener("DOMContentLoaded", async function () {
             const item = buildHistoryItem(session, loadSession);
             menu.appendChild(item);
         });
-    };
-
-    // ============================
-    // 🧭 MAIN MENU
-    // ============================
-    window.showMainMenu = function () {
-        document.querySelector(".sidebar-menu").innerHTML = `
-            <div class="sidebar-item" onclick="newChat()">
-                <span class="sidebar-icon">✏️</span> New Chat
-            </div>
-            <div class="sidebar-item" onclick="showHistory()">
-                <span class="sidebar-icon">🕘</span> Chat History
-            </div>
-            <div class="sidebar-item" onclick="showSettings()">
-                <span class="sidebar-icon">⚙️</span> Settings
-            </div>`;
-    };
-
-    // ============================
-    // ➕ NEW CHAT
-    // ============================
-    window.newChat = function () {
-        currentSessionId = generateSessionId();
-        firstMessage = true;
-        chatbox.innerHTML = "";
-        if (welcome) welcome.style.display = "block";
-        inputArea.classList.remove("bottom");
-        inputArea.classList.add("center");
-        if (window.innerWidth <= 768) closeSidebar();
-    };
-
-    // ============================
-    // 🚪 LOGOUT
-    // ============================
-    window.logoutUser = async function () {
-        await supabaseClient.auth.signOut();
-        window.location.href = "/auth.html";
     };
 
 });
