@@ -21,8 +21,7 @@ html { scroll-behavior: smooth; }
 ::-webkit-scrollbar-thumb:hover { background: #10a37f; }
 
 /* ============================
-   ICON RAIL — slim collapsed sidebar
-   Visible on desktop when sidebar is closed
+   ICON RAIL
 ============================ */
 .icon-rail {
     width: 52px;
@@ -30,7 +29,7 @@ html { scroll-behavior: smooth; }
     height: 100dvh;
     background: #111;
     border-right: 1px solid #1e1e1e;
-    display: none;               /* hidden by default; shown when sidebar closes */
+    display: none;
     flex-direction: column;
     align-items: center;
     padding: 10px 0;
@@ -80,7 +79,6 @@ html { scroll-behavior: smooth; }
 
 .rail-spacer { flex: 1; }
 
-/* Avatar in rail */
 .rail-avatar {
     width: 34px;
     height: 34px;
@@ -101,12 +99,11 @@ html { scroll-behavior: smooth; }
     box-shadow: 0 0 0 2px #10a37f66;
 }
 
-/* Logout rail button — red tint on hover */
 .rail-logout { color: #666; }
 .rail-logout:hover { background: #1f1515; color: #e06c6c; }
 
 /* ============================
-   SIDEBAR — full expanded panel
+   SIDEBAR
 ============================ */
 .sidebar {
     width: 0;
@@ -130,7 +127,6 @@ html { scroll-behavior: smooth; }
     box-shadow: 2px 0 10px rgba(0,0,0,0.4);
 }
 
-/* Header row inside the expanded sidebar */
 .sidebar-header {
     display: flex;
     align-items: center;
@@ -144,7 +140,6 @@ html { scroll-behavior: smooth; }
     flex-shrink: 0;
 }
 
-/* Collapse/expand toggle button sitting inside the sidebar header */
 .sidebar-inner-toggle {
     width: 34px;
     height: 34px;
@@ -166,7 +161,6 @@ html { scroll-behavior: smooth; }
     color: #e5e5e5;
 }
 
-/* Brand text + logo */
 .sidebar-brand {
     display: flex;
     align-items: center;
@@ -176,7 +170,6 @@ html { scroll-behavior: smooth; }
     overflow: hidden;
 }
 
-/* Mobile close X — hidden on desktop */
 .close-btn {
     display: none;
     background: transparent;
@@ -259,13 +252,9 @@ html { scroll-behavior: smooth; }
 .sidebar-item.logout { color: #e06c6c; }
 .sidebar-item.logout:hover { background: #e06c6c22; color: #ff8080; }
 
-/* Desktop toggle — REMOVED from header, now inside sidebar */
 .desktop-toggle { display: none !important; }
 .mobile-toggle { display: none; }
 
-/* ============================
-   SIDEBAR OVERLAY (mobile)
-============================ */
 .sidebar-overlay { display: none; }
 
 /* ============================
@@ -378,6 +367,17 @@ html { scroll-behavior: smooth; }
 @keyframes fadeUp {
     from { opacity: 0; transform: translateY(8px); }
     to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 /* ============================
@@ -779,7 +779,7 @@ html { scroll-behavior: smooth; }
 .bot-copy-btn.copied { color: #10a37f; border-color: #10a37f44; }
 
 /* ============================
-   SETTINGS OVERLAY (main body)
+   SETTINGS OVERLAY
 ============================ */
 .settings-overlay {
     position: absolute; inset: 0;
@@ -899,7 +899,6 @@ html { scroll-behavior: smooth; }
 
     body { display: block; overflow: hidden; }
 
-    /* Hide icon rail on mobile */
     .icon-rail { display: none !important; }
 
     .sidebar {
@@ -918,7 +917,6 @@ html { scroll-behavior: smooth; }
     }
     .sidebar-overlay.show { display: block; }
 
-    /* SHOW mobile hamburger only on mobile */
     .mobile-toggle { 
         display: flex !important;
         position: absolute;

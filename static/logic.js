@@ -34,7 +34,7 @@ async function getUser() {
 
         if (avatarEl)   avatarEl.textContent  = initials;
         if (nameEl)     nameEl.textContent     = fullName;
-        if (railAvatar) railAvatar.textContent = initials;  // keep rail avatar in sync
+        if (railAvatar) railAvatar.textContent = initials;
     }
 }
 
@@ -50,9 +50,86 @@ let chatTitle = "New Chat";
 let firstMessage = true;
 
 // ============================
+// ⏰ TIME-BASED GREETING SYSTEM
+// ============================
+function getTimeOfDay() {
+    const hour = new Date().getHours();
+    
+    if (hour >= 5 && hour < 12) return "morning";
+    if (hour >= 12 && hour < 17) return "afternoon";
+    if (hour >= 17 && hour < 21) return "evening";
+    return "night";
+}
+
+function getGreetingMessage(userName) {
+    const timeOfDay = getTimeOfDay();
+    const greetings = {
+        morning: [
+            `Good morning, ${userName}`,
+            `Rise and shine, ${userName}!`,
+            `Good morning! Ready to code, ${userName}?`,
+            `☀️ Good morning, ${userName}!`,
+        ],
+        afternoon: [
+            `Good afternoon, ${userName}`,
+            `Hope you're having a great afternoon, ${userName}!`,
+            `Afternoon, ${userName}!`,
+            `🌤️ Good afternoon, ${userName}!`,
+        ],
+        evening: [
+            `Good evening, ${userName}`,
+            `Evening, ${userName}!`,
+            `Good evening! Let's build something, ${userName}`,
+            `🌙 Good evening, ${userName}!`,
+        ],
+        night: [
+            `Good night, ${userName}`,
+            `Night owl coding session, ${userName}?`,
+            `Burning the midnight oil, ${userName}?`,
+            `🌌 Good night, ${userName}!`,
+        ]
+    };
+    
+    const greetingList = greetings[timeOfDay];
+    return greetingList[Math.floor(Math.random() * greetingList.length)];
+}
+
+function displayGreeting() {
+    const userNameEl = document.getElementById("userFullname");
+    const userName = userNameEl?.textContent || "User";
+    
+    const greeting = getGreetingMessage(userName);
+    
+    // Create greeting element
+    const greetingDiv = document.createElement("div");
+    greetingDiv.style.cssText = `
+        text-align: center;
+        margin-top: 20px;
+        margin-bottom: 30px;
+        padding: 20px;
+        background: linear-gradient(135deg, #10a37f11 0%, #0d8c6d11 100%);
+        border: 1px solid #10a37f22;
+        border-radius: 12px;
+        animation: fadeIn 0.6s ease-in-out;
+    `;
+    greetingDiv.innerHTML = `
+        <div style="font-size: 24px; font-weight: 600; color: #10a37f; letter-spacing: -0.02em;">
+            ${greeting}
+        </div>
+        <div style="font-size: 14px; color: #888; margin-top: 8px;">
+            How can I help you today?
+        </div>
+    `;
+    
+    const chatbox = document.getElementById("chatbox");
+    if (chatbox) {
+        chatbox.innerHTML = "";
+        chatbox.appendChild(greetingDiv);
+    }
+}
+
+// ============================
 // 🔀 SIDEBAR TOGGLE
-//    Desktop: toggles between full sidebar (260px) and slim icon rail (52px)
-//    Mobile:  toggles slide-in full sidebar
 // ============================
 function toggleSidebar() {
     const sidebar = document.getElementById("sidebar");
@@ -62,11 +139,9 @@ function toggleSidebar() {
     const isMobile = window.innerWidth <= 768;
 
     if (isMobile) {
-        // Mobile: slide in/out
         sidebar.classList.toggle("open");
         overlay.classList.toggle("show");
     } else {
-        // Desktop: swap between full sidebar and icon rail
         const isOpen = sidebar.classList.contains("open");
         if (isOpen) {
             sidebar.classList.remove("open");
@@ -85,7 +160,6 @@ function closeSidebar() {
     overlay.classList.remove("show");
 }
 
-// Open sidebar AND immediately navigate to a section (used from icon rail)
 window.openSidebarTo = function (section) {
     const sidebar  = document.getElementById("sidebar");
     const iconRail = document.getElementById("iconRail");
@@ -414,11 +488,14 @@ window.newChat = function () {
     const welcome   = document.getElementById("welcome");
 
     if (chatbox)   chatbox.innerHTML = "";
-    if (welcome)   welcome.style.display = "block";
+    if (welcome)   welcome.style.display = "none";
     if (inputArea) {
         inputArea.classList.remove("bottom");
         inputArea.classList.add("center");
     }
+    
+    displayGreeting();
+    
     if (window.innerWidth <= 768) closeSidebar();
     showMainMenu();
     showToast("New chat started", 2000);
@@ -876,6 +953,8 @@ document.addEventListener("DOMContentLoaded", async function () {
         window.location.href = "/auth.html";
         return;
     }
+
+    displayGreeting();
 
     const chatbox   = document.getElementById("chatbox");
     const input     = document.getElementById("input");
