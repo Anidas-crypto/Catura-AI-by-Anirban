@@ -320,7 +320,7 @@ html { scroll-behavior: smooth; }
     box-sizing: border-box;
     justify-content: flex-start;
     align-items: stretch;
-    padding-top: 12px;
+    padding-top: 80px;
     padding-bottom: 12px;
 }
 
