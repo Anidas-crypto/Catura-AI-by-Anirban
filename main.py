@@ -1,41 +1,82 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 import requests
 import os
 import uuid
 import json
+from datetime import datetime, timedelta
 
 app = FastAPI()
+
+# ✅ CORS MIDDLEWARE
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ✅ MOUNT STATIC FILES WITH CACHE CONTROL
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # 🧠 In-memory session store
 user_memory = {}
 
+# ✅ CACHE CONTROL MIDDLEWARE
+@app.middleware("http")
+async def add_cache_headers(request: Request, call_next):
+    response = await call_next(request)
+    
+    # ✅ Never cache HTML
+    if request.url.path == "/" or request.url.path.endswith(".html"):
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    
+    # ✅ Cache static files for 1 year (they have version params)
+    elif request.url.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    
+    # ✅ Cache manifest and service-worker
+    elif request.url.path in ["/manifest.json", "/service-worker.js"]:
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    
+    return response
+
 @app.get("/")
 def home():
-    return FileResponse("index.html")
+    return FileResponse("index.html", media_type="text/html")
 
 @app.get("/auth.html")
 def auth_page():
-    return FileResponse("auth.html")
+    return FileResponse("auth.html", media_type="text/html")
 
 @app.get("/manifest.json")
 async def serve_manifest():
     path = os.path.join(os.path.dirname(__file__), "manifest.json")
-    return FileResponse(path)
+    return FileResponse(path, media_type="application/manifest+json")
 
 @app.get("/service-worker.js")
 async def serve_sw():
-    return FileResponse(os.path.join(os.path.dirname(__file__), "service-worker.js"))
+    return FileResponse(
+        os.path.join(os.path.dirname(__file__), "service-worker.js"),
+        media_type="application/javascript"
+    )
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "3.0.0"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
-    return FileResponse("google5869a60ba00ea65a.html")
+    return FileResponse("google5869a60ba00ea65a.html", media_type="text/html")
+
+@app.get("/health")
+def health_check():
+    return {"status": "healthy", "version": "3.0.0", "timestamp": datetime.utcnow().isoformat()}
 
 @app.get("/chat")
 def chat(request: Request, prompt: str):
@@ -56,14 +97,14 @@ def chat(request: Request, prompt: str):
                 yield f"data: {json.dumps({'token': 'I was created by Anirban.'}, ensure_ascii=False)}\n\n"
                 yield "data: [DONE]\n\n"
             return StreamingResponse(quick(), media_type="text/event-stream",
-                headers={"Set-Cookie": f"session_id={session_id}; Path=/; SameSite=Lax"})
+                headers={"Set-Cookie": f"session_id={session_id}; Path=/; SameSite=Lax; Max-Age=31536000"})
 
         if any(q in prompt_lower for q in ["what is your name", "who are you"]):
             def quick():
                 yield f"data: {json.dumps({'token': 'I am Catura AI, created by Anirban.'}, ensure_ascii=False)}\n\n"
                 yield "data: [DONE]\n\n"
             return StreamingResponse(quick(), media_type="text/event-stream",
-                headers={"Set-Cookie": f"session_id={session_id}; Path=/; SameSite=Lax"})
+                headers={"Set-Cookie": f"session_id={session_id}; Path=/; SameSite=Lax; Max-Age=31536000"})
 
         if session_id not in user_memory:
             user_memory[session_id] = []
@@ -98,7 +139,6 @@ def chat(request: Request, prompt: str):
                         "model": "openai/gpt-3.5-turbo",
                         "messages": messages,
                         "stream": True,
-                        # ✅ These ensure the model gives properly formatted code
                         "temperature": 0.3,
                         "max_tokens": 2048
                     },
@@ -120,7 +160,6 @@ def chat(request: Request, prompt: str):
                             token = delta.get("content", "")
                             if token:
                                 full_reply += token
-                                # ✅ ensure_ascii=False preserves all characters exactly
                                 yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
                         except Exception:
                             continue
@@ -140,7 +179,7 @@ def chat(request: Request, prompt: str):
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",
-                "Set-Cookie": f"session_id={session_id}; Path=/; SameSite=Lax"
+                "Set-Cookie": f"session_id={session_id}; Path=/; SameSite=Lax; Max-Age=31536000"
             }
         )
 

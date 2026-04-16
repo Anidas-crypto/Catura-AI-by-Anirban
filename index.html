@@ -6,9 +6,18 @@
     <meta name="description" content="Catura AI is a free AI chatbot assistant like ChatGPT and Claude.">
     <meta name="robots" content="index, follow">
     <meta name="google-site-verification" content="qiQ1Xx00fMsEhl6f4cmRXiJg-16rT3M_sg4kDAt5y1Q" />
+    
+    <!-- ✅ CACHE BUSTING - NEVER CACHE HTML -->
+    <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="pragma" content="no-cache">
+    <meta http-equiv="expires" content="0">
+    
     <title>Catura AI</title>
     <link rel="icon" type="image/png" href="static/logos.png">
-    <link rel="stylesheet" href="static/style.css">
+    
+    <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
+    <link rel="stylesheet" href="static/style.css?v=3.0.0">
+    
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#000000" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -142,8 +151,6 @@
         <!-- Settings Overlay -->
         <div id="settingsOverlay" class="settings-overlay"></div>
 
-        <!-- Header REMOVED - Cleaner look -->
-
         <div id="chatbox"></div>
 
         <div class="input-area center" id="inputArea">
@@ -154,13 +161,18 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="static/logic.js"></script>
+    
+    <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
+    <script src="static/logic.js?v=3.0.0"></script>
 
     <script>
+        // ✅ VERSION INFO FOR DEBUGGING
+        console.log('🚀 Catura AI v3.0.0 loaded');
+        
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js')
-                    .then(() => console.log('✅ Catura AI PWA Ready'))
+                navigator.serviceWorker.register('/service-worker.js?v=3.0.0')
+                    .then(() => console.log('✅ Catura AI PWA Ready - v3.0.0'))
                     .catch((err) => console.log('❌ SW Error:', err));
             });
         }
