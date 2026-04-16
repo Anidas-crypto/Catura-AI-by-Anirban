@@ -122,10 +122,12 @@ function displayGreeting() {
     `;
     
     const chatbox = document.getElementById("chatbox");
+    const app = document.getElementById("app");
     if (chatbox) {
         chatbox.innerHTML = "";
         chatbox.appendChild(greetingDiv);
     }
+    if (app) app.classList.add("greeting-mode");
 }
 
 // ============================
@@ -977,6 +979,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         if (welcome) welcome.style.display = "none";
         inputArea.classList.remove("center");
         inputArea.classList.add("bottom");
+        document.getElementById("app")?.classList.remove("greeting-mode");
 
         const userBubble = createUserBubble(message);
         chatbox.appendChild(userBubble);
@@ -1057,6 +1060,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         if (welcome) welcome.style.display = "none";
         inputArea.classList.remove("center");
         inputArea.classList.add("bottom");
+        document.getElementById("app")?.classList.remove("greeting-mode");
 
         currentSessionId = sessionId;
         firstMessage = false;

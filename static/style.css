@@ -271,6 +271,25 @@ html { scroll-behavior: smooth; }
     min-width: 0;
 }
 
+/* Greeting state: center the greeting + input together */
+.app.greeting-mode {
+    justify-content: center;
+    align-items: center;
+}
+
+.app.greeting-mode #chatbox {
+    flex: 0 0 auto;
+    overflow: visible;
+    justify-content: center;
+    align-items: center;
+    padding-bottom: 0;
+}
+
+.app.greeting-mode .input-area.center {
+    width: 95%;
+    max-width: 720px;
+}
+
 /* ============================
    HEADER
 ============================ */
@@ -552,13 +571,11 @@ html { scroll-behavior: smooth; }
 }
 
 .input-area.center {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 70%; 
+    position: static;
+    transform: none;
+    width: 95%;
     max-width: 720px;
-    margin: 0;
+    margin: 12px auto 0 auto;
 }
 
 .input-area.bottom {
@@ -1210,9 +1227,9 @@ html { scroll-behavior: smooth; }
 
     .input-area.center { 
         width: 92%; 
-        bottom: 20px;
-        left: 50%;
-        transform: translateX(-50%);
+        margin: 12px auto 0 auto;
+        position: static;
+        transform: none;
     }
     .input-area { gap: 8px; padding: 10px 12px; }
     .input-area button { width: 36px; height: 36px; }
