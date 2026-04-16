@@ -37,6 +37,7 @@ html { scroll-behavior: smooth; }
     flex-shrink: 0;
     z-index: 100;
     overflow: hidden;
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .icon-rail.visible { display: flex; }
@@ -258,7 +259,7 @@ html { scroll-behavior: smooth; }
 .sidebar-overlay { display: none; }
 
 /* ============================
-   APP
+   APP - SHIFTS WITH SIDEBAR
 ============================ */
 .app {
     flex: 1;
@@ -269,6 +270,8 @@ html { scroll-behavior: smooth; }
     position: relative;
     overflow: hidden;
     min-width: 0;
+    transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Greeting state: center the greeting + input together */
@@ -549,7 +552,7 @@ html { scroll-behavior: smooth; }
 @keyframes cursorBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
 
 /* ============================
-   INPUT AREA - CLAUDE LIKE COMPACT
+   INPUT AREA - SHIFTS WITH SIDEBAR
 ============================ */
 .input-area {
     display: flex; 
@@ -560,7 +563,7 @@ html { scroll-behavior: smooth; }
     border: 1.5px solid #252525; 
     border-radius: 18px;
     max-width: 720px; 
-    width: 95%; 
+    width: calc(100% - 40px);
     margin: 0 auto 20px auto;
     box-sizing: border-box;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -576,22 +579,22 @@ html { scroll-behavior: smooth; }
 .input-area.center {
     position: static;
     transform: none;
-    width: 95%;
+    width: calc(100% - 40px);
     max-width: 720px;
     margin: 12px auto 0 auto;
 }
 
 .input-area.bottom {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 70%;
+    position: relative;
+    bottom: auto;
+    left: auto;
+    transform: none;
+    width: calc(100% - 40px);
     max-width: 720px;
     background: rgba(15,15,15,0.95); 
     backdrop-filter: blur(10px);
     border-color: #252525;
-    margin: 0;
+    margin: 0 auto 20px auto;
     z-index: 50;
 }
 
@@ -1231,7 +1234,7 @@ html { scroll-behavior: smooth; }
     .message.bot  { font-size: 14px; padding: 12px 0; }
 
     .input-area.center { 
-        width: 92%; 
+        width: calc(100% - 40px); 
         margin: 12px auto 0 auto;
         position: static;
         transform: none;
