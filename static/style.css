@@ -276,8 +276,9 @@ html { scroll-behavior: smooth; }
 
 /* Greeting state: center the greeting + input together */
 .app.greeting-mode {
-    justify-content: center;
+    justify-content: flex-start;
     align-items: center;
+    padding-top: 10%;
 }
 
 .app.greeting-mode #chatbox {
@@ -285,31 +286,21 @@ html { scroll-behavior: smooth; }
     overflow: visible;
     justify-content: center;
     align-items: center;
-    padding-bottom: 0;
+    padding: 0;
+    width: 100%;
 }
 
 .app.greeting-mode .input-area.center {
     width: 95%;
     max-width: 720px;
+    margin: 24px auto 0 auto;
 }
 
 /* ============================
-   HEADER
+   HEADER - HIDDEN FOR CLEAN LOOK
 ============================ */
 .header {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 13px 16px;
-    font-weight: 600;
-    font-size: 15px;
-    border-bottom: 1px solid #1a1a1a;
-    background: rgba(15,15,15,0.8);
-    backdrop-filter: blur(10px);
-    flex-shrink: 0;
-    letter-spacing: 0.01em;
-    position: relative;
-    z-index: 10;
+    display: none;
 }
 
 /* ============================
@@ -640,11 +631,11 @@ html { scroll-behavior: smooth; }
 .input-area button:active { transform: scale(0.95); }
 
 /* ============================
-   WELCOME SCREEN
+   WELCOME SCREEN - OPTIMIZED FOR CLAUDE STYLE
 ============================ */
 .welcome {
     position: absolute; 
-    top: 36%; 
+    top: 28%; 
     left: 50%;
     transform: translate(-50%, -50%);
     width: 80%; 
@@ -656,7 +647,7 @@ html { scroll-behavior: smooth; }
 
 .welcome h1 {
     font-size: 28px; 
-    margin-bottom: 12px; 
+    margin: 0 0 12px 0;
     font-weight: 700;
     letter-spacing: -0.02em;
     background: linear-gradient(135deg, #10a37f 0%, #0d8c6d 100%);
@@ -665,7 +656,12 @@ html { scroll-behavior: smooth; }
     background-clip: text;
 }
 
-.welcome p { color: #888; margin-bottom: 28px; font-size: 15px; line-height: 1.6; }
+.welcome p { 
+    color: #888; 
+    margin: 0 0 28px 0;
+    font-size: 15px; 
+    line-height: 1.6; 
+}
 
 .suggestions {
     display: grid; 
@@ -1219,11 +1215,8 @@ html { scroll-behavior: smooth; }
     }
 
     .app { width: 100%; height: 100dvh; }
-    .header { 
-        font-size: 14px; 
-        padding: 12px 14px;
-        justify-content: center;
-    }
+    
+    .header { display: none; }
 
     #chatbox { 
         padding: 12px 12px 130px 12px; 
@@ -1242,7 +1235,7 @@ html { scroll-behavior: smooth; }
     .input-area { gap: 8px; padding: 10px 12px; }
     .input-area button { width: 36px; height: 36px; }
 
-    .welcome { width: 92%; top: 30%; }
+    .welcome { width: 92%; top: 25%; }
     .welcome h1 { font-size: 22px; }
     .welcome p  { font-size: 14px; }
     .suggestions { grid-template-columns: 1fr; gap: 10px; }
