@@ -104,7 +104,7 @@ html { scroll-behavior: smooth; }
 .rail-logout:hover { background: #1f1515; color: #e06c6c; }
 
 /* ============================
-   SIDEBAR
+   SIDEBAR - FIXED FOR DROPDOWN VISIBILITY
 ============================ */
 .sidebar {
     width: 0;
@@ -114,7 +114,7 @@ html { scroll-behavior: smooth; }
     border-right: 1px solid #222;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow: visible;
     transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
                 min-width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     flex-shrink: 0;
@@ -126,6 +126,7 @@ html { scroll-behavior: smooth; }
     width: 260px;
     min-width: 260px;
     box-shadow: 2px 0 10px rgba(0,0,0,0.4);
+    overflow: visible;
 }
 
 .sidebar-header {
@@ -193,7 +194,7 @@ html { scroll-behavior: smooth; }
     flex-direction: column;
     gap: 4px;
     overflow-y: auto;
-    overflow-x: hidden;
+    overflow-x: visible;
 }
 
 .sidebar-item {
@@ -209,7 +210,7 @@ html { scroll-behavior: smooth; }
     user-select: none;
     white-space: nowrap;
     position: relative;
-    overflow: hidden;
+    overflow: visible;
 }
 
 .sidebar-item::before {
@@ -304,7 +305,7 @@ html { scroll-behavior: smooth; }
 }
 
 /* ============================
-   CHATBOX - FIXED FOR NATURAL FLOW
+   CHATBOX - FIXED FOR NATURAL FLOW WITH TOP SPACING
 ============================ */
 #chatbox {
     flex: 1;
@@ -813,12 +814,12 @@ html { scroll-behavior: smooth; }
 }
 
 /* ============================
-   HISTORY 3-DOT MENU - FIXED
+   HISTORY 3-DOT MENU - FIXED WITH VISIBILITY
 ============================ */
 .history-menu-wrap { 
     position: relative; 
     flex-shrink: 0;
-    z-index: 100;
+    z-index: 1001;
 }
 
 .history-menu-btn {
@@ -851,7 +852,7 @@ html { scroll-behavior: smooth; }
     border-radius: 10px;
     padding: 4px; 
     min-width: 148px; 
-    z-index: 10000;
+    z-index: 10001;
     box-shadow: 0 8px 24px rgba(0,0,0,0.4); 
     animation: dropIn 0.12s ease;
 }
@@ -1193,6 +1194,7 @@ html { scroll-behavior: smooth; }
         height: 100dvh; 
         transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
         z-index: 1000;
+        overflow: visible;
     }
     .sidebar.open { left: 0; box-shadow: 4px 0 20px rgba(0,0,0,0.6); }
 
@@ -1219,7 +1221,7 @@ html { scroll-behavior: smooth; }
     .header { display: none; }
 
     #chatbox { 
-        padding: 12px 12px 130px 12px; 
+        padding: 60px 12px 130px 12px; 
         max-width: 100%; 
     }
 
