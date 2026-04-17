@@ -188,7 +188,7 @@ function useSuggestion(el) {
 }
 
 // ============================
-// 🧠 QUERY COMPLEXITY DETECTOR
+// �� QUERY COMPLEXITY DETECTOR
 // ============================
 function isHeavyQuery(text) {
     const lower = text.toLowerCase().trim();
@@ -921,7 +921,7 @@ async function deleteSingleChat(sessionId) {
 
     const { error: msgErr } = await supabaseClient.from("messages").delete()
         .eq("session_id", sessionId).eq("user_id", currentUser.id);
-    if (msgErr) { showToast("�� Failed to delete messages"); return; }
+    if (msgErr) { showToast("❌ Failed to delete messages"); return; }
 
     const { error: sessErr } = await supabaseClient.from("chat_sessions").delete()
         .eq("session_id", sessionId).eq("user_id", currentUser.id);
@@ -1342,7 +1342,6 @@ function handleFileSelect(event) {
     showToast(`Selected: ${names}`);
     event.target.value = '';
 }
-
 
 // ============================
 // 🤖 MODEL SELECTOR

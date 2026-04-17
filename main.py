@@ -68,7 +68,7 @@ async def serve_sw():
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "3.1.0"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "27.0.0"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -76,7 +76,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "3.1.0", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "27.0.0", "timestamp": datetime.utcnow().isoformat()}
 
 @app.get("/chat")
 def chat(request: Request, prompt: str, model: str = "dagr"):
@@ -101,7 +101,7 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
 
         if any(q in prompt_lower for q in ["what is your name", "who are you"]):
             def quick():
-                yield f"data: {json.dumps({'token': 'I am Catura AI, created by Anirban.'}, ensure_ascii=False)}\n\n"
+                yield f"data: {json.dumps({'token': 'I am Catura AI, created by Anirban. I can switch between Dagr and Apep models.'}, ensure_ascii=False)}\n\n"
                 yield "data: [DONE]\n\n"
             return StreamingResponse(quick(), media_type="text/event-stream",
                 headers={"Set-Cookie": f"session_id={session_id}; Path=/; SameSite=Lax; Max-Age=31536000"})
@@ -111,28 +111,40 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
 
         user_memory[session_id].append({"role": "user", "content": prompt})
 
-        # 🤖 SELECT MODEL BASED ON USER CHOICE
+        # 🤖 MODEL MAPPING
         model_map = {
-            "dagr": "openai/gpt-3.5-turbo",  # Current model
-            # Add more models here in future
-            # "gpt4": "openai/gpt-4",
-            # "claude": "anthropic/claude-3-sonnet",
+            "dagr": "openai/gpt-3.5-turbo",
+            "apep": "meta-llama/llama-3.3-70b-instruct:free",
         }
         
         selected_model = model_map.get(model.lower(), "openai/gpt-3.5-turbo")
 
+        # 🧠 SYSTEM PROMPTS FOR EACH MODEL
+        system_prompts = {
+            "dagr": (
+                "You are Catura AI (Dagr), a helpful and friendly AI assistant created by Anirban. "
+                "You are a general-purpose conversational AI. Always remember the conversation context and give clear, helpful answers. "
+                "Be engaging, concise, and supportive in all interactions."
+            ),
+            "apep": (
+                "You are Catura AI (Apep), an expert coding and technical problem-solving AI specialist created by Anirban. "
+                "You specialize in programming, debugging, algorithms, system design, and technical solutions. "
+                "When writing code, ALWAYS use proper indentation (4 spaces per level), put each statement on its own line, and wrap ALL code in a fenced "
+                "markdown code block with the language specified at the top, like:\n"
+                "```python\n<code here>\n```\n"
+                "Never compress code onto a single line. Always format code for readability and add comments for complex logic. "
+                "Provide detailed explanations for your code and suggest best practices."
+            )
+        }
+
+        # Get appropriate system prompt based on selected model
+        model_key = model.lower()
+        system_prompt = system_prompts.get(model_key, system_prompts["dagr"])
+
         messages = [
             {
                 "role": "system",
-                "content": (
-                    "You are Catura AI, a helpful AI assistant created by Anirban. "
-                    "Always remember the conversation context and give clear, helpful answers. "
-                    "When writing code, ALWAYS use proper indentation (4 spaces per level), "
-                    "put each statement on its own line, and wrap ALL code in a fenced "
-                    "markdown code block with the language specified, like:\n"
-                    "```java\n<code here>\n```\n"
-                    "Never compress code onto a single line. Always format code for readability."
-                )
+                "content": system_prompt
             }
         ] + user_memory[session_id][-20:]
 
