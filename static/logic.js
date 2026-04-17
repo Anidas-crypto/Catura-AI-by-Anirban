@@ -1129,7 +1129,8 @@ document.addEventListener("DOMContentLoaded", async function () {
         chatbox.scrollTop = chatbox.scrollHeight;
 
         try {
-            const res = await fetch(`/chat?prompt=${encodeURIComponent(message)}`);
+            const model = getSelectedModel(); // Get selected model
+            const res = await fetch(`/chat?prompt=${encodeURIComponent(message)}&model=${model}`);
             if (!res.ok) throw new Error("Server error " + res.status);
 
             thinking.remove();
@@ -1340,4 +1341,70 @@ function handleFileSelect(event) {
     const names = Array.from(files).map(f => f.name).join(', ');
     showToast(`Selected: ${names}`);
     event.target.value = '';
+}
+
+
+// ============================
+// 🤖 MODEL SELECTOR
+// ============================
+let selectedModel = 'dagr'; // Default model
+
+window.toggleModelSelector = function (e) {
+    e.stopPropagation();
+    const dropdown = document.getElementById('modelDropdown');
+    const btn = document.getElementById('modelSelectorBtn');
+    
+    const isOpen = dropdown.classList.contains('open');
+    closeAllModelMenus();
+    
+    if (!isOpen) {
+        dropdown.classList.add('open');
+        btn.classList.add('open');
+    }
+};
+
+window.selectModel = function (modelId, modelName) {
+    selectedModel = modelId.toLowerCase();
+    
+    // Update button text
+    const modelNameEl = document.getElementById('modelName');
+    if (modelNameEl) {
+        modelNameEl.textContent = modelName;
+    }
+    
+    // Update active state for all model options
+    document.querySelectorAll('.model-option').forEach(opt => {
+        opt.classList.remove('active');
+    });
+    
+    // Find and activate the clicked option
+    const activeOption = document.querySelector(`[data-model="${modelId}"]`);
+    if (activeOption) {
+        activeOption.classList.add('active');
+    }
+    
+    // Close dropdown
+    closeAllModelMenus();
+    
+    showToast(`✓ Switched to ${modelName}`, 1500);
+};
+
+function closeAllModelMenus() {
+    const dropdown = document.getElementById('modelDropdown');
+    const btn = document.getElementById('modelSelectorBtn');
+    if (dropdown) dropdown.classList.remove('open');
+    if (btn) btn.classList.remove('open');
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function (e) {
+    const wrap = document.getElementById('modelSelectorWrap');
+    if (wrap && !wrap.contains(e.target)) {
+        closeAllModelMenus();
+    }
+});
+
+// Get currently selected model
+function getSelectedModel() {
+    return selectedModel;
 }

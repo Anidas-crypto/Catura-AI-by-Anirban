@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" href="static/logos.png">
     
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <link rel="stylesheet" href="static/style.css?v=26.2.0">
+    <link rel="stylesheet" href="static/style.css?v=26.3.0">
     
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#000000" />
@@ -220,6 +220,42 @@
                     </div>
                 </div>
 
+                <!-- MODEL SELECTOR (NEW) -->
+                <div class="model-selector-wrap" id="modelSelectorWrap">
+                    <button class="model-selector-btn" id="modelSelectorBtn" onclick="toggleModelSelector(event)" title="Choose AI Model">
+                        <span class="model-name" id="modelName">Dagr</span>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                    </button>
+                    <!-- Model selector dropdown -->
+                    <div class="model-dropdown" id="modelDropdown">
+                        <div class="model-dropdown-header">Choose AI Model</div>
+                        <div class="model-option active" data-model="dagr" data-name="Dagr" onclick="selectModel('dagr', 'Dagr')">
+                            <div class="model-option-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/>
+                                </svg>
+                            </div>
+                            <div class="model-option-info">
+                                <div class="model-option-name">Dagr</div>
+                                <div class="model-option-desc">Current Model</div>
+                            </div>
+                            <div class="model-option-check">✓</div>
+                        </div>
+                        <div class="model-dropdown-divider"></div>
+                        <div class="model-dropdown-footer">
+                            <div class="model-coming-soon">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <polyline points="12 6 12 12 16 14"></polyline>
+                                </svg>
+                                <span>More models coming soon</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="input-bottom-spacer"></div>
 
                 <!-- Send button -->
@@ -240,16 +276,16 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <script src="static/logic.js?v=26.2.0"></script>
+    <script src="static/logic.js?v=26.3.0"></script>
 
     <script>
         // ✅ VERSION INFO FOR DEBUGGING
-        console.log('🚀 Catura AI v26.2.0 loaded');
+        console.log('🚀 Catura AI v26.3.0 loaded');
         
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js?v=26.2.0')
-                    .then(() => console.log('✅ Catura AI PWA Ready - v26.2.0'))
+                navigator.serviceWorker.register('/service-worker.js?v=26.3.0')
+                    .then(() => console.log('✅ Catura AI PWA Ready - v26.3.0'))
                     .catch((err) => console.log('❌ SW Error:', err));
             });
         }

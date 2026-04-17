@@ -68,7 +68,7 @@ async def serve_sw():
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "3.0.0"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "3.1.0"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -76,10 +76,10 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "3.0.0", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "3.1.0", "timestamp": datetime.utcnow().isoformat()}
 
 @app.get("/chat")
-def chat(request: Request, prompt: str):
+def chat(request: Request, prompt: str, model: str = "dagr"):
     try:
         session_id = request.cookies.get("session_id")
         if not session_id:
@@ -111,6 +111,16 @@ def chat(request: Request, prompt: str):
 
         user_memory[session_id].append({"role": "user", "content": prompt})
 
+        # 🤖 SELECT MODEL BASED ON USER CHOICE
+        model_map = {
+            "dagr": "openai/gpt-3.5-turbo",  # Current model
+            # Add more models here in future
+            # "gpt4": "openai/gpt-4",
+            # "claude": "anthropic/claude-3-sonnet",
+        }
+        
+        selected_model = model_map.get(model.lower(), "openai/gpt-3.5-turbo")
+
         messages = [
             {
                 "role": "system",
@@ -136,7 +146,7 @@ def chat(request: Request, prompt: str):
                         "Content-Type": "application/json"
                     },
                     json={
-                        "model": "openai/gpt-3.5-turbo",
+                        "model": selected_model,
                         "messages": messages,
                         "stream": True,
                         "temperature": 0.3,
