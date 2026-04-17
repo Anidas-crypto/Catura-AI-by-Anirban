@@ -544,38 +544,49 @@ html { scroll-behavior: smooth; }
 @keyframes cursorBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
 
 /* ============================
-   INPUT AREA - SHIFTS WITH SIDEBAR
+   INPUT AREA - CLAUDE/PERPLEXITY/GITHUB COPILOT STYLE
 ============================ */
+
 .input-area {
-    display: flex; 
-    align-items: flex-end; 
-    gap: 10px; 
-    padding: 12px 14px;
-    background: linear-gradient(90deg, #161616 0%, #1a1a1a 100%);
-    border: 1.5px solid #252525; 
-    border-radius: 18px;
-    max-width: 720px; 
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    padding: 14px 16px;
+    background: linear-gradient(135deg, #0f0f0f 0%, #161616 100%);
+    border: 1px solid #333;
+    border-radius: 12px;
+    max-width: 720px;
     width: calc(100% - 40px);
     margin: 0 auto 20px auto;
     box-sizing: border-box;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     position: relative;
 }
 
-.input-area:focus-within {
-    border-color: #10a37f;
-    box-shadow: 0 0 0 2px rgba(16,163,127,0.1), 0 4px 16px rgba(16,163,127,0.2);
+/* Hover State */
+.input-area:hover {
+    border-color: #444;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
+/* Focus State - When User Clicks */
+.input-area:focus-within {
+    border-color: #10a37f;
+    box-shadow: 0 0 0 2px rgba(16, 163, 127, 0.15), 0 4px 16px rgba(16, 163, 127, 0.25);
+    background: linear-gradient(135deg, #0a0a0a 0%, #141414 100%);
+}
+
+/* Center Position (On Greeting Screen) */
 .input-area.center {
     position: static;
     transform: none;
     width: calc(100% - 40px);
     max-width: 720px;
-    margin: 12px auto 0 auto;
+    margin: 24px auto 0 auto;
 }
 
+/* Bottom Position (After Message Sent) */
 .input-area.bottom {
     position: relative;
     bottom: auto;
@@ -583,53 +594,100 @@ html { scroll-behavior: smooth; }
     transform: none;
     width: calc(100% - 40px);
     max-width: 720px;
-    background: rgba(15,15,15,0.95); 
-    backdrop-filter: blur(10px);
-    border-color: #252525;
+    background: rgba(15, 15, 15, 0.98);
+    backdrop-filter: blur(8px);
+    border-color: #333;
     margin: 0 auto 20px auto;
     z-index: 50;
 }
 
+/* Textarea Input */
 #input {
-    flex: 1; 
-    padding: 10px 6px; 
-    border-radius: 12px; 
-    border: none; 
+    flex: 1;
+    padding: 10px 8px;
+    border-radius: 8px;
+    border: none;
     outline: none;
-    font-size: 14px; 
-    font-family: inherit; 
-    background: transparent; 
+    font-size: 14px;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: transparent;
     color: #e5e5e5;
-    resize: none; 
-    overflow-y: hidden; 
-    min-height: 24px; 
+    resize: none;
+    overflow-y: auto;
+    min-height: 24px;
     max-height: 140px;
-    line-height: 1.5; 
-    white-space: pre-wrap; 
-    word-break: break-word; 
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
     box-sizing: border-box;
+    scrollbar-width: thin;
+    scrollbar-color: #333 transparent;
 }
-#input::placeholder { color: #555; }
 
+/* Input Placeholder */
+#input::placeholder {
+    color: #666;
+    font-weight: 400;
+}
+
+/* Input Scrollbar Styling */
+#input::-webkit-scrollbar {
+    width: 6px;
+}
+
+#input::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#input::-webkit-scrollbar-thumb {
+    background: #444;
+    border-radius: 3px;
+}
+
+#input::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+
+/* Send Button - Modern Style */
 .input-area button {
-    width: 40px; 
-    height: 40px; 
-    border-radius: 12px;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
     background: linear-gradient(135deg, #10a37f 0%, #0d8c6d 100%);
-    border: none; 
-    color: white; 
-    display: flex; 
-    align-items: center; 
+    border: none;
+    color: white;
+    display: flex;
+    align-items: center;
     justify-content: center;
-    cursor: pointer; 
-    padding: 0; 
+    cursor: pointer;
+    padding: 0;
     flex-shrink: 0;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    margin-bottom: 2px; 
-    box-shadow: 0 4px 12px rgba(16,163,127,0.3);
+    margin-bottom: 2px;
+    box-shadow: 0 2px 8px rgba(16, 163, 127, 0.25);
+    font-size: 16px;
+    font-weight: 600;
 }
-.input-area button:hover  { transform: scale(1.08); box-shadow: 0 6px 16px rgba(16,163,127,0.4); }
-.input-area button:active { transform: scale(0.95); }
+
+/* Send Button Hover */
+.input-area button:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(16, 163, 127, 0.4);
+    background: linear-gradient(135deg, #0d8c6d 0%, #0a7a5e 100%);
+}
+
+/* Send Button Active */
+.input-area button:active {
+    transform: scale(0.98);
+    box-shadow: 0 2px 6px rgba(16, 163, 127, 0.2);
+}
+
+/* Send Button Disabled State */
+.input-area button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: scale(1);
+}
 
 /* ============================
    WELCOME SCREEN - OPTIMIZED FOR CLAUDE STYLE
@@ -1229,13 +1287,25 @@ html { scroll-behavior: smooth; }
     .message.bot  { font-size: 14px; padding: 12px 0; }
 
     .input-area.center { 
-        width: calc(100% - 40px); 
+        width: calc(100% - 24px); 
         margin: 12px auto 0 auto;
         position: static;
         transform: none;
     }
-    .input-area { gap: 8px; padding: 10px 12px; }
-    .input-area button { width: 36px; height: 36px; }
+    .input-area { 
+        gap: 8px; 
+        padding: 12px 12px; 
+        border-radius: 10px;
+        width: calc(100% - 24px);
+        margin: 0 auto 20px auto;
+    }
+    .input-area button { width: 34px; height: 34px; }
+
+    #input {
+        font-size: 14px;
+        min-height: 20px;
+        max-height: 120px;
+    }
 
     .welcome { width: 92%; top: 25%; }
     .welcome h1 { font-size: 22px; }
