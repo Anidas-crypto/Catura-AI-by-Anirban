@@ -1470,3 +1470,213 @@ html { scroll-behavior: smooth; }
     .settings-nav-item { white-space: nowrap; font-size: 13px; padding: 7px 14px; flex-shrink: 0; }
     .settings-content { overflow-y: visible; padding-right: 0; }
 }
+/* ============================
+   🎨 THEME SYSTEM
+   ============================ */
+
+/* Light theme variables */
+[data-theme="light"] {
+    --bg: #f5f5f5;
+    --sidebar-bg: #ebebeb;
+    --sidebar-border: #d8d8d8;
+    --input-bg: #ffffff;
+    --input-border: #d0d0d0;
+    --text-primary: #111111;
+    --text-secondary: #444444;
+    --text-muted: #888888;
+    --bubble-user: #e8e8e8;
+    --bubble-bot: transparent;
+    --rail-bg: #e0e0e0;
+}
+
+/* Apply light theme */
+[data-theme="light"] body { background: #f5f5f5; color: #111; }
+[data-theme="light"] .sidebar { background: #ebebeb; border-color: #d8d8d8; }
+[data-theme="light"] .icon-rail { background: #e0e0e0; border-color: #d0d0d0; }
+[data-theme="light"] .app { background: #f5f5f5; }
+[data-theme="light"] .input-area { background: #ffffff; border-color: #d0d0d0; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+[data-theme="light"] #input { background: transparent; color: #111; }
+[data-theme="light"] #input::placeholder { color: #aaa; }
+[data-theme="light"] .message.user { background: #e3e3e3; color: #111; }
+[data-theme="light"] .message.bot { color: #111; }
+[data-theme="light"] .message.bot p, [data-theme="light"] .message.bot li, [data-theme="light"] .message.bot td { color: #222; }
+[data-theme="light"] .sidebar-item { color: #333; }
+[data-theme="light"] .sidebar-item:hover { background: #dcdcdc; }
+[data-theme="light"] .sidebar-brand { color: #111; }
+[data-theme="light"] .user-fullname { color: #333; }
+[data-theme="light"] .user-avatar { background: #10a37f; color: #fff; }
+[data-theme="light"] .rail-btn { color: #555; }
+[data-theme="light"] .rail-btn:hover { background: #d4d4d4; color: #111; }
+[data-theme="light"] .settings-overlay { background: rgba(200,200,200,0.7); backdrop-filter: blur(12px); }
+[data-theme="light"] .settings-panel-wrap { background: #f0f0f0; border-color: #d0d0d0; }
+[data-theme="light"] .settings-nav { background: #e5e5e5; border-color: #d0d0d0; }
+[data-theme="light"] .settings-nav-title { color: #111; }
+[data-theme="light"] .settings-nav-item { color: #555; }
+[data-theme="light"] .settings-nav-item:hover { background: #ddd; color: #111; }
+[data-theme="light"] .settings-nav-item.active { background: #10a37f22; color: #10a37f; }
+[data-theme="light"] .sc-section-title { color: #aaa; }
+[data-theme="light"] .sc-row { border-color: #ddd; }
+[data-theme="light"] .sc-row:hover:not(.disabled) { background: #e8e8e8; }
+[data-theme="light"] .sc-row-label { color: #111; }
+[data-theme="light"] .sc-row-sub { color: #888; }
+[data-theme="light"] .sc-profile-name { color: #111; }
+[data-theme="light"] .sc-profile-email { color: #888; }
+[data-theme="light"] .sc-avatar { background: #10a37f; color: #fff; }
+[data-theme="light"] .history-title { color: #111; }
+[data-theme="light"] .history-date { color: #888; }
+[data-theme="light"] .code-block { background: #e8e8e8; border-color: #ccc; }
+[data-theme="light"] .code-block pre { background: #e0e0e0; color: #222; }
+[data-theme="light"] .inline-code { background: #ddd; color: #333; }
+[data-theme="light"] table th { background: #ddd; color: #111; }
+[data-theme="light"] table td { border-color: #ccc; color: #222; }
+[data-theme="light"] .toastNotif, [data-theme="light"] #toastNotif { background: #fff; color: #111; border-color: #ddd; }
+
+/* ============================
+   🎨 THEME PICKER UI
+   ============================ */
+.sc-row-block {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 16px;
+    cursor: default;
+}
+.sc-row-block:hover { background: transparent !important; }
+.sc-row-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.theme-picker {
+    display: flex;
+    gap: 12px;
+    width: 100%;
+}
+
+.theme-option {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    background: transparent;
+    border: 2px solid #2a2a2a;
+    border-radius: 12px;
+    padding: 10px 8px;
+    cursor: pointer;
+    color: #888;
+    font-size: 12px;
+    font-weight: 500;
+    transition: border-color 0.2s, color 0.2s, background 0.2s;
+}
+.theme-option:hover { border-color: #555; color: #ccc; }
+.theme-option.active { border-color: #10a37f; color: #10a37f; background: #10a37f0f; }
+
+/* Theme preview cards */
+.theme-preview {
+    width: 100%;
+    height: 52px;
+    border-radius: 7px;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: 5px 6px;
+    gap: 4px;
+}
+.light-preview { background: #f0f0f0; }
+.dark-preview  { background: #1a1a1a; }
+.auto-preview  { background: linear-gradient(105deg, #f0f0f0 50%, #1a1a1a 50%); }
+
+.tp-bar {
+    height: 7px;
+    border-radius: 3px;
+    width: 55%;
+    align-self: flex-end;
+    margin-bottom: 2px;
+}
+.light-preview .tp-bar { background: #ccc; }
+.dark-preview  .tp-bar { background: #333; }
+.auto-preview  .tp-bar { background: linear-gradient(90deg, #ccc 50%, #333 50%); }
+
+.tp-line {
+    height: 4px;
+    border-radius: 2px;
+    width: 85%;
+}
+.tp-line.short { width: 60%; }
+.light-preview .tp-line { background: #ddd; }
+.dark-preview  .tp-line { background: #2a2a2a; }
+.auto-preview  .tp-line { background: linear-gradient(90deg, #ddd 50%, #2a2a2a 50%); }
+
+.tp-bubble {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #e07040;
+    position: absolute;
+    bottom: 5px;
+    right: 6px;
+}
+
+/* ============================
+   🔠 FONT SIZE PICKER UI
+   ============================ */
+.font-picker {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+}
+.font-option {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    border: 2px solid #2a2a2a;
+    border-radius: 12px;
+    padding: 12px 6px 10px;
+    cursor: pointer;
+    color: #888;
+    font-size: 11px;
+    font-weight: 500;
+    transition: border-color 0.2s, color 0.2s, background 0.2s;
+}
+.font-option:hover { border-color: #555; color: #ccc; }
+.font-option.active { border-color: #10a37f; color: #10a37f; background: #10a37f0f; }
+
+.font-sample       { font-size: 20px; font-weight: 600; color: #ccc; line-height: 1; font-family: Georgia, serif; }
+.small-sample      { font-size: 15px; }
+.large-sample      { font-size: 26px; }
+.xlarge-sample     { font-size: 32px; }
+.font-option.active .font-sample { color: #10a37f; }
+
+/* ============================
+   🔠 FONT SIZE ACTUAL EFFECT
+   ============================ */
+[data-fontsize="small"] .message.bot,
+[data-fontsize="small"] .message.user { font-size: 13px !important; }
+[data-fontsize="small"] .message.bot p,
+[data-fontsize="small"] .message.bot li { font-size: 13px !important; line-height: 1.7; }
+
+[data-fontsize="large"] .message.bot,
+[data-fontsize="large"] .message.user { font-size: 17px !important; }
+[data-fontsize="large"] .message.bot p,
+[data-fontsize="large"] .message.bot li { font-size: 17px !important; line-height: 1.8; }
+
+[data-fontsize="xlarge"] .message.bot,
+[data-fontsize="xlarge"] .message.user { font-size: 20px !important; }
+[data-fontsize="xlarge"] .message.bot p,
+[data-fontsize="xlarge"] .message.bot li { font-size: 20px !important; line-height: 1.9; }
+
+/* Light theme adjustments for pickers */
+[data-theme="light"] .theme-option { border-color: #ccc; color: #777; }
+[data-theme="light"] .theme-option:hover { border-color: #aaa; color: #333; }
+[data-theme="light"] .theme-option.active { border-color: #10a37f; color: #10a37f; background: #10a37f10; }
+[data-theme="light"] .font-option { border-color: #ccc; color: #777; }
+[data-theme="light"] .font-option:hover { border-color: #aaa; color: #333; }
+[data-theme="light"] .font-option.active { border-color: #10a37f; color: #10a37f; background: #10a37f10; }
+[data-theme="light"] .font-sample { color: #555; }
+[data-theme="light"] .font-option.active .font-sample { color: #10a37f; }

@@ -611,25 +611,75 @@ window.showSettingsTab = function (tab, clickedEl) {
         general: `
             <div class="sc-section">
                 <div class="sc-section-title">Appearance</div>
-                <div class="sc-row disabled">
-                    <svg class="sc-row-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="5"></circle>
-                        <path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"></path>
-                    </svg>
-                    <div class="sc-row-body">
+
+                <!-- THEME PICKER -->
+                <div class="sc-row sc-row-block">
+                    <div class="sc-row-top">
+                        <svg class="sc-row-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="5"></circle>
+                            <path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"></path>
+                        </svg>
                         <p class="sc-row-label">Theme</p>
-                        <p class="sc-row-sub soon">Dark mode — more options coming soon</p>
+                    </div>
+                    <div class="theme-picker">
+                        <button class="theme-option ${(localStorage.getItem('catura-theme') || 'dark') === 'light' ? 'active' : ''}" onclick="setTheme('light')" title="Light">
+                            <div class="theme-preview light-preview">
+                                <div class="tp-bar"></div>
+                                <div class="tp-line"></div>
+                                <div class="tp-line short"></div>
+                                <div class="tp-bubble"></div>
+                            </div>
+                            <span>Light</span>
+                        </button>
+                        <button class="theme-option ${(localStorage.getItem('catura-theme') || 'dark') === 'auto' ? 'active' : ''}" onclick="setTheme('auto')" title="Auto">
+                            <div class="theme-preview auto-preview">
+                                <div class="tp-half-light"></div>
+                                <div class="tp-half-dark"></div>
+                                <div class="tp-bar"></div>
+                                <div class="tp-line"></div>
+                                <div class="tp-bubble"></div>
+                            </div>
+                            <span>Auto</span>
+                        </button>
+                        <button class="theme-option ${(localStorage.getItem('catura-theme') || 'dark') === 'dark' ? 'active' : ''}" onclick="setTheme('dark')" title="Dark">
+                            <div class="theme-preview dark-preview">
+                                <div class="tp-bar"></div>
+                                <div class="tp-line"></div>
+                                <div class="tp-line short"></div>
+                                <div class="tp-bubble"></div>
+                            </div>
+                            <span>Dark</span>
+                        </button>
                     </div>
                 </div>
-                <div class="sc-row disabled">
-                    <svg class="sc-row-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="4 7 4 4 20 4 20 7"></polyline>
-                        <rect x="2" y="7" width="20" height="13" rx="2"></rect>
-                        <path d="M9 17v-3m6 3v-3"></path>
-                    </svg>
-                    <div class="sc-row-body">
-                        <p class="sc-row-label">Font size</p>
-                        <p class="sc-row-sub soon">Coming soon</p>
+
+                <!-- FONT SIZE PICKER -->
+                <div class="sc-row sc-row-block" style="margin-top:8px;">
+                    <div class="sc-row-top">
+                        <svg class="sc-row-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="4 7 4 4 20 4 20 7"></polyline>
+                            <rect x="2" y="7" width="20" height="13" rx="2"></rect>
+                            <path d="M9 17v-3m6 3v-3"></path>
+                        </svg>
+                        <p class="sc-row-label">Chat font size</p>
+                    </div>
+                    <div class="font-picker">
+                        <button class="font-option ${(localStorage.getItem('catura-font') || 'default') === 'default' ? 'active' : ''}" onclick="setFontSize('default')">
+                            <span class="font-sample">Aa</span>
+                            <span>Default</span>
+                        </button>
+                        <button class="font-option ${(localStorage.getItem('catura-font') || 'default') === 'small' ? 'active' : ''}" onclick="setFontSize('small')">
+                            <span class="font-sample small-sample">Aa</span>
+                            <span>Small</span>
+                        </button>
+                        <button class="font-option ${(localStorage.getItem('catura-font') || 'default') === 'large' ? 'active' : ''}" onclick="setFontSize('large')">
+                            <span class="font-sample large-sample">Aa</span>
+                            <span>Large</span>
+                        </button>
+                        <button class="font-option ${(localStorage.getItem('catura-font') || 'default') === 'xlarge' ? 'active' : ''}" onclick="setFontSize('xlarge')">
+                            <span class="font-sample xlarge-sample">Aa</span>
+                            <span>X-Large</span>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -951,6 +1001,9 @@ function buildHistoryItem(session, openSessionFn) {
 // ============================
 document.addEventListener("DOMContentLoaded", async function () {
 
+    initTheme();
+    initFontSize();
+
     await getUser();
 
     if (!currentUser) {
@@ -1129,6 +1182,63 @@ document.addEventListener("DOMContentLoaded", async function () {
     };
 
 });
+
+// ============================
+// 🎨 THEME SYSTEM
+// ============================
+window.setTheme = function(theme) {
+    localStorage.setItem('catura-theme', theme);
+    applyTheme(theme);
+    // Update active button
+    document.querySelectorAll('.theme-option').forEach(btn => btn.classList.remove('active'));
+    const activeBtn = document.querySelector(`.theme-option[onclick="setTheme('${theme}')"]`);
+    if (activeBtn) activeBtn.classList.add('active');
+    showToast(`Theme: ${theme.charAt(0).toUpperCase() + theme.slice(1)}`, 1500);
+};
+
+function applyTheme(theme) {
+    const root = document.documentElement;
+    root.removeAttribute('data-theme');
+    if (theme === 'light') {
+        root.setAttribute('data-theme', 'light');
+    } else if (theme === 'auto') {
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (!prefersDark) root.setAttribute('data-theme', 'light');
+    }
+    // dark = default, no attribute needed
+}
+
+function initTheme() {
+    const saved = localStorage.getItem('catura-theme') || 'dark';
+    applyTheme(saved);
+    // Listen for system preference changes (for auto mode)
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+        if ((localStorage.getItem('catura-theme') || 'dark') === 'auto') applyTheme('auto');
+    });
+}
+
+// ============================
+// 🔠 FONT SIZE SYSTEM
+// ============================
+window.setFontSize = function(size) {
+    localStorage.setItem('catura-font', size);
+    applyFontSize(size);
+    document.querySelectorAll('.font-option').forEach(btn => btn.classList.remove('active'));
+    const activeBtn = document.querySelector(`.font-option[onclick="setFontSize('${size}')"]`);
+    if (activeBtn) activeBtn.classList.add('active');
+    showToast(`Font size: ${size.charAt(0).toUpperCase() + size.slice(1)}`, 1500);
+};
+
+function applyFontSize(size) {
+    const root = document.documentElement;
+    root.removeAttribute('data-fontsize');
+    if (size && size !== 'default') root.setAttribute('data-fontsize', size);
+}
+
+function initFontSize() {
+    const saved = localStorage.getItem('catura-font') || 'default';
+    applyFontSize(saved);
+}
 
 // ============================
 // ✅ PLUS MENU (+ Button dropdown)
