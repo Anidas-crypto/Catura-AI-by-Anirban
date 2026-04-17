@@ -595,6 +595,64 @@ window.closeSettings = function () {
     showMainMenu();
 };
 
+// ============================
+// ✏️ EDIT DISPLAY NAME
+// ============================
+window.editDisplayName = async function () {
+    const currentName = document.getElementById("userFullname")?.textContent || "User";
+    const newName = prompt("Enter your new display name:", currentName);
+    
+    if (!newName || newName.trim() === "" || newName.trim() === currentName) {
+        return;
+    }
+
+    const trimmedName = newName.trim();
+
+    try {
+        // Update Supabase Auth metadata
+        const { data, error } = await supabaseClient.auth.updateUser({
+            data: { full_name: trimmedName }
+        });
+
+        if (error) {
+            console.error("❌ Update failed:", error.message);
+            showToast("❌ Failed to update name. Please try again.");
+            return;
+        }
+
+        // Update current user object
+        currentUser = data.user;
+
+        // Generate new initials
+        const parts = trimmedName.split(/\s+/).filter(Boolean);
+        const initials = parts.length >= 2
+            ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+            : parts[0].slice(0, 2).toUpperCase();
+
+        // Update all name displays in the UI
+        const avatarEl    = document.getElementById("userAvatar");
+        const nameEl      = document.getElementById("userFullname");
+        const railAvatar  = document.getElementById("railAvatar");
+        const scProfileName = document.querySelector(".sc-profile-name");
+
+        if (avatarEl)   avatarEl.textContent  = initials;
+        if (nameEl)     nameEl.textContent    = trimmedName;
+        if (railAvatar) railAvatar.textContent = initials;
+        if (scProfileName) scProfileName.textContent = trimmedName;
+
+        showToast(`✓ Name updated to ${trimmedName}`);
+        
+        // Refresh settings panel to show updated name
+        setTimeout(() => {
+            showSettingsTab('profile', document.querySelector('.settings-nav-item.active'));
+        }, 500);
+
+    } catch (err) {
+        console.error("❌ Error:", err);
+        showToast("❌ Failed to update name. Please try again.");
+    }
+};
+
 window.showSettingsTab = function (tab, clickedEl) {
     document.querySelectorAll(".settings-nav-item").forEach(el => el.classList.remove("active"));
     if (clickedEl) clickedEl.classList.add("active");
@@ -721,14 +779,14 @@ window.showSettingsTab = function (tab, clickedEl) {
             </div>
             <div class="sc-section">
                 <div class="sc-section-title">Actions</div>
-                <div class="sc-row disabled">
+                <div class="sc-row" onclick="editDisplayName()">
                     <svg class="sc-row-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                         <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                     </svg>
                     <div class="sc-row-body">
                         <p class="sc-row-label">Edit display name</p>
-                        <p class="sc-row-sub soon">Coming soon</p>
+                        <p class="sc-row-sub">Change how your name appears</p>
                     </div>
                 </div>
                 <div class="sc-row danger" onclick="logoutUser()">
@@ -863,7 +921,7 @@ async function deleteSingleChat(sessionId) {
 
     const { error: msgErr } = await supabaseClient.from("messages").delete()
         .eq("session_id", sessionId).eq("user_id", currentUser.id);
-    if (msgErr) { showToast("❌ Failed to delete messages"); return; }
+    if (msgErr) { showToast("�� Failed to delete messages"); return; }
 
     const { error: sessErr } = await supabaseClient.from("chat_sessions").delete()
         .eq("session_id", sessionId).eq("user_id", currentUser.id);
@@ -1282,25 +1340,4 @@ function handleFileSelect(event) {
     const names = Array.from(files).map(f => f.name).join(', ');
     showToast(`Selected: ${names}`);
     event.target.value = '';
-}
-
-function showToast(msg) {
-    let toast = document.getElementById('catura-toast');
-    if (!toast) {
-        toast = document.createElement('div');
-        toast.id = 'catura-toast';
-        toast.style.cssText = `
-            position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
-            background: #1e1e1e; border: 1px solid #333; color: #ccc;
-            padding: 10px 18px; border-radius: 10px; font-size: 13px;
-            z-index: 9999; pointer-events: none; white-space: nowrap;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.5);
-            opacity: 0; transition: opacity 0.2s;
-        `;
-        document.body.appendChild(toast);
-    }
-    toast.textContent = msg;
-    toast.style.opacity = '1';
-    clearTimeout(toast._timer);
-    toast._timer = setTimeout(() => { toast.style.opacity = '0'; }, 2500);
 }
