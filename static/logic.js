@@ -441,6 +441,7 @@ function createBotWrapper() {
 async function streamWords(botMsg, wrapper, reader, decoder, chatbox) {
     let buffer    = "";
     let fullReply = "";
+    let hasError  = false;
 
     const liveSpan = document.createElement("span");
     liveSpan.style.cssText = "white-space: pre-wrap; word-break: break-word; font-size: 15px; line-height: 1.8; color: #d4d4d4;";
@@ -460,7 +461,12 @@ async function streamWords(botMsg, wrapper, reader, decoder, chatbox) {
             if (payload === "[DONE]") break;
             try {
                 const chunk = JSON.parse(payload);
-                if (chunk.error) { botMsg.innerHTML = `<p style="color:#e06c6c">⚠️ ${chunk.error}</p>`; return ""; }
+                // ✅ FIX: Show real error message from server and stop streaming
+                if (chunk.error) {
+                    botMsg.innerHTML = `<p style="color:#e06c6c">⚠️ ${chunk.error}</p>`;
+                    hasError = true;
+                    return "";
+                }
                 if (chunk.token) {
                     fullReply += chunk.token;
                     liveSpan.textContent = fullReply;
@@ -468,6 +474,14 @@ async function streamWords(botMsg, wrapper, reader, decoder, chatbox) {
                 }
             } catch { continue; }
         }
+
+        if (hasError) break;
+    }
+
+    if (!fullReply.trim()) {
+        // ✅ FIX: Handle case where stream ended with no tokens and no error message
+        botMsg.innerHTML = `<p style="color:#e06c6c">⚠️ The model returned an empty response. It may be rate-limited — please try again in a moment.</p>`;
+        return "";
     }
 
     botMsg.innerHTML = formatMessage(fullReply);
