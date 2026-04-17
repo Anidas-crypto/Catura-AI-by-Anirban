@@ -1129,3 +1129,68 @@ document.addEventListener("DOMContentLoaded", async function () {
     };
 
 });
+
+// ============================
+// ✅ PLUS MENU (+ Button dropdown)
+// ============================
+function togglePlusMenu(e) {
+    e.stopPropagation();
+    const dropdown = document.getElementById('plusDropdown');
+    dropdown.classList.toggle('open');
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(e) {
+    const wrap = document.getElementById('plusMenuWrap');
+    if (wrap && !wrap.contains(e.target)) {
+        const dropdown = document.getElementById('plusDropdown');
+        if (dropdown) dropdown.classList.remove('open');
+    }
+});
+
+function handlePlusAction(action) {
+    const dropdown = document.getElementById('plusDropdown');
+    if (dropdown) dropdown.classList.remove('open');
+
+    if (action === 'file') {
+        const fi = document.getElementById('fileInput');
+        if (fi) fi.click();
+    } else if (action === 'connect') {
+        showToast('Connect apps — coming soon!');
+    } else if (action === 'think') {
+        showToast('Think mode — coming soon!');
+    } else if (action === 'research') {
+        showToast('Deep research — coming soon!');
+    } else if (action === 'search') {
+        showToast('Web search — coming soon!');
+    }
+}
+
+function handleFileSelect(event) {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+    const names = Array.from(files).map(f => f.name).join(', ');
+    showToast(`Selected: ${names}`);
+    event.target.value = '';
+}
+
+function showToast(msg) {
+    let toast = document.getElementById('catura-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'catura-toast';
+        toast.style.cssText = `
+            position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
+            background: #1e1e1e; border: 1px solid #333; color: #ccc;
+            padding: 10px 18px; border-radius: 10px; font-size: 13px;
+            z-index: 9999; pointer-events: none; white-space: nowrap;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+            opacity: 0; transition: opacity 0.2s;
+        `;
+        document.body.appendChild(toast);
+    }
+    toast.textContent = msg;
+    toast.style.opacity = '1';
+    clearTimeout(toast._timer);
+    toast._timer = setTimeout(() => { toast.style.opacity = '0'; }, 2500);
+}
