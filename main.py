@@ -26,7 +26,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 user_memory = {}
 
 # ✅ YOUR RENDER APP URL — update this to your actual Render domain
-APP_URL = os.getenv("APP_URL", "https://catura-ai.onrender.com")
+APP_URL = os.getenv("APP_URL", "https://my-ai-assistant-9bbd.onrender.com/")
 
 # ✅ CACHE CONTROL MIDDLEWARE
 @app.middleware("http")
