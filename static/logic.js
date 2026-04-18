@@ -560,6 +560,9 @@ window.showMainMenu = function () {
 // ============================
 // ⚙️ SETTINGS OVERLAY
 // ============================
+// ============================
+// ⚙️ SETTINGS OVERLAY
+// ============================
 window.showSettings = function () {
     const overlay = document.getElementById("settingsOverlay");
     const email    = currentUser?.email || "Not logged in";
@@ -593,6 +596,35 @@ window.showSettings = function () {
                         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
                     </svg> Privacy
                 </div>
+                <div class="settings-nav-item" onclick="showSettingsTab('speech', this)">
+                    <svg class="sn-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="8" y1="6" x2="8" y2="18"></line>
+                        <line x1="12" y1="3" x2="12" y2="21"></line>
+                        <line x1="16" y1="7" x2="16" y2="17"></line>
+                        <line x1="4" y1="9" x2="4" y2="15"></line>
+                        <line x1="20" y1="9" x2="20" y2="15"></line>
+                    </svg> Speech
+                </div>
+                <div class="settings-nav-item" onclick="showSettingsTab('personalization', this)">
+                    <svg class="sn-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                    </svg> Personalization
+                </div>
+                <div class="settings-nav-item" onclick="showSettingsTab('datacontrols', this)">
+                    <svg class="sn-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                        <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+                        <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+                    </svg> Data controls
+                </div>
+                <div class="settings-nav-item" onclick="showSettingsTab('account', this)">
+                    <svg class="sn-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="7" r="4"></circle>
+                        <path d="M5.5 21a9 9 0 0 1 13 0"></path>
+                    </svg> Account
+                </div>
             </div>
             <div class="settings-content" id="settingsContent"></div>
         </div>`;
@@ -623,7 +655,6 @@ window.editDisplayName = async function () {
     const trimmedName = newName.trim();
 
     try {
-        // Update Supabase Auth metadata
         const { data, error } = await supabaseClient.auth.updateUser({
             data: { full_name: trimmedName }
         });
@@ -634,16 +665,13 @@ window.editDisplayName = async function () {
             return;
         }
 
-        // Update current user object
         currentUser = data.user;
 
-        // Generate new initials
         const parts = trimmedName.split(/\s+/).filter(Boolean);
         const initials = parts.length >= 2
             ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
             : parts[0].slice(0, 2).toUpperCase();
 
-        // Update all name displays in the UI
         const avatarEl    = document.getElementById("userAvatar");
         const nameEl      = document.getElementById("userFullname");
         const railAvatar  = document.getElementById("railAvatar");
@@ -656,7 +684,6 @@ window.editDisplayName = async function () {
 
         showToast(`✓ Name updated to ${trimmedName}`);
         
-        // Refresh settings panel to show updated name
         setTimeout(() => {
             showSettingsTab('profile', document.querySelector('.settings-nav-item.active'));
         }, 500);
@@ -666,6 +693,23 @@ window.editDisplayName = async function () {
         showToast("❌ Failed to update name. Please try again.");
     }
 };
+
+// ============================
+// 🔲 COMING SOON HELPER
+// ============================
+function comingSoonSection(title, items) {
+    const rows = items.map(({ icon, label, sub }) => `
+        <div class="sc-row disabled">
+            <svg class="sc-row-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                ${icon}
+            </svg>
+            <div class="sc-row-body">
+                <p class="sc-row-label">${label}</p>
+                <p class="sc-row-sub soon">${sub || 'Coming soon'}</p>
+            </div>
+        </div>`).join('');
+    return `<div class="sc-section"><div class="sc-section-title">${title}</div>${rows}</div>`;
+}
 
 window.showSettingsTab = function (tab, clickedEl) {
     document.querySelectorAll(".settings-nav-item").forEach(el => el.classList.remove("active"));
@@ -684,7 +728,6 @@ window.showSettingsTab = function (tab, clickedEl) {
             <div class="sc-section">
                 <div class="sc-section-title">Appearance</div>
 
-                <!-- THEME PICKER -->
                 <div class="sc-row sc-row-block">
                     <div class="sc-row-top">
                         <svg class="sc-row-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -725,7 +768,6 @@ window.showSettingsTab = function (tab, clickedEl) {
                     </div>
                 </div>
 
-                <!-- FONT SIZE PICKER -->
                 <div class="sc-row sc-row-block" style="margin-top:8px;">
                     <div class="sc-row-top">
                         <svg class="sc-row-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -878,6 +920,201 @@ window.showSettingsTab = function (tab, clickedEl) {
                     <div class="sc-row-body">
                         <p class="sc-row-label">Delete my account</p>
                         <p class="sc-row-sub soon">Coming soon</p>
+                    </div>
+                </div>
+            </div>`,
+
+        // ============================
+        // 🔊 SPEECH TAB
+        // ============================
+        speech: `
+            <div class="sc-section">
+                <div class="sc-section-title">Voice & speech</div>
+                <div class="sc-row disabled">
+                    <svg class="sc-row-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                        <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                        <line x1="12" y1="19" x2="12" y2="23"></line>
+                        <line x1="8" y1="23" x2="16" y2="23"></line>
+                    </svg>
+                    <div class="sc-row-body">
+                        <p class="sc-row-label">Voice input</p>
+                        <p class="sc-row-sub soon">Coming soon</p>
+                    </div>
+                </div>
+                <div class="sc-row disabled">
+                    <svg class="sc-row-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                        <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+                        <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                    </svg>
+                    <div class="sc-row-body">
+                        <p class="sc-row-label">Text-to-speech</p>
+                        <p class="sc-row-sub soon">Coming soon</p>
+                    </div>
+                </div>
+                <div class="sc-row disabled">
+                    <svg class="sc-row-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="8" y1="6" x2="8" y2="18"></line>
+                        <line x1="12" y1="3" x2="12" y2="21"></line>
+                        <line x1="16" y1="7" x2="16" y2="17"></line>
+                        <line x1="4" y1="9" x2="4" y2="15"></line>
+                        <line x1="20" y1="9" x2="20" y2="15"></line>
+                    </svg>
+                    <div class="sc-row-body">
+                        <p class="sc-row-label">Voice style</p>
+                        <p class="sc-row-sub soon">Coming soon</p>
+                    </div>
+                </div>
+            </div>`,
+
+        // ============================
+        // 🎨 PERSONALIZATION TAB
+        // ============================
+        personalization: `
+            <div class="sc-section">
+                <div class="sc-section-title">Custom instructions</div>
+                <div class="sc-row disabled">
+                    <svg class="sc-row-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 20h9"></path>
+                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                    </svg>
+                    <div class="sc-row-body">
+                        <p class="sc-row-label">Custom instructions</p>
+                        <p class="sc-row-sub soon">Tell Catura how to respond — coming soon</p>
+                    </div>
+                </div>
+                <div class="sc-row disabled">
+                    <svg class="sc-row-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <path d="M8 14s1.5 2 4 2 4-2 4-2"></path>
+                        <line x1="9" y1="9" x2="9.01" y2="9"></line>
+                        <line x1="15" y1="9" x2="15.01" y2="9"></line>
+                    </svg>
+                    <div class="sc-row-body">
+                        <p class="sc-row-label">AI personality</p>
+                        <p class="sc-row-sub soon">Coming soon</p>
+                    </div>
+                </div>
+            </div>
+            <div class="sc-section">
+                <div class="sc-section-title">Memory</div>
+                <div class="sc-row disabled">
+                    <svg class="sc-row-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                    </svg>
+                    <div class="sc-row-body">
+                        <p class="sc-row-label">Memory & context</p>
+                        <p class="sc-row-sub soon">Coming soon</p>
+                    </div>
+                </div>
+            </div>`,
+
+        // ============================
+        // 🗄️ DATA CONTROLS TAB
+        // ============================
+        datacontrols: `
+            <div class="sc-section">
+                <div class="sc-section-title">Your data</div>
+                <div class="sc-row disabled">
+                    <svg class="sc-row-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                        <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                        <polyline points="7 3 7 8 15 8"></polyline>
+                    </svg>
+                    <div class="sc-row-body">
+                        <p class="sc-row-label">Export all data</p>
+                        <p class="sc-row-sub soon">Download a copy of your data — coming soon</p>
+                    </div>
+                </div>
+                <div class="sc-row disabled">
+                    <svg class="sc-row-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                        <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+                        <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+                    </svg>
+                    <div class="sc-row-body">
+                        <p class="sc-row-label">Manage stored data</p>
+                        <p class="sc-row-sub soon">Coming soon</p>
+                    </div>
+                </div>
+                <div class="sc-row disabled">
+                    <svg class="sc-row-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                    </svg>
+                    <div class="sc-row-body">
+                        <p class="sc-row-label">Data sharing preferences</p>
+                        <p class="sc-row-sub soon">Coming soon</p>
+                    </div>
+                </div>
+            </div>`,
+
+        // ============================
+        // 👤 ACCOUNT TAB
+        // ============================
+        account: `
+            <div class="sc-section">
+                <div class="sc-section-title">Account details</div>
+                <div class="sc-profile-card">
+                    <div class="sc-avatar">${initials}</div>
+                    <div>
+                        <p class="sc-profile-name">${fullName}</p>
+                        <p class="sc-profile-email">${email}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="sc-section">
+                <div class="sc-section-title">Subscription</div>
+                <div class="sc-row disabled">
+                    <svg class="sc-row-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
+                        <line x1="1" y1="10" x2="23" y2="10"></line>
+                    </svg>
+                    <div class="sc-row-body">
+                        <p class="sc-row-label">Upgrade plan</p>
+                        <p class="sc-row-sub soon">Pro features — coming soon</p>
+                    </div>
+                </div>
+                <div class="sc-row disabled">
+                    <svg class="sc-row-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                    </svg>
+                    <div class="sc-row-body">
+                        <p class="sc-row-label">Current plan: Free</p>
+                        <p class="sc-row-sub">Unlimited chats with Dagr & Apep</p>
+                    </div>
+                </div>
+            </div>
+            <div class="sc-section">
+                <div class="sc-section-title">Security</div>
+                <div class="sc-row disabled">
+                    <svg class="sc-row-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                    </svg>
+                    <div class="sc-row-body">
+                        <p class="sc-row-label">Change password</p>
+                        <p class="sc-row-sub soon">Coming soon</p>
+                    </div>
+                </div>
+                <div class="sc-row disabled">
+                    <svg class="sc-row-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                        <path d="M12 8v4M12 16h.01"></path>
+                    </svg>
+                    <div class="sc-row-body">
+                        <p class="sc-row-label">Two-factor authentication</p>
+                        <p class="sc-row-sub soon">Coming soon</p>
+                    </div>
+                </div>
+                <div class="sc-row danger disabled">
+                    <svg class="sc-row-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                    <div class="sc-row-body">
+                        <p class="sc-row-label">Delete account</p>
+                        <p class="sc-row-sub soon">Permanently remove your account — coming soon</p>
                     </div>
                 </div>
             </div>`
