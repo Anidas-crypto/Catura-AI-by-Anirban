@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" href="static/logos.png">
     
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <link rel="stylesheet" href="static/style.css?v=27.0.1">
+    <link rel="stylesheet" href="static/style.css?v=27.0.2">
     
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#000000" />
@@ -216,7 +216,6 @@
                         </svg>
                     </button>
                     <div class="model-dropdown" id="modelDropdown">
-                        <div class="model-dropdown-header">Choose AI Model</div>
                         <div class="model-option active" data-model="dagr" data-name="Dagr" onclick="selectModel('dagr', 'Dagr')">
                             <div class="model-option-info">
                                 <div class="model-option-name">Dagr</div>
@@ -260,14 +259,14 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <script src="static/logic.js?v=27.0.1"></script>
+    <script src="static/logic.js?v=27.0.2"></script>
 
     <script>
         console.log('🚀 Catura AI v27.0.1 loaded');
         
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js?v=27.0.1')
+                navigator.serviceWorker.register('/service-worker.js?v=27.0.2')
                     .then(() => console.log('✅ Catura AI PWA Ready - v27.0.1'))
                     .catch((err) => console.log('❌ SW Error:', err));
             });

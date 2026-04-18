@@ -1739,6 +1739,7 @@ html { scroll-behavior: smooth; }
     border: 1px solid #2a2a2a;
     border-radius: 12px;
     min-width: 220px;
+    padding-top: 6px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
     z-index: 500;
     opacity: 0;
