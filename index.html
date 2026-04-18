@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" href="static/logos.png">
     
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <link rel="stylesheet" href="static/style.css?v=27.0.2">
+    <link rel="stylesheet" href="static/style.css?v=27.0.3">
     
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#000000" />
@@ -259,14 +259,14 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <script src="static/logic.js?v=27.0.2"></script>
+    <script src="static/logic.js?v=27.0.3"></script>
 
     <script>
         console.log('🚀 Catura AI v27.0.1 loaded');
         
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js?v=27.0.2')
+                navigator.serviceWorker.register('/service-worker.js?v=27.0.3')
                     .then(() => console.log('✅ Catura AI PWA Ready - v27.0.1'))
                     .catch((err) => console.log('❌ SW Error:', err));
             });
