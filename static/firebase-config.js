@@ -2,13 +2,13 @@
 // 🔥 FIREBASE CONFIGURATION
 // ============================
 const firebaseConfig = {
-    apiKey: "YOUR_FIREBASE_API_KEY",
-    authDomain: "YOUR_FIREBASE_PROJECT.firebaseapp.com",
-    databaseURL: "https://YOUR_FIREBASE_PROJECT.firebaseio.com",
-    projectId: "YOUR_FIREBASE_PROJECT",
-    storageBucket: "YOUR_FIREBASE_PROJECT.appspot.com",
-    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-    appId: "YOUR_APP_ID"
+    apiKey: "AIzaSyDT_FwVCzkVXUFwX6FRxRQNv0FKlqtPsrU",
+    authDomain: "catura-ai-feedback-req-form.firebaseapp.com",
+    databaseURL: "https://catura-ai-feedback-req-form-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "catura-ai-feedback-req-form",
+    storageBucket: "catura-ai-feedback-req-form.firebasestorage.app",
+    messagingSenderId: "126962844999",
+    appId: "1:126962844999:web:6d896bac7a65e6f160f862"
 };
 
 // Initialize Firebase
