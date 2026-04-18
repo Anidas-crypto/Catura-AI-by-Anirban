@@ -799,7 +799,7 @@ window.showSettingsTab = function (tab, clickedEl) {
             </div>
             <div class="sc-section">
                 <div class="sc-section-title">Support</div>
-                <div class="sc-row disabled">
+                <div class="sc-row" onclick="openFeedbackModal('bug')">
                     <svg class="sc-row-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="10"></circle>
                         <path d="M8 14s1.5 2 4 2 4-2 4-2"></path>
@@ -808,16 +808,16 @@ window.showSettingsTab = function (tab, clickedEl) {
                     </svg>
                     <div class="sc-row-body">
                         <p class="sc-row-label">Send bug report</p>
-                        <p class="sc-row-sub soon">Coming soon</p>
+                        <p class="sc-row-sub">Help us fix issues</p>
                     </div>
                 </div>
-                <div class="sc-row disabled">
+                <div class="sc-row" onclick="openFeedbackModal('feature')">
                     <svg class="sc-row-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
                     </svg>
                     <div class="sc-row-body">
                         <p class="sc-row-label">Request a feature</p>
-                        <p class="sc-row-sub soon">Coming soon</p>
+                        <p class="sc-row-sub">Suggest improvements</p>
                     </div>
                 </div>
             </div>`,

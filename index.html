@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" href="static/logos.png">
     
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <link rel="stylesheet" href="static/style.css?v=27.0.3">
+    <link rel="stylesheet" href="static/style.css?v=27.0.4">
     
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#000000" />
@@ -256,18 +256,78 @@
 
     </div>
 
+    <!-- FEEDBACK MODAL -->
+    <div id="feedbackModal" class="feedback-modal">
+        <div class="feedback-modal-overlay" onclick="closeFeedbackModal()"></div>
+        <div class="feedback-modal-content">
+            <button class="feedback-close-btn" onclick="closeFeedbackModal()">✕</button>
+            
+            <div class="feedback-modal-header">
+                <h2 id="feedbackModalTitle">Send Feedback</h2>
+            </div>
+
+            <form id="feedbackForm" class="feedback-form">
+                <div class="form-group">
+                    <label for="feedbackName">Name</label>
+                    <input 
+                        type="text" 
+                        id="feedbackName" 
+                        placeholder="Your name" 
+                        required
+                        autocomplete="name"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="feedbackEmail">Email</label>
+                    <input 
+                        type="email" 
+                        id="feedbackEmail" 
+                        placeholder="your@email.com" 
+                        required
+                        autocomplete="email"
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="feedbackMessage">Message</label>
+                    <textarea 
+                        id="feedbackMessage" 
+                        placeholder="Tell us your thoughts..." 
+                        rows="5"
+                        required
+                    ></textarea>
+                </div>
+
+                <button type="submit" class="feedback-submit-btn" id="feedbackSubmitBtn">
+                    <span>Submit</span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left: 6px;">
+                        <line x1="12" y1="19" x2="12" y2="5"></line>
+                        <polyline points="5 12 12 5 19 12"></polyline>
+                    </svg>
+                </button>
+            </form>
+
+            <div id="feedbackMessage" class="feedback-message" style="display:none;"></div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js"></script>
     
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <script src="static/logic.js?v=27.0.3"></script>
+    <script src="static/firebase-config.js?v=27.0.4"></script>
+    <script src="static/logic.js?v=27.0.4"></script>
+    <script src="static/feedback.js?v=27.0.4"></script>
 
     <script>
-        console.log('🚀 Catura AI v27.0.1 loaded');
+        console.log('🚀 Catura AI v27.0.4 loaded');
         
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js?v=27.0.3')
-                    .then(() => console.log('✅ Catura AI PWA Ready - v27.0.1'))
+                navigator.serviceWorker.register('/service-worker.js?v=27.0.4')
+                    .then(() => console.log('✅ Catura AI PWA Ready - v27.0.4'))
                     .catch((err) => console.log('❌ SW Error:', err));
             });
         }
