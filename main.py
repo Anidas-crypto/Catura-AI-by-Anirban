@@ -69,7 +69,7 @@ async def serve_sw():
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "27.0.0"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "27.0.1"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -77,7 +77,43 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "27.0.0", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "27.0.1", "timestamp": datetime.utcnow().isoformat()}
+
+
+# ✅ HELPER: Call OpenRouter with automatic fallback
+def call_openrouter_stream(model_id, messages, api_key):
+    """Attempt streaming request to OpenRouter. Returns (response, error_msg)."""
+    try:
+        resp = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": APP_URL,
+                "X-Title": "Catura AI",
+            },
+            json={
+                "model": model_id,
+                "messages": messages,
+                "stream": True,
+                "temperature": 0.3,
+                "max_tokens": 2048,
+            },
+            stream=True,
+            timeout=60,
+        )
+        if resp.status_code != 200:
+            try:
+                err_body = resp.json()
+                err_msg = err_body.get("error", {}).get("message", f"HTTP {resp.status_code}")
+            except Exception:
+                err_msg = f"HTTP {resp.status_code}"
+            return None, err_msg
+        return resp, None
+    except requests.exceptions.Timeout:
+        return None, "Request timed out"
+    except Exception as e:
+        return None, str(e)
 
 
 @app.get("/chat")
@@ -113,14 +149,23 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
 
         user_memory[session_id].append({"role": "user", "content": prompt})
 
-        # ✅ MODEL MAPPING
+        # ✅ MODEL MAPPING — with fallback chain for reliability
+        # Primary model → Fallback model (if primary fails)
         model_map = {
-            "dagr": "openai/gpt-3.5-turbo",
-            "apep": "meta-llama/llama-3.3-70b-instruct:free",
+            "dagr": {
+                "primary": "openai/gpt-3.5-turbo",
+                "fallback": "openai/gpt-3.5-turbo",
+            },
+            "apep": {
+                "primary": "openai/gpt-oss-120b:free",
+                "fallback": "openai/gpt-3.5-turbo",  # safety net
+            },
         }
 
         model_key = model.lower().strip()
-        selected_model = model_map.get(model_key, "openai/gpt-3.5-turbo")
+        model_config = model_map.get(model_key, model_map["dagr"])
+        primary_model = model_config["primary"]
+        fallback_model = model_config["fallback"]
 
         # ✅ SYSTEM PROMPTS FOR EACH MODEL
         system_prompts = {
@@ -146,40 +191,28 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
             {"role": "system", "content": system_prompt}
         ] + user_memory[session_id][-20:]
 
+        api_key = os.getenv("OPENROUTER_API_KEY")
+
         def generate():
             full_reply = ""
+            used_model = primary_model
+
+            # ✅ Try primary model first
+            resp, err = call_openrouter_stream(primary_model, messages, api_key)
+
+            # ✅ If primary fails AND we have a different fallback → try fallback
+            if resp is None and primary_model != fallback_model:
+                print(f"⚠️ Primary model '{primary_model}' failed: {err}. Trying fallback '{fallback_model}'...")
+                resp, err = call_openrouter_stream(fallback_model, messages, api_key)
+                used_model = fallback_model
+
+            # ✅ If even fallback failed → return error
+            if resp is None:
+                yield f"data: {json.dumps({'error': f'Model unavailable: {err}. Please try again in a moment.'}, ensure_ascii=False)}\n\n"
+                yield "data: [DONE]\n\n"
+                return
+
             try:
-                resp = requests.post(
-                    "https://openrouter.ai/api/v1/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {os.getenv('OPENROUTER_API_KEY')}",
-                        "Content-Type": "application/json",
-                        # ✅ FIX 1: Required headers for free-tier models on OpenRouter
-                        "HTTP-Referer": APP_URL,
-                        "X-Title": "Catura AI",
-                    },
-                    json={
-                        "model": selected_model,
-                        "messages": messages,
-                        "stream": True,
-                        "temperature": 0.3,
-                        "max_tokens": 2048,
-                    },
-                    stream=True,
-                    timeout=60,
-                )
-
-                # ✅ FIX 2: Detect non-200 HTTP response before even reading stream
-                if resp.status_code != 200:
-                    try:
-                        err_body = resp.json()
-                        err_msg = err_body.get("error", {}).get("message", f"HTTP {resp.status_code} from model provider")
-                    except Exception:
-                        err_msg = f"HTTP {resp.status_code} error from model provider"
-                    yield f"data: {json.dumps({'error': err_msg}, ensure_ascii=False)}\n\n"
-                    yield "data: [DONE]\n\n"
-                    return
-
                 for line in resp.iter_lines():
                     if not line:
                         continue
@@ -191,7 +224,7 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
                         try:
                             chunk = json.loads(payload)
 
-                            # ✅ FIX 3: Detect OpenRouter error objects embedded in the stream
+                            # Detect OpenRouter error objects embedded in stream
                             if "error" in chunk:
                                 err_msg = chunk["error"].get("message", "Unknown model error")
                                 yield f"data: {json.dumps({'error': f'Model error: {err_msg}'}, ensure_ascii=False)}\n\n"
@@ -203,7 +236,7 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
                                 continue
 
                             delta = choices[0].get("delta", {})
-                            token = delta.get("content") or ""  # ✅ FIX 4: handles None safely
+                            token = delta.get("content") or ""
                             if token:
                                 full_reply += token
                                 yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
@@ -213,20 +246,18 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
                         except Exception:
                             continue
 
-                # ✅ FIX 5: If stream ended with no content at all, send a helpful error
+                # If stream ended with no content at all
                 if not full_reply.strip():
-                    yield f"data: {json.dumps({'error': 'The model returned an empty response. The free-tier model may be rate-limited. Please try again in a moment.'}, ensure_ascii=False)}\n\n"
+                    yield f"data: {json.dumps({'error': 'The model returned an empty response. It may be rate-limited. Please try again in a moment.'}, ensure_ascii=False)}\n\n"
                     yield "data: [DONE]\n\n"
                     return
 
+                # Save to memory
                 user_memory[session_id].append({"role": "assistant", "content": full_reply})
                 if len(user_memory[session_id]) > 40:
                     user_memory[session_id] = user_memory[session_id][-40:]
 
-                yield "data: [DONE]\n\n"
-
-            except requests.exceptions.Timeout:
-                yield f"data: {json.dumps({'error': 'Request timed out. The model took too long to respond. Please try again.'}, ensure_ascii=False)}\n\n"
+                print(f"✅ Successfully used model: {used_model}")
                 yield "data: [DONE]\n\n"
 
             except Exception as e:

@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" href="static/logos.png">
     
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <link rel="stylesheet" href="static/style.css?v=26.5.0">
+    <link rel="stylesheet" href="static/style.css?v=27.0.1">
     
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#000000" />
@@ -30,10 +30,7 @@
     <!-- Mobile overlay backdrop -->
     <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
 
-    <!-- =============================================
-         ICON RAIL — slim column, always visible on desktop
-         Shown when full sidebar is collapsed
-    ============================================= -->
+    <!-- ICON RAIL -->
     <div class="icon-rail" id="iconRail">
 
         <button class="rail-btn" onclick="toggleSidebar()" title="Open Sidebar">
@@ -81,13 +78,10 @@
 
     </div>
 
-    <!-- =============================================
-         FULL SIDEBAR — expanded panel
-    ============================================= -->
+    <!-- FULL SIDEBAR -->
     <div class="sidebar open" id="sidebar">
 
         <div class="sidebar-header">
-            <!-- Collapse toggle lives INSIDE sidebar header -->
             <button class="sidebar-inner-toggle" onclick="toggleSidebar()" title="Collapse Sidebar">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                     <rect x="2" y="3" width="20" height="18" rx="3"/>
@@ -98,7 +92,6 @@
             <span class="sidebar-brand">
                 <img src="static/logo.png" alt="Catura AI Logo" class="sidebar-logo"> Catura AI
             </span>
-            <!-- Mobile-only X close -->
             <button class="close-btn" onclick="closeSidebar()">✕</button>
         </div>
 
@@ -143,24 +136,18 @@
 
     </div>
 
-    <!-- =============================================
-         MAIN APP
-    ============================================= -->
+    <!-- MAIN APP -->
     <div class="app" id="app">
 
-        <!-- Settings Overlay -->
         <div id="settingsOverlay" class="settings-overlay"></div>
 
         <div id="chatbox"></div>
 
         <div class="input-area center" id="inputArea">
-            <!-- Top row: textarea -->
             <div class="input-row-top">
                 <textarea id="input" placeholder="Message Catura AI..." rows="1"></textarea>
             </div>
-            <!-- Bottom row: + button left, send button right -->
             <div class="input-row-bottom">
-                <!-- Plus button with dropdown -->
                 <div class="plus-menu-wrap" id="plusMenuWrap">
                     <button class="plus-btn" id="plusBtn" onclick="togglePlusMenu(event)" title="More options">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -168,7 +155,6 @@
                             <line x1="5" y1="12" x2="19" y2="12"></line>
                         </svg>
                     </button>
-                    <!-- Dropdown menu -->
                     <div class="plus-dropdown" id="plusDropdown">
                         <div class="plus-dropdown-item" onclick="handlePlusAction('file')">
                             <span class="plus-item-icon">
@@ -222,7 +208,6 @@
 
                 <div class="input-bottom-spacer"></div>
 
-                <!-- MODEL SELECTOR - RIGHT SIDE (JUST LEFT OF SEND) -->
                 <div class="model-selector-wrap" id="modelSelectorWrap">
                     <button class="model-selector-btn" id="modelSelectorBtn" onclick="toggleModelSelector(event)" title="Choose AI Model">
                         <span class="model-name" id="modelName">Dagr</span>
@@ -230,7 +215,6 @@
                             <polyline points="6 9 12 15 18 9"></polyline>
                         </svg>
                     </button>
-                    <!-- Model selector dropdown -->
                     <div class="model-dropdown" id="modelDropdown">
                         <div class="model-dropdown-header">Choose AI Model</div>
                         <div class="model-option active" data-model="dagr" data-name="Dagr" onclick="selectModel('dagr', 'Dagr')">
@@ -240,7 +224,6 @@
                             </div>
                             <div class="model-option-check">✓</div>
                         </div>
-                        <!-- apep ai adding-->
                         <div class="model-option" data-model="apep" data-name="Apep" onclick="selectModel('apep', 'Apep')">
                             <div class="model-option-info">
                                 <div class="model-option-name">Apep</div>
@@ -261,7 +244,6 @@
                     </div>
                 </div>
 
-                <!-- Send button -->
                 <button class="send-btn" onclick="sendMessage()" id="sendBtn">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                         <line x1="12" y1="19" x2="12" y2="5"></line>
@@ -271,7 +253,6 @@
             </div>
         </div>
 
-        <!-- Hidden file input for file upload -->
         <input type="file" id="fileInput" multiple accept="image/*,.pdf,.txt,.doc,.docx,.csv" style="display:none" onchange="handleFileSelect(event)">
 
     </div>
@@ -279,16 +260,15 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <script src="static/logic.js?v=26.5.0"></script>
+    <script src="static/logic.js?v=27.0.1"></script>
 
     <script>
-        // ✅ VERSION INFO FOR DEBUGGING
-        console.log('🚀 Catura AI v26.5.0 loaded');
+        console.log('🚀 Catura AI v27.0.1 loaded');
         
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js?v=26.5.0')
-                    .then(() => console.log('✅ Catura AI PWA Ready - v26.5.0'))
+                navigator.serviceWorker.register('/service-worker.js?v=27.0.1')
+                    .then(() => console.log('✅ Catura AI PWA Ready - v27.0.1'))
                     .catch((err) => console.log('❌ SW Error:', err));
             });
         }
