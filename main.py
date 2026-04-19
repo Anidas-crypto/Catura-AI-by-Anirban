@@ -153,7 +153,7 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
         # Primary model → Fallback model (if primary fails)
         model_map = {
             "dagr": {
-                "primary": "google/gemma-4-26b-a4b-it:free",
+                "primary": "openai/gpt-oss-20b:free",
                 "fallback": "meta-llama/llama-3.3-70b-instruct:free",
             },
             "apep": {
