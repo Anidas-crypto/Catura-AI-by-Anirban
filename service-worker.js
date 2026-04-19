@@ -1,5 +1,5 @@
 // ✅ CATURA AI SERVICE WORKER - WITH CACHE BUSTING
-const CACHE_VERSION = '26.4.5';
+const CACHE_VERSION = '26.4.6';
 const CACHE_NAME = `catura-ai-v${CACHE_VERSION}`;
 
 const FILES_TO_CACHE = [

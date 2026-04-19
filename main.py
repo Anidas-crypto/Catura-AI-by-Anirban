@@ -69,7 +69,7 @@ async def serve_sw():
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "26.4.5"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "26.4.6"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -77,7 +77,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "26.4.5", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "26.4.6", "timestamp": datetime.utcnow().isoformat()}
 
 
 # ✅ HELPER: Call OpenRouter with automatic fallback
@@ -160,6 +160,10 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
                 "primary": "openai/gpt-oss-120b:free",
                 "fallback": "meta-llama/llama-3.3-70b-instruct:free",
             },
+            "qwen": {
+                "primary": "qwen/qwen3-coder:free",
+                "fallback": "openai/gpt-oss-120b:free",
+            },
         }
 
         model_key = model.lower().strip()
@@ -182,6 +186,16 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
                 "```python\n<code here>\n```\n"
                 "Never compress code onto a single line. Always format code for readability and add comments for complex logic. "
                 "Provide detailed explanations for your code and suggest best practices."
+            ),
+            "qwen": (
+                "You are Catura AI (Qwen), an ultra-advanced coding AI specialist created by Anirban, powered by Qwen3 Coder 480B. "
+                "You are the most powerful coding model available in Catura AI. You specialize in complex programming tasks, "
+                "large-scale system architecture, advanced algorithms, and cutting-edge technical solutions. "
+                "When writing code, ALWAYS use proper indentation (4 spaces per level), put each statement on its own line, and wrap ALL code in a fenced "
+                "markdown code block with the language specified at the top, like:\n"
+                "```python\n<code here>\n```\n"
+                "Always write production-quality code with detailed comments, error handling, and best practices. "
+                "Provide thorough explanations and consider edge cases in all solutions."
             )
         }
 
