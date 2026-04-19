@@ -69,7 +69,7 @@ async def serve_sw():
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "26.4.4"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "26.4.5"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -77,7 +77,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "26.4.4", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "26.4.5", "timestamp": datetime.utcnow().isoformat()}
 
 
 # ✅ HELPER: Call OpenRouter with automatic fallback
@@ -106,18 +106,13 @@ def call_openrouter_stream(model_id, messages, api_key):
             try:
                 err_body = resp.json()
                 err_msg = err_body.get("error", {}).get("message", f"HTTP {resp.status_code}")
-                err_code = err_body.get("error", {}).get("code", "")
-                print(f"❌ OpenRouter [{model_id}] status={resp.status_code} code={err_code} msg={err_msg}")
-            except Exception as parse_err:
+            except Exception:
                 err_msg = f"HTTP {resp.status_code}"
-                print(f"❌ OpenRouter [{model_id}] status={resp.status_code} (parse error: {parse_err})")
             return None, err_msg
         return resp, None
     except requests.exceptions.Timeout:
-        print(f"❌ Timeout calling [{model_id}]")
         return None, "Request timed out"
     except Exception as e:
-        print(f"❌ Exception calling [{model_id}]: {e}")
         return None, str(e)
 
 
@@ -158,7 +153,7 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
         # Primary model → Fallback model (if primary fails)
         model_map = {
             "dagr": {
-                "primary": "google/gemma-4-31b-it:free",
+                "primary": "google/gemma-4-26b-a4b-it:free",
                 "fallback": "meta-llama/llama-3.3-70b-instruct:free",
             },
             "apep": {
