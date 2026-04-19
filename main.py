@@ -69,7 +69,7 @@ async def serve_sw():
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "26.4.8"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "26.4.9"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -77,7 +77,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "26.4.8", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "26.4.9", "timestamp": datetime.utcnow().isoformat()}
 
 
 # ✅ HELPER: Call OpenRouter with automatic fallback
@@ -116,53 +116,38 @@ def call_openrouter_stream(model_id, messages, api_key):
         return None, str(e)
 
 
-# ✅ HELPER: Call HuggingFace Inference API (for Neit / Gemma 4 E4B)
+# ✅ HELPER: Call HuggingFace Inference Providers (Neit / Gemma 4 E4B)
+# Uses HF OpenAI-compatible endpoint - works with Gemma 4 family
 def call_huggingface_stream(messages, api_key):
-    """Call HuggingFace Inference API for google/gemma-4-E4B-it. Returns (response, error_msg)."""
+    """Call HuggingFace Inference Providers for google/gemma-4-E4B-it."""
     try:
-        # Build Gemma chat prompt format
-        prompt = ""
-        for msg in messages:
-            role = msg["role"]
-            content = msg["content"]
-            if role == "system":
-                prompt += f"<start_of_turn>user\nSystem: {content}<end_of_turn>\n"
-            elif role == "user":
-                prompt += f"<start_of_turn>user\n{content}<end_of_turn>\n"
-            elif role == "assistant":
-                prompt += f"<start_of_turn>model\n{content}<end_of_turn>\n"
-        prompt += "<start_of_turn>model\n"
-
         resp = requests.post(
-            "https://api-inference.huggingface.co/models/google/gemma-4-E4B-it",
+            "https://huggingface.co/api/inference-proxy/together/v1/chat/completions",
             headers={
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
             },
             json={
-                "inputs": prompt,
-                "parameters": {
-                    "max_new_tokens": 2048,
-                    "temperature": 0.3,
-                    "return_full_text": False,
-                },
+                "model": "google/gemma-4-E4B-it",
+                "messages": messages,
                 "stream": True,
+                "temperature": 0.3,
+                "max_tokens": 2048,
             },
             stream=True,
             timeout=60,
         )
-
         if resp.status_code != 200:
             try:
                 err_body = resp.json()
-                err_msg = err_body.get("error", f"HTTP {resp.status_code}")
+                err_msg = err_body.get("error", {}).get("message", f"HTTP {resp.status_code}")
+                if not isinstance(err_msg, str):
+                    err_msg = f"HTTP {resp.status_code}"
             except Exception:
                 err_msg = f"HTTP {resp.status_code}"
             print(f"❌ [HuggingFace/Neit] error: {err_msg}")
             return None, err_msg
-
         return resp, None
-
     except requests.exceptions.Timeout:
         print("❌ [HuggingFace/Neit] timed out")
         return None, "Request timed out"
@@ -205,7 +190,7 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
         user_memory[session_id].append({"role": "user", "content": prompt})
 
         # ✅ MODEL POOLS — relay race style, loops between models
-        # "huggingface" prefix = uses HuggingFace API instead of OpenRouter
+        # "huggingface" prefix = routes to HuggingFace API instead of OpenRouter
         model_pools = {
             "dagr": ["openai/gpt-oss-20b:free", "openai/gpt-oss-120b:free"],
             "apep": ["openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"],
@@ -298,23 +283,13 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
                         if not line:
                             continue
                         decoded = line.decode("utf-8")
-                        if decoded.startswith("data:"):
-                            payload = decoded[5:].strip()
-                            if payload == "[DONE]":
+                        if decoded.startswith("data: "):
+                            payload = decoded[6:]
+                            if payload.strip() == "[DONE]":
                                 break
                             try:
                                 chunk = json.loads(payload)
 
-                                # ✅ HuggingFace token format
-                                if current_model.startswith("huggingface/"):
-                                    token = chunk.get("token", {}).get("text", "")
-                                    # HF sometimes sends special tokens — skip them
-                                    if token and not token.startswith("<"):
-                                        full_reply += token
-                                        yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
-                                    continue
-
-                                # ✅ OpenRouter token format
                                 # Mid-stream error from OpenRouter → switch model
                                 if "error" in chunk:
                                     err_msg = chunk["error"].get("message", "Unknown error")
