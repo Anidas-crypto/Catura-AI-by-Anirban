@@ -69,7 +69,7 @@ async def serve_sw():
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "26.4.6"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "26.4.8"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -77,7 +77,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "26.4.6", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "26.4.8", "timestamp": datetime.utcnow().isoformat()}
 
 
 # ✅ HELPER: Call OpenRouter with automatic fallback
@@ -116,6 +116,61 @@ def call_openrouter_stream(model_id, messages, api_key):
         return None, str(e)
 
 
+# ✅ HELPER: Call HuggingFace Inference API (for Neit / Gemma 4 E4B)
+def call_huggingface_stream(messages, api_key):
+    """Call HuggingFace Inference API for google/gemma-4-E4B-it. Returns (response, error_msg)."""
+    try:
+        # Build Gemma chat prompt format
+        prompt = ""
+        for msg in messages:
+            role = msg["role"]
+            content = msg["content"]
+            if role == "system":
+                prompt += f"<start_of_turn>user\nSystem: {content}<end_of_turn>\n"
+            elif role == "user":
+                prompt += f"<start_of_turn>user\n{content}<end_of_turn>\n"
+            elif role == "assistant":
+                prompt += f"<start_of_turn>model\n{content}<end_of_turn>\n"
+        prompt += "<start_of_turn>model\n"
+
+        resp = requests.post(
+            "https://api-inference.huggingface.co/models/google/gemma-4-E4B-it",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "inputs": prompt,
+                "parameters": {
+                    "max_new_tokens": 2048,
+                    "temperature": 0.3,
+                    "return_full_text": False,
+                },
+                "stream": True,
+            },
+            stream=True,
+            timeout=60,
+        )
+
+        if resp.status_code != 200:
+            try:
+                err_body = resp.json()
+                err_msg = err_body.get("error", f"HTTP {resp.status_code}")
+            except Exception:
+                err_msg = f"HTTP {resp.status_code}"
+            print(f"❌ [HuggingFace/Neit] error: {err_msg}")
+            return None, err_msg
+
+        return resp, None
+
+    except requests.exceptions.Timeout:
+        print("❌ [HuggingFace/Neit] timed out")
+        return None, "Request timed out"
+    except Exception as e:
+        print(f"❌ [HuggingFace/Neit] exception: {e}")
+        return None, str(e)
+
+
 @app.get("/chat")
 def chat(request: Request, prompt: str, model: str = "dagr"):
     try:
@@ -150,10 +205,12 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
         user_memory[session_id].append({"role": "user", "content": prompt})
 
         # ✅ MODEL POOLS — relay race style, loops between models
+        # "huggingface" prefix = uses HuggingFace API instead of OpenRouter
         model_pools = {
             "dagr": ["openai/gpt-oss-20b:free", "openai/gpt-oss-120b:free"],
             "apep": ["openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"],
             "qwen": ["openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"],
+            "neit": ["huggingface/gemma-4-E4B-it"],
         }
 
         model_key = model.lower().strip()
@@ -184,6 +241,11 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
                 "```python\n<code here>\n```\n"
                 "Always write production-quality code with detailed comments, error handling, and best practices. "
                 "Provide thorough explanations and consider edge cases in all solutions."
+            ),
+            "neit": (
+                "You are Catura AI (Neit), a smart and versatile AI assistant created by Anirban, powered by Google Gemma 4 E4B. "
+                "You are fast, efficient, and great at reasoning, multilingual conversations, and everyday tasks. "
+                "Always give clear, helpful, and accurate responses. Be concise yet thorough."
             )
         }
 
@@ -194,10 +256,11 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
         ] + user_memory[session_id][-20:]
 
         api_key = os.getenv("OPENROUTER_API_KEY")
+        hf_api_key = os.getenv("HUGGINGFACE_API_KEY")
 
         def generate():
             full_reply = ""
-            pool = model_pool  # e.g. [20b, 120b]
+            pool = model_pool  # e.g. [20b, 120b] or [huggingface/...]
             pool_index = 0
             max_switches = 10  # max number of model switches allowed
             switches = 0
@@ -216,7 +279,11 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
                 else:
                     continuation_messages = messages
 
-                resp, err = call_openrouter_stream(current_model, continuation_messages, api_key)
+                # ✅ Route to correct API based on model prefix
+                if current_model.startswith("huggingface/"):
+                    resp, err = call_huggingface_stream(continuation_messages, hf_api_key)
+                else:
+                    resp, err = call_openrouter_stream(current_model, continuation_messages, api_key)
 
                 if resp is None:
                     print(f"❌ [{current_model}] failed to connect: {err}. Switching model...")
@@ -231,13 +298,23 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
                         if not line:
                             continue
                         decoded = line.decode("utf-8")
-                        if decoded.startswith("data: "):
-                            payload = decoded[6:]
-                            if payload.strip() == "[DONE]":
+                        if decoded.startswith("data:"):
+                            payload = decoded[5:].strip()
+                            if payload == "[DONE]":
                                 break
                             try:
                                 chunk = json.loads(payload)
 
+                                # ✅ HuggingFace token format
+                                if current_model.startswith("huggingface/"):
+                                    token = chunk.get("token", {}).get("text", "")
+                                    # HF sometimes sends special tokens — skip them
+                                    if token and not token.startswith("<"):
+                                        full_reply += token
+                                        yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
+                                    continue
+
+                                # ✅ OpenRouter token format
                                 # Mid-stream error from OpenRouter → switch model
                                 if "error" in chunk:
                                     err_msg = chunk["error"].get("message", "Unknown error")
