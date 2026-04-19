@@ -162,7 +162,7 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
             },
             "qwen": {
                 "primary": "nvidia/nemotron-3-super-120b-a12b:free",
-                "fallback": "openai/gpt-oss-120b:free",
+                # "fallback": "openai/gpt-oss-120b:free",
             },
         }
 
