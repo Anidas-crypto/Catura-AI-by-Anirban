@@ -161,8 +161,13 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
                 "fallback": "meta-llama/llama-3.3-70b-instruct:free",
             },
             "qwen": {
-                "primary": "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
-                # "fallback": "openai/gpt-oss-120b:free",
+                "primary": "openai/gpt-oss-120b:free",
+                "fallbacks": [
+                    "openai/gpt-oss-20b:free",
+                    "openai/gpt-oss-120b:free",
+                    "openai/gpt-oss-20b:free",
+                    "openai/gpt-oss-20b:free",
+                ],
             },
         }
 
