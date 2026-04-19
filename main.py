@@ -161,7 +161,7 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
                 "fallback": "meta-llama/llama-3.3-70b-instruct:free",
             },
             "qwen": {
-                "primary": "openrouter/free",
+                "primary": "google/gemma-3n-e4b-it:free",
                 # "fallback": "openai/gpt-oss-120b:free",
             },
         }
