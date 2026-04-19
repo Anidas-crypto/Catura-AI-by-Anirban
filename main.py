@@ -69,7 +69,7 @@ async def serve_sw():
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "26.4.7"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "26.4.6"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -77,10 +77,10 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "26.4.7", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "26.4.6", "timestamp": datetime.utcnow().isoformat()}
 
 
-# ✅ HELPER: Call a single model on OpenRouter
+# ✅ HELPER: Call OpenRouter with automatic fallback
 def call_openrouter_stream(model_id, messages, api_key):
     """Attempt streaming request to OpenRouter. Returns (response, error_msg)."""
     try:
@@ -108,36 +108,12 @@ def call_openrouter_stream(model_id, messages, api_key):
                 err_msg = err_body.get("error", {}).get("message", f"HTTP {resp.status_code}")
             except Exception:
                 err_msg = f"HTTP {resp.status_code}"
-            print(f"❌ [{model_id}] HTTP error: {err_msg}")
             return None, err_msg
         return resp, None
     except requests.exceptions.Timeout:
-        print(f"❌ [{model_id}] Timed out")
         return None, "Request timed out"
     except Exception as e:
-        print(f"❌ [{model_id}] Exception: {e}")
         return None, str(e)
-
-
-# ✅ HELPER: Try models in a loop until one works
-def try_models_in_loop(model_pool, messages, api_key, max_attempts=6):
-    """
-    Cycles through model_pool repeatedly up to max_attempts times.
-    Returns (response, used_model) or (None, None) if all fail.
-    Example: pool = [A, B]  →  tries A → B → A → B → A → B
-    """
-    attempts = 0
-    pool_size = len(model_pool)
-    while attempts < max_attempts:
-        model_id = model_pool[attempts % pool_size]
-        print(f"🔄 Attempt {attempts + 1}/{max_attempts}: trying [{model_id}]")
-        resp, err = call_openrouter_stream(model_id, messages, api_key)
-        if resp is not None:
-            print(f"✅ [{model_id}] connected successfully")
-            return resp, model_id
-        attempts += 1
-    print(f"❌ All {max_attempts} attempts failed across {pool_size} models")
-    return None, None
 
 
 @app.get("/chat")
@@ -173,20 +149,11 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
 
         user_memory[session_id].append({"role": "user", "content": prompt})
 
-        # ✅ MODEL POOLS — loops through these when a model fails
+        # ✅ MODEL POOLS — relay race style, loops between models
         model_pools = {
-            "dagr": [
-                "openai/gpt-oss-20b:free",
-                "openai/gpt-oss-120b:free",
-            ],
-            "apep": [
-                "openai/gpt-oss-120b:free",
-                "openai/gpt-oss-20b:free",
-            ],
-            # "qwen": [
-            #     "openai/gpt-oss-120b:free",
-            #     "openai/gpt-oss-20b:free",
-            # ],
+            "dagr": ["openai/gpt-oss-20b:free", "openai/gpt-oss-120b:free"],
+            "apep": ["openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"],
+            "qwen": ["openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"],
         }
 
         model_key = model.lower().strip()
@@ -208,16 +175,16 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
                 "Never compress code onto a single line. Always format code for readability and add comments for complex logic. "
                 "Provide detailed explanations for your code and suggest best practices."
             ),
-            # "qwen": (
-            #     "You are Catura AI (Qwen), an ultra-advanced coding AI specialist created by Anirban, powered by Qwen3 Coder 480B. "
-            #     "You are the most powerful coding model available in Catura AI. You specialize in complex programming tasks, "
-            #     "large-scale system architecture, advanced algorithms, and cutting-edge technical solutions. "
-            #     "When writing code, ALWAYS use proper indentation (4 spaces per level), put each statement on its own line, and wrap ALL code in a fenced "
-            #     "markdown code block with the language specified at the top, like:\n"
-            #     "```python\n<code here>\n```\n"
-            #     "Always write production-quality code with detailed comments, error handling, and best practices. "
-            #     "Provide thorough explanations and consider edge cases in all solutions."
-            # )
+            "qwen": (
+                "You are Catura AI (Qwen), an ultra-advanced coding AI specialist created by Anirban, powered by Qwen3 Coder 480B. "
+                "You are the most powerful coding model available in Catura AI. You specialize in complex programming tasks, "
+                "large-scale system architecture, advanced algorithms, and cutting-edge technical solutions. "
+                "When writing code, ALWAYS use proper indentation (4 spaces per level), put each statement on its own line, and wrap ALL code in a fenced "
+                "markdown code block with the language specified at the top, like:\n"
+                "```python\n<code here>\n```\n"
+                "Always write production-quality code with detailed comments, error handling, and best practices. "
+                "Provide thorough explanations and consider edge cases in all solutions."
+            )
         }
 
         system_prompt = system_prompts.get(model_key, system_prompts["dagr"])
@@ -230,68 +197,99 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
 
         def generate():
             full_reply = ""
-            used_model = None
+            pool = model_pool  # e.g. [20b, 120b]
+            pool_index = 0
+            max_switches = 10  # max number of model switches allowed
+            switches = 0
 
-            # ✅ Loop through model pool until one connects
-            resp, used_model = try_models_in_loop(model_pool, messages, api_key, max_attempts=6)
+            while switches <= max_switches:
+                current_model = pool[pool_index % len(pool)]
+                print(f"🔄 [{current_model}] starting (switch {switches}, reply so far: {len(full_reply)} chars)")
 
-            # ✅ If all models in pool failed → return error
-            if resp is None:
-                yield f"data: {json.dumps({'error': 'All models are currently unavailable. Please try again in a moment.'}, ensure_ascii=False)}\n\n"
+                # Build messages — if we already have partial reply, add it
+                # so the next model continues from where previous left off
+                if full_reply.strip():
+                    continuation_messages = messages + [
+                        {"role": "assistant", "content": full_reply},
+                        {"role": "user", "content": "Continue exactly from where you left off. Do not repeat anything already said."}
+                    ]
+                else:
+                    continuation_messages = messages
+
+                resp, err = call_openrouter_stream(current_model, continuation_messages, api_key)
+
+                if resp is None:
+                    print(f"❌ [{current_model}] failed to connect: {err}. Switching model...")
+                    pool_index += 1
+                    switches += 1
+                    continue
+
+                # Stream tokens from current model
+                stream_broke = False
+                try:
+                    for line in resp.iter_lines():
+                        if not line:
+                            continue
+                        decoded = line.decode("utf-8")
+                        if decoded.startswith("data: "):
+                            payload = decoded[6:]
+                            if payload.strip() == "[DONE]":
+                                break
+                            try:
+                                chunk = json.loads(payload)
+
+                                # Mid-stream error from OpenRouter → switch model
+                                if "error" in chunk:
+                                    err_msg = chunk["error"].get("message", "Unknown error")
+                                    print(f"⚠️ [{current_model}] mid-stream error: {err_msg}. Switching model...")
+                                    stream_broke = True
+                                    break
+
+                                choices = chunk.get("choices")
+                                if not choices:
+                                    continue
+
+                                delta = choices[0].get("delta", {})
+                                token = delta.get("content") or ""
+                                if token:
+                                    full_reply += token
+                                    yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
+
+                            except json.JSONDecodeError:
+                                continue
+                            except Exception:
+                                continue
+
+                except Exception as e:
+                    print(f"⚠️ [{current_model}] stream exception: {e}. Switching model...")
+                    stream_broke = True
+
+                # If stream finished cleanly with content → done!
+                if not stream_broke and full_reply.strip():
+                    print(f"✅ [{current_model}] completed response ({len(full_reply)} chars)")
+                    break
+
+                # Stream broke or returned empty → switch to next model and continue
+                if stream_broke or not full_reply.strip():
+                    pool_index += 1
+                    switches += 1
+                    print(f"🔁 Switching to next model. Reply so far: {len(full_reply)} chars")
+                    continue
+
+                break  # safety
+
+            # After loop — check if we got anything at all
+            if not full_reply.strip():
+                yield f"data: {json.dumps({'error': 'All models failed to respond. Please try again in a moment.'}, ensure_ascii=False)}\n\n"
                 yield "data: [DONE]\n\n"
                 return
 
-            try:
-                for line in resp.iter_lines():
-                    if not line:
-                        continue
-                    decoded = line.decode("utf-8")
-                    if decoded.startswith("data: "):
-                        payload = decoded[6:]
-                        if payload.strip() == "[DONE]":
-                            break
-                        try:
-                            chunk = json.loads(payload)
+            # Save completed reply to memory
+            user_memory[session_id].append({"role": "assistant", "content": full_reply})
+            if len(user_memory[session_id]) > 40:
+                user_memory[session_id] = user_memory[session_id][-40:]
 
-                            # Detect OpenRouter error objects embedded in stream
-                            if "error" in chunk:
-                                err_msg = chunk["error"].get("message", "Unknown model error")
-                                yield f"data: {json.dumps({'error': f'Model error: {err_msg}'}, ensure_ascii=False)}\n\n"
-                                yield "data: [DONE]\n\n"
-                                return
-
-                            choices = chunk.get("choices")
-                            if not choices:
-                                continue
-
-                            delta = choices[0].get("delta", {})
-                            token = delta.get("content") or ""
-                            if token:
-                                full_reply += token
-                                yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
-
-                        except json.JSONDecodeError:
-                            continue
-                        except Exception:
-                            continue
-
-                # If stream ended with no content at all
-                if not full_reply.strip():
-                    yield f"data: {json.dumps({'error': 'The model returned an empty response. It may be rate-limited. Please try again in a moment.'}, ensure_ascii=False)}\n\n"
-                    yield "data: [DONE]\n\n"
-                    return
-
-                # Save to memory
-                user_memory[session_id].append({"role": "assistant", "content": full_reply})
-                if len(user_memory[session_id]) > 40:
-                    user_memory[session_id] = user_memory[session_id][-40:]
-
-                print(f"✅ Successfully used model: {used_model}")
-                yield "data: [DONE]\n\n"
-
-            except Exception as e:
-                yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
-                yield "data: [DONE]\n\n"
+            yield "data: [DONE]\n\n"
 
         return StreamingResponse(
             generate(),
