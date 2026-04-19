@@ -80,7 +80,7 @@ def health_check():
     return {"status": "healthy", "version": "26.4.6", "timestamp": datetime.utcnow().isoformat()}
 
 
-# ✅ HELPER: Call OpenRouter with automatic fallback
+# ✅ HELPER: Call a single model on OpenRouter
 def call_openrouter_stream(model_id, messages, api_key):
     """Attempt streaming request to OpenRouter. Returns (response, error_msg)."""
     try:
@@ -108,12 +108,36 @@ def call_openrouter_stream(model_id, messages, api_key):
                 err_msg = err_body.get("error", {}).get("message", f"HTTP {resp.status_code}")
             except Exception:
                 err_msg = f"HTTP {resp.status_code}"
+            print(f"❌ [{model_id}] HTTP error: {err_msg}")
             return None, err_msg
         return resp, None
     except requests.exceptions.Timeout:
+        print(f"❌ [{model_id}] Timed out")
         return None, "Request timed out"
     except Exception as e:
+        print(f"❌ [{model_id}] Exception: {e}")
         return None, str(e)
+
+
+# ✅ HELPER: Try models in a loop until one works
+def try_models_in_loop(model_pool, messages, api_key, max_attempts=6):
+    """
+    Cycles through model_pool repeatedly up to max_attempts times.
+    Returns (response, used_model) or (None, None) if all fail.
+    Example: pool = [A, B]  →  tries A → B → A → B → A → B
+    """
+    attempts = 0
+    pool_size = len(model_pool)
+    while attempts < max_attempts:
+        model_id = model_pool[attempts % pool_size]
+        print(f"🔄 Attempt {attempts + 1}/{max_attempts}: trying [{model_id}]")
+        resp, err = call_openrouter_stream(model_id, messages, api_key)
+        if resp is not None:
+            print(f"✅ [{model_id}] connected successfully")
+            return resp, model_id
+        attempts += 1
+    print(f"❌ All {max_attempts} attempts failed across {pool_size} models")
+    return None, None
 
 
 @app.get("/chat")
@@ -149,32 +173,24 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
 
         user_memory[session_id].append({"role": "user", "content": prompt})
 
-        # ✅ MODEL MAPPING — with fallback chain for reliability
-        # Primary model → Fallback model (if primary fails)
-        model_map = {
-            "dagr": {
-                "primary": "openai/gpt-oss-20b:free",
-                "fallback": "meta-llama/llama-3.3-70b-instruct:free",
-            },
-            "apep": {
-                "primary": "openai/gpt-oss-120b:free",
-                "fallback": "meta-llama/llama-3.3-70b-instruct:free",
-            },
-            "qwen": {
-                "primary": "openai/gpt-oss-120b:free",
-                "fallbacks": [
-                    "openai/gpt-oss-20b:free",
-                    "openai/gpt-oss-120b:free",
-                    "openai/gpt-oss-20b:free",
-                    "openai/gpt-oss-20b:free",
-                ],
-            },
+        # ✅ MODEL POOLS — loops through these when a model fails
+        model_pools = {
+            "dagr": [
+                "openai/gpt-oss-20b:free",
+                "openai/gpt-oss-120b:free",
+            ],
+            "apep": [
+                "openai/gpt-oss-120b:free",
+                "openai/gpt-oss-20b:free",
+            ],
+            "qwen": [
+                "openai/gpt-oss-120b:free",
+                "openai/gpt-oss-20b:free",
+            ],
         }
 
         model_key = model.lower().strip()
-        model_config = model_map.get(model_key, model_map["dagr"])
-        primary_model = model_config["primary"]
-        fallback_model = model_config["fallback"]
+        model_pool = model_pools.get(model_key, model_pools["dagr"])
 
         # ✅ SYSTEM PROMPTS FOR EACH MODEL
         system_prompts = {
@@ -214,20 +230,14 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
 
         def generate():
             full_reply = ""
-            used_model = primary_model
+            used_model = None
 
-            # ✅ Try primary model first
-            resp, err = call_openrouter_stream(primary_model, messages, api_key)
+            # ✅ Loop through model pool until one connects
+            resp, used_model = try_models_in_loop(model_pool, messages, api_key, max_attempts=6)
 
-            # ✅ If primary fails AND we have a different fallback → try fallback
-            if resp is None and primary_model != fallback_model:
-                print(f"⚠️ Primary model '{primary_model}' failed: {err}. Trying fallback '{fallback_model}'...")
-                resp, err = call_openrouter_stream(fallback_model, messages, api_key)
-                used_model = fallback_model
-
-            # ✅ If even fallback failed → return error
+            # ✅ If all models in pool failed → return error
             if resp is None:
-                yield f"data: {json.dumps({'error': f'Model unavailable: {err}. Please try again in a moment.'}, ensure_ascii=False)}\n\n"
+                yield f"data: {json.dumps({'error': 'All models are currently unavailable. Please try again in a moment.'}, ensure_ascii=False)}\n\n"
                 yield "data: [DONE]\n\n"
                 return
 
