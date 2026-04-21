@@ -439,14 +439,16 @@ function createBotWrapper() {
 // ✍️ STREAMER
 // ============================
 async function streamWords(botMsg, wrapper, reader, decoder, chatbox) {
-    let buffer    = "";
-    let fullReply = "";
-    let hasError  = false;
+    let buffer         = "";
+    let fullReply      = "";
+    let done_streaming = false;
 
     const liveSpan = document.createElement("span");
     liveSpan.style.cssText = "white-space: pre-wrap; word-break: break-word; font-size: 15px; line-height: 1.8; color: #d4d4d4;";
     botMsg.appendChild(liveSpan);
 
+    // Labelled outer loop so `break outer` exits BOTH loops cleanly
+    outer:
     while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -458,15 +460,25 @@ async function streamWords(botMsg, wrapper, reader, decoder, chatbox) {
         for (const line of lines) {
             if (!line.startsWith("data: ")) continue;
             const payload = line.slice(6).trim();
-            if (payload === "[DONE]") break;
+
+            // [DONE] must break the OUTER while — inner break only exits the for loop
+            if (payload === "[DONE]") {
+                done_streaming = true;
+                break outer;
+            }
+
             try {
                 const chunk = JSON.parse(payload);
-                // ✅ FIX: Show real error message from server and stop streaming
+
+                // Server sent an explicit error token
                 if (chunk.error) {
                     botMsg.innerHTML = `<p style="color:#e06c6c">⚠️ ${chunk.error}</p>`;
-                    hasError = true;
                     return "";
                 }
+
+                // Ignore status/relay tokens like {status:"retrying"} silently
+                if (chunk.status) continue;
+
                 if (chunk.token) {
                     fullReply += chunk.token;
                     liveSpan.textContent = fullReply;
@@ -474,16 +486,15 @@ async function streamWords(botMsg, wrapper, reader, decoder, chatbox) {
                 }
             } catch { continue; }
         }
-
-        if (hasError) break;
     }
 
-    if (!fullReply.trim()) {
-        // ✅ FIX: Handle case where stream ended with no tokens and no error message
-        botMsg.innerHTML = `<p style="color:#e06c6c">⚠️ The model returned an empty response. It may be rate-limited — please try again in a moment.</p>`;
+    // Stream closed without [DONE] AND no content — genuine failure
+    if (!done_streaming && !fullReply.trim()) {
+        botMsg.innerHTML = `<p style="color:#e06c6c">⚠️ The model returned an empty response. It may be rate-limited — please try again.</p>`;
         return "";
     }
 
+    // Render whatever we got (partial content on early close is still valid)
     botMsg.innerHTML = formatMessage(fullReply);
     wrapper.dataset.raw = fullReply;
     return fullReply;
