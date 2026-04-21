@@ -69,7 +69,7 @@ async def serve_sw():
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "26.4.9"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "26.4.10"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -77,7 +77,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "26.4.9", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "26.4.10", "timestamp": datetime.utcnow().isoformat()}
 
 
 # ✅ HELPER: Call OpenRouter with automatic fallback
@@ -116,45 +116,6 @@ def call_openrouter_stream(model_id, messages, api_key):
         return None, str(e)
 
 
-# ✅ HELPER: Call HuggingFace Inference Providers (Neit / Gemma 4 E4B)
-# Uses HF OpenAI-compatible endpoint - works with Gemma 4 family
-def call_huggingface_stream(messages, api_key):
-    """Call HuggingFace Inference Providers for google/gemma-4-E4B-it."""
-    try:
-        resp = requests.post(
-            "https://huggingface.co/api/inference-proxy/together/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": "google/gemma-4-E4B-it",
-                "messages": messages,
-                "stream": True,
-                "temperature": 0.3,
-                "max_tokens": 2048,
-            },
-            stream=True,
-            timeout=60,
-        )
-        if resp.status_code != 200:
-            try:
-                err_body = resp.json()
-                err_msg = err_body.get("error", {}).get("message", f"HTTP {resp.status_code}")
-                if not isinstance(err_msg, str):
-                    err_msg = f"HTTP {resp.status_code}"
-            except Exception:
-                err_msg = f"HTTP {resp.status_code}"
-            print(f"❌ [HuggingFace/Neit] error: {err_msg}")
-            return None, err_msg
-        return resp, None
-    except requests.exceptions.Timeout:
-        print("❌ [HuggingFace/Neit] timed out")
-        return None, "Request timed out"
-    except Exception as e:
-        print(f"❌ [HuggingFace/Neit] exception: {e}")
-        return None, str(e)
-
 
 @app.get("/chat")
 def chat(request: Request, prompt: str, model: str = "dagr"):
@@ -190,12 +151,9 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
         user_memory[session_id].append({"role": "user", "content": prompt})
 
         # ✅ MODEL POOLS — relay race style, loops between models
-        # "huggingface" prefix = routes to HuggingFace API instead of OpenRouter
         model_pools = {
             "dagr": ["openai/gpt-oss-20b:free", "openai/gpt-oss-120b:free"],
             "apep": ["openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"],
-            "qwen": ["openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"],
-            "neit": ["huggingface/gemma-4-E4B-it"],
         }
 
         model_key = model.lower().strip()
@@ -217,21 +175,6 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
                 "Never compress code onto a single line. Always format code for readability and add comments for complex logic. "
                 "Provide detailed explanations for your code and suggest best practices."
             ),
-            "qwen": (
-                "You are Catura AI (Qwen), an ultra-advanced coding AI specialist created by Anirban, powered by Qwen3 Coder 480B. "
-                "You are the most powerful coding model available in Catura AI. You specialize in complex programming tasks, "
-                "large-scale system architecture, advanced algorithms, and cutting-edge technical solutions. "
-                "When writing code, ALWAYS use proper indentation (4 spaces per level), put each statement on its own line, and wrap ALL code in a fenced "
-                "markdown code block with the language specified at the top, like:\n"
-                "```python\n<code here>\n```\n"
-                "Always write production-quality code with detailed comments, error handling, and best practices. "
-                "Provide thorough explanations and consider edge cases in all solutions."
-            ),
-            "neit": (
-                "You are Catura AI (Neit), a smart and versatile AI assistant created by Anirban, powered by Google Gemma 4 E4B. "
-                "You are fast, efficient, and great at reasoning, multilingual conversations, and everyday tasks. "
-                "Always give clear, helpful, and accurate responses. Be concise yet thorough."
-            )
         }
 
         system_prompt = system_prompts.get(model_key, system_prompts["dagr"])
@@ -241,11 +184,10 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
         ] + user_memory[session_id][-20:]
 
         api_key = os.getenv("OPENROUTER_API_KEY")
-        hf_api_key = os.getenv("HUGGINGFACE_API_KEY")
 
         def generate():
             full_reply = ""
-            pool = model_pool  # e.g. [20b, 120b] or [huggingface/...]
+            pool = model_pool  # e.g. [20b, 120b]
             pool_index = 0
             max_switches = 10  # max number of model switches allowed
             switches = 0
@@ -264,11 +206,7 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
                 else:
                     continuation_messages = messages
 
-                # ✅ Route to correct API based on model prefix
-                if current_model.startswith("huggingface/"):
-                    resp, err = call_huggingface_stream(continuation_messages, hf_api_key)
-                else:
-                    resp, err = call_openrouter_stream(current_model, continuation_messages, api_key)
+                resp, err = call_openrouter_stream(current_model, continuation_messages, api_key)
 
                 if resp is None:
                     print(f"❌ [{current_model}] failed to connect: {err}. Switching model...")

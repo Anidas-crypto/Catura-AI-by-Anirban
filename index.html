@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" href="static/logos.png">
     
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <link rel="stylesheet" href="static/style.css?v=26.4.9">
+    <link rel="stylesheet" href="static/style.css?v=26.4.10">
     
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#000000" />
@@ -230,20 +230,6 @@
                             </div>
                             <div class="model-option-check">✓</div>
                         </div>
-                        <div class="model-option" data-model="qwen" data-name="Qwen" onclick="selectModel('qwen', 'Qwen')">
-                            <div class="model-option-info">
-                                <div class="model-option-name">Qwen</div>
-                                <div class="model-option-desc">Ultra-advanced 480B coding specialist</div>
-                            </div>
-                            <div class="model-option-check">✓</div>
-                        </div>
-                        <div class="model-option" data-model="neit" data-name="Neit" onclick="selectModel('neit', 'Neit')">
-                            <div class="model-option-info">
-                                <div class="model-option-name">Neit</div>
-                                <div class="model-option-desc">Fast & smart — powered by Google Gemma 4</div>
-                            </div>
-                            <div class="model-option-check">✓</div>
-                        </div>
                         <div class="model-dropdown-divider"></div>
                         <div class="model-dropdown-footer">
                             <div class="model-coming-soon">
@@ -331,16 +317,16 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
     
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <script src="static/firebase-config.js?v=26.4.9"></script>
-    <script src="static/logic.js?v=26.4.9"></script>
-    <script src="static/feedback.js?v=26.4.9"></script>
+    <script src="static/firebase-config.js?v=26.4.10"></script>
+    <script src="static/logic.js?v=26.4.10"></script>
+    <script src="static/feedback.js?v=26.4.10"></script>
 
     <script>
         console.log('🚀 Catura AI v27.0.4 loaded');
         
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js?v=26.4.9')
+                navigator.serviceWorker.register('/service-worker.js?v=26.4.10')
                     .then(() => console.log('✅ Catura AI PWA Ready - v27.0.4'))
                     .catch((err) => console.log('❌ SW Error:', err));
             });
