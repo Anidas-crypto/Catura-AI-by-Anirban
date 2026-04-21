@@ -1840,27 +1840,6 @@ html { scroll-behavior: smooth; }
     margin: 0;
 }
 
-.model-dropdown-footer {
-    padding: 12px 12px;
-    background: #0f0f0f;
-    border-top: 1px solid #242424;
-}
-
-.model-coming-soon {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 12px;
-    color: #555;
-    text-align: center;
-    justify-content: center;
-    padding: 4px 0;
-}
-
-.model-coming-soon svg {
-    flex-shrink: 0;
-}
-
 /* Light theme adjustments */
 [data-theme="light"] .model-selector-btn {
     color: #aaa;
