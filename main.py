@@ -69,7 +69,7 @@ async def serve_sw():
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "26.4.10"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "26.4.11"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -77,7 +77,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "26.4.10", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "26.4.11", "timestamp": datetime.utcnow().isoformat()}
 
 
 # ✅ HELPER: Call OpenRouter with automatic fallback
@@ -186,100 +186,112 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
         api_key = os.getenv("OPENROUTER_API_KEY")
 
         def generate():
-            full_reply = ""
-            pool = model_pool  # e.g. [20b, 120b]
-            pool_index = 0
-            max_switches = 10  # max number of model switches allowed
-            switches = 0
+            # ── True mid-stream relay race ────────────────────────────────
+            # When a model drops mid-stream, the partial reply so far is
+            # passed as a proper `assistant` turn to the next model, which
+            # naturally continues from that exact point — no "continue from
+            # where you left off" instruction needed (that confuses models).
+            # Models alternate back and forth until one finishes cleanly.
+            # Safety cap: 20 hand-offs max to prevent infinite loops if both
+            # models are severely degraded.
 
-            while switches <= max_switches:
-                current_model = pool[pool_index % len(pool)]
-                print(f"🔄 [{current_model}] starting (switch {switches}, reply so far: {len(full_reply)} chars)")
+            MAX_HANDOFFS = 20
+            full_reply = ""       # accumulated response across all hand-offs
+            pool_index = 0        # which model in the pool is currently active
+            handoffs = 0
 
-                # Build messages — if we already have partial reply, add it
-                # so the next model continues from where previous left off
+            while handoffs < MAX_HANDOFFS:
+                current_model = model_pool[pool_index % len(model_pool)]
+                print(f"🔄 Handoff {handoffs} — [{current_model}] | accumulated: {len(full_reply)} chars")
+
+                # Build the message list for this leg of the relay.
+                # If we already have partial output, inject it as an assistant
+                # turn so the model continues naturally — NO extra user prompt.
                 if full_reply.strip():
-                    continuation_messages = messages + [
-                        {"role": "assistant", "content": full_reply},
-                        {"role": "user", "content": "Continue exactly from where you left off. Do not repeat anything already said."}
+                    relay_messages = messages + [
+                        {"role": "assistant", "content": full_reply}
                     ]
                 else:
-                    continuation_messages = messages
+                    relay_messages = messages
 
-                resp, err = call_openrouter_stream(current_model, continuation_messages, api_key)
+                resp, err = call_openrouter_stream(current_model, relay_messages, api_key)
 
                 if resp is None:
-                    print(f"❌ [{current_model}] failed to connect: {err}. Switching model...")
+                    print(f"❌ [{current_model}] connection failed: {err} — switching model")
                     pool_index += 1
-                    switches += 1
+                    handoffs += 1
                     continue
 
-                # Stream tokens from current model
+                # ── Stream tokens from this model ─────────────────────────
+                leg_tokens = 0      # tokens received in this leg
                 stream_broke = False
+
                 try:
                     for line in resp.iter_lines():
                         if not line:
                             continue
                         decoded = line.decode("utf-8")
-                        if decoded.startswith("data: "):
-                            payload = decoded[6:]
-                            if payload.strip() == "[DONE]":
+                        if not decoded.startswith("data: "):
+                            continue
+                        payload = decoded[6:]
+                        if payload.strip() == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(payload)
+
+                            # OpenRouter mid-stream error → hand off to next model
+                            if "error" in chunk:
+                                err_msg = chunk["error"].get("message", "unknown")
+                                print(f"⚠️ [{current_model}] mid-stream error: {err_msg} — handing off")
+                                stream_broke = True
                                 break
-                            try:
-                                chunk = json.loads(payload)
 
-                                # Mid-stream error from OpenRouter → switch model
-                                if "error" in chunk:
-                                    err_msg = chunk["error"].get("message", "Unknown error")
-                                    print(f"⚠️ [{current_model}] mid-stream error: {err_msg}. Switching model...")
-                                    stream_broke = True
-                                    break
-
-                                choices = chunk.get("choices")
-                                if not choices:
-                                    continue
-
-                                delta = choices[0].get("delta", {})
-                                token = delta.get("content") or ""
-                                if token:
-                                    full_reply += token
-                                    yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
-
-                            except json.JSONDecodeError:
+                            choices = chunk.get("choices")
+                            if not choices:
                                 continue
-                            except Exception:
-                                continue
+
+                            token = (choices[0].get("delta") or {}).get("content") or ""
+                            if token:
+                                full_reply += token
+                                leg_tokens += 1
+                                yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
+
+                        except (json.JSONDecodeError, Exception):
+                            continue
 
                 except Exception as e:
-                    print(f"⚠️ [{current_model}] stream exception: {e}. Switching model...")
+                    print(f"⚠️ [{current_model}] stream exception: {e} — handing off")
                     stream_broke = True
 
-                # If stream finished cleanly with content → done!
-                if not stream_broke and full_reply.strip():
-                    print(f"✅ [{current_model}] completed response ({len(full_reply)} chars)")
-                    break
+                # ── Did this leg finish cleanly? ──────────────────────────
+                if not stream_broke:
+                    if full_reply.strip():
+                        # Response is complete — save and exit
+                        print(f"✅ [{current_model}] finished relay. Total: {len(full_reply)} chars across {handoffs + 1} leg(s)")
+                        user_memory[session_id].append({"role": "assistant", "content": full_reply})
+                        if len(user_memory[session_id]) > 40:
+                            user_memory[session_id] = user_memory[session_id][-40:]
+                        yield "data: [DONE]\n\n"
+                        return
+                    else:
+                        # Model connected but returned nothing — switch
+                        print(f"⚠️ [{current_model}] returned empty — switching model")
 
-                # Stream broke or returned empty → switch to next model and continue
-                if stream_broke or not full_reply.strip():
-                    pool_index += 1
-                    switches += 1
-                    print(f"🔁 Switching to next model. Reply so far: {len(full_reply)} chars")
-                    continue
+                # Hand the baton to the other model
+                print(f"🏃 Passing baton to next model. Leg tokens: {leg_tokens} | Total so far: {len(full_reply)} chars")
+                pool_index += 1
+                handoffs += 1
 
-                break  # safety
-
-            # After loop — check if we got anything at all
-            if not full_reply.strip():
-                yield f"data: {json.dumps({'error': 'All models failed to respond. Please try again in a moment.'}, ensure_ascii=False)}\n\n"
+            # Safety cap hit — return whatever we have or an error
+            if full_reply.strip():
+                print(f"⚠️ Hit MAX_HANDOFFS ({MAX_HANDOFFS}) but have partial response — saving anyway")
+                user_memory[session_id].append({"role": "assistant", "content": full_reply})
+                if len(user_memory[session_id]) > 40:
+                    user_memory[session_id] = user_memory[session_id][-40:]
                 yield "data: [DONE]\n\n"
-                return
-
-            # Save completed reply to memory
-            user_memory[session_id].append({"role": "assistant", "content": full_reply})
-            if len(user_memory[session_id]) > 40:
-                user_memory[session_id] = user_memory[session_id][-40:]
-
-            yield "data: [DONE]\n\n"
+            else:
+                yield f"data: {json.dumps({'error': 'Models could not complete a response. Please try again.'}, ensure_ascii=False)}\n\n"
+                yield "data: [DONE]\n\n"
 
         return StreamingResponse(
             generate(),
