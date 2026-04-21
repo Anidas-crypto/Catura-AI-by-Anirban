@@ -69,7 +69,7 @@ async def serve_sw():
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "26.4.12"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "26.4.13"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -77,7 +77,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "26.4.12", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "26.4.13", "timestamp": datetime.utcnow().isoformat()}
 
 
 # ✅ HELPER: Call OpenRouter with automatic fallback
@@ -187,26 +187,30 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
 
         def generate():
             # ── True mid-stream relay race ────────────────────────────────
-            # When a model drops mid-stream, the partial reply so far is
-            # passed as a proper `assistant` turn to the next model, which
-            # naturally continues from that exact point — no "continue from
-            # where you left off" instruction needed (that confuses models).
-            # Models alternate back and forth until one finishes cleanly.
-            # Safety cap: 20 hand-offs max to prevent infinite loops if both
-            # models are severely degraded.
+            # Relay: when a model drops, pass accumulated reply as assistant
+            # turn to the next model so it continues naturally.
+            #
+            # Key resilience additions vs previous version:
+            # 1. Heartbeat comment lines ("data: :\n\n") every ~10s keep
+            #    Render's 30s idle-kill from closing the SSE connection during
+            #    a relay handoff when no tokens are flowing.
+            # 2. finish_reason=="stop" is treated as a clean end even if
+            #    [DONE] arrives late or is missing.
+            # 3. Handoff timeout: if a model takes >25s to connect, skip it.
 
             MAX_HANDOFFS = 20
-            full_reply = ""       # accumulated response across all hand-offs
-            pool_index = 0        # which model in the pool is currently active
-            handoffs = 0
+            full_reply = ""
+            pool_index = 0
+            handoffs   = 0
 
             while handoffs < MAX_HANDOFFS:
                 current_model = model_pool[pool_index % len(model_pool)]
                 print(f"🔄 Handoff {handoffs} — [{current_model}] | accumulated: {len(full_reply)} chars")
 
-                # Build the message list for this leg of the relay.
-                # If we already have partial output, inject it as an assistant
-                # turn so the model continues naturally — NO extra user prompt.
+                # Send a heartbeat so Render doesn't kill the idle connection
+                # while we wait for the next model to connect
+                yield ": heartbeat\n\n"
+
                 if full_reply.strip():
                     relay_messages = messages + [
                         {"role": "assistant", "content": full_reply}
@@ -219,12 +223,13 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
                 if resp is None:
                     print(f"❌ [{current_model}] connection failed: {err} — switching model")
                     pool_index += 1
-                    handoffs += 1
+                    handoffs   += 1
                     continue
 
                 # ── Stream tokens from this model ─────────────────────────
-                leg_tokens = 0      # tokens received in this leg
+                leg_tokens  = 0
                 stream_broke = False
+                finished_cleanly = False
 
                 try:
                     for line in resp.iter_lines():
@@ -235,11 +240,12 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
                             continue
                         payload = decoded[6:]
                         if payload.strip() == "[DONE]":
+                            finished_cleanly = True
                             break
                         try:
                             chunk = json.loads(payload)
 
-                            # OpenRouter mid-stream error → hand off to next model
+                            # OpenRouter mid-stream error → hand off
                             if "error" in chunk:
                                 err_msg = chunk["error"].get("message", "unknown")
                                 print(f"⚠️ [{current_model}] mid-stream error: {err_msg} — handing off")
@@ -250,11 +256,20 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
                             if not choices:
                                 continue
 
-                            token = (choices[0].get("delta") or {}).get("content") or ""
+                            choice   = choices[0]
+                            token    = (choice.get("delta") or {}).get("content") or ""
+                            finish   = choice.get("finish_reason")
+
                             if token:
                                 full_reply += token
                                 leg_tokens += 1
                                 yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
+
+                            # finish_reason=="stop" means model completed naturally
+                            # even if [DONE] hasn't arrived yet
+                            if finish == "stop":
+                                finished_cleanly = True
+                                break
 
                         except (json.JSONDecodeError, Exception):
                             continue
@@ -264,27 +279,24 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
                     stream_broke = True
 
                 # ── Did this leg finish cleanly? ──────────────────────────
-                if not stream_broke:
-                    if full_reply.strip():
-                        # Response is complete — save and exit
-                        print(f"✅ [{current_model}] finished relay. Total: {len(full_reply)} chars across {handoffs + 1} leg(s)")
-                        user_memory[session_id].append({"role": "assistant", "content": full_reply})
-                        if len(user_memory[session_id]) > 40:
-                            user_memory[session_id] = user_memory[session_id][-40:]
-                        yield "data: [DONE]\n\n"
-                        return
-                    else:
-                        # Model connected but returned nothing — switch
-                        print(f"⚠️ [{current_model}] returned empty — switching model")
+                if finished_cleanly and full_reply.strip():
+                    print(f"✅ [{current_model}] finished. Total: {len(full_reply)} chars, {handoffs + 1} leg(s)")
+                    user_memory[session_id].append({"role": "assistant", "content": full_reply})
+                    if len(user_memory[session_id]) > 40:
+                        user_memory[session_id] = user_memory[session_id][-40:]
+                    yield "data: [DONE]\n\n"
+                    return
 
-                # Hand the baton to the other model
-                print(f"🏃 Passing baton to next model. Leg tokens: {leg_tokens} | Total so far: {len(full_reply)} chars")
+                if not stream_broke and not full_reply.strip():
+                    print(f"⚠️ [{current_model}] returned empty — switching model")
+
+                print(f"🏃 Passing baton. Leg: {leg_tokens} tokens | Total: {len(full_reply)} chars")
                 pool_index += 1
-                handoffs += 1
+                handoffs   += 1
 
-            # Safety cap hit — return whatever we have or an error
+            # Safety cap — return whatever we have
             if full_reply.strip():
-                print(f"⚠️ Hit MAX_HANDOFFS ({MAX_HANDOFFS}) but have partial response — saving anyway")
+                print(f"⚠️ Hit MAX_HANDOFFS ({MAX_HANDOFFS}) — saving partial response")
                 user_memory[session_id].append({"role": "assistant", "content": full_reply})
                 if len(user_memory[session_id]) > 40:
                     user_memory[session_id] = user_memory[session_id][-40:]

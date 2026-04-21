@@ -447,57 +447,74 @@ async function streamWords(botMsg, wrapper, reader, decoder, chatbox) {
     liveSpan.style.cssText = "white-space: pre-wrap; word-break: break-word; font-size: 15px; line-height: 1.8; color: #d4d4d4;";
     botMsg.appendChild(liveSpan);
 
-    // Labelled outer loop so `break outer` exits BOTH loops cleanly
-    outer:
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+    // Wrap the entire read loop so a network abort / stream error never
+    // propagates as an unhandled throw into sendMessage's catch block.
+    // That catch block appends a NEW error div *after* the bot wrapper,
+    // causing the "content + error" double-render you see in the UI.
+    try {
+        outer:
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop();
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop();
 
-        for (const line of lines) {
-            if (!line.startsWith("data: ")) continue;
-            const payload = line.slice(6).trim();
+            for (const line of lines) {
+                if (!line.startsWith("data: ")) continue;
+                const payload = line.slice(6).trim();
 
-            // [DONE] must break the OUTER while — inner break only exits the for loop
-            if (payload === "[DONE]") {
-                done_streaming = true;
-                break outer;
+                // break outer exits BOTH loops — plain break only exits the for
+                if (payload === "[DONE]") {
+                    done_streaming = true;
+                    break outer;
+                }
+
+                try {
+                    const chunk = JSON.parse(payload);
+
+                    // Explicit error token from server
+                    if (chunk.error) {
+                        // If we already rendered content, keep it and stop —
+                        // don't overwrite a partial valid response with an error
+                        if (!fullReply.trim()) {
+                            botMsg.innerHTML = `<p style="color:#e06c6c">⚠️ ${chunk.error}</p>`;
+                        }
+                        return fullReply || "";
+                    }
+
+                    // Relay status tokens — ignore silently
+                    if (chunk.status) continue;
+
+                    if (chunk.token) {
+                        fullReply += chunk.token;
+                        liveSpan.textContent = fullReply;
+                        chatbox.scrollTop = chatbox.scrollHeight;
+                    }
+                } catch { continue; }
             }
-
-            try {
-                const chunk = JSON.parse(payload);
-
-                // Server sent an explicit error token
-                if (chunk.error) {
-                    botMsg.innerHTML = `<p style="color:#e06c6c">⚠️ ${chunk.error}</p>`;
-                    return "";
-                }
-
-                // Ignore status/relay tokens like {status:"retrying"} silently
-                if (chunk.status) continue;
-
-                if (chunk.token) {
-                    fullReply += chunk.token;
-                    liveSpan.textContent = fullReply;
-                    chatbox.scrollTop = chatbox.scrollHeight;
-                }
-            } catch { continue; }
         }
+    } catch (networkErr) {
+        // reader.read() threw (Render killed the connection, network drop, etc.)
+        // Don't re-throw — fall through to the content check below
+        console.warn("Stream read error (handled):", networkErr);
     }
 
-    // Stream closed without [DONE] AND no content — genuine failure
-    if (!done_streaming && !fullReply.trim()) {
-        botMsg.innerHTML = `<p style="color:#e06c6c">⚠️ The model returned an empty response. It may be rate-limited — please try again.</p>`;
-        return "";
+    // If we collected content — always render it, even if [DONE] never arrived.
+    // A relay handoff means the backend finished cleanly even if the SSE close
+    // was abrupt from the browser's perspective.
+    if (fullReply.trim()) {
+        botMsg.innerHTML = formatMessage(fullReply);
+        wrapper.dataset.raw = fullReply;
+        return fullReply;
     }
 
-    // Render whatever we got (partial content on early close is still valid)
-    botMsg.innerHTML = formatMessage(fullReply);
-    wrapper.dataset.raw = fullReply;
-    return fullReply;
+    // Truly empty — no tokens at all
+    if (!done_streaming) {
+        botMsg.innerHTML = `<p style="color:#e06c6c">⚠️ No response received. The model may be rate-limited — please try again.</p>`;
+    }
+    return "";
 }
 
 // ============================
@@ -1415,12 +1432,18 @@ document.addEventListener("DOMContentLoaded", async function () {
             }
 
         } catch (err) {
-            thinking.remove();
+            // thinking may already be detached if we got past the res.ok check
+            try { thinking.remove(); } catch (_) {}
             console.error("❌ AI fetch failed:", err);
-            const errMsg = document.createElement("div");
-            errMsg.classList.add("message", "bot");
-            errMsg.innerHTML = `<p style="color:#e06c6c">⚠️ Failed to get a response. Please try again.</p>`;
-            chatbox.appendChild(errMsg);
+            // Only show error div if no bot wrapper was added yet
+            // (if wrapper exists, streamWords already handled the error inside it)
+            const existingWrapper = chatbox.querySelector(".bot-msg-wrapper:last-child");
+            if (!existingWrapper || existingWrapper.querySelector(".message.bot")?.innerHTML?.trim() === "") {
+                const errMsg = document.createElement("div");
+                errMsg.classList.add("message", "bot");
+                errMsg.innerHTML = `<p style="color:#e06c6c">⚠️ Failed to get a response. Please try again.</p>`;
+                chatbox.appendChild(errMsg);
+            }
         }
     };
 
