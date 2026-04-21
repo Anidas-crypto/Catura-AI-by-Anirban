@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" href="static/logos.png">
     
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <link rel="stylesheet" href="static/style.css?v=26.4.17">
+    <link rel="stylesheet" href="static/style.css?v=26.4.18">
     
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#000000" />
@@ -32,7 +32,6 @@
 
     <!-- ICON RAIL -->
     <div class="icon-rail" id="iconRail">
-
         <button class="rail-btn" onclick="toggleSidebar()" title="Open Sidebar">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                 <rect x="2" y="3" width="20" height="18" rx="3"/>
@@ -75,12 +74,10 @@
                 <line x1="21" y1="12" x2="9" y2="12"></line>
             </svg>
         </button>
-
     </div>
 
     <!-- FULL SIDEBAR -->
     <div class="sidebar open" id="sidebar">
-
         <div class="sidebar-header">
             <button class="sidebar-inner-toggle" onclick="toggleSidebar()" title="Collapse Sidebar">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -133,17 +130,19 @@
                 Logout
             </div>
         </div>
-
     </div>
 
     <!-- MAIN APP -->
     <div class="app" id="app">
-
         <div id="settingsOverlay" class="settings-overlay"></div>
-
         <div id="chatbox"></div>
 
         <div class="input-area center" id="inputArea">
+            <!-- ATTACHED FILES PREVIEW -->
+            <div class="attached-files-preview" id="attachedFilesPreview" style="display: none;">
+                <div class="attached-files-list" id="attachedFilesList"></div>
+            </div>
+
             <div class="input-row-top">
                 <textarea id="input" placeholder="Message Catura AI..." rows="1"></textarea>
             </div>
@@ -242,8 +241,7 @@
             </div>
         </div>
 
-        <input type="file" id="fileInput" multiple accept="image/*,.pdf,.txt,.doc,.docx,.csv" style="display:none" onchange="handleFileSelect(event)">
-
+        <input type="file" id="fileInput" multiple accept="image/*,.pdf,.txt,.doc,.docx,.csv,.jpg,.jpeg,.png,.gif,.webp" style="display:none" onchange="handleFileSelect(event)">
     </div>
 
     <!-- FEEDBACK MODAL -->
@@ -307,17 +305,18 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
     
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <script src="static/firebase-config.js?v=26.4.17"></script>
-    <script src="static/logic.js?v=26.4.17"></script>
-    <script src="static/feedback.js?v=26.4.17"></script>
+    <script src="static/firebase-config.js?v=26.4.18"></script>
+    <script src="static/logic.js?v=26.4.18"></script>
+    <script src="static/feedback.js?v=26.4.18"></script>
+    <script src="static/file-upload.js?v=26.4.18"></script>
 
     <script>
-        console.log('🚀 Catura AI v27.0.4 loaded');
+        console.log('🚀 Catura AI v27.0.5 loaded');
         
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js?v=26.4.17')
-                    .then(() => console.log('✅ Catura AI PWA Ready - v27.0.4'))
+                navigator.serviceWorker.register('/service-worker.js?v=26.4.18')
+                    .then(() => console.log('✅ Catura AI PWA Ready - v27.0.5'))
                     .catch((err) => console.log('❌ SW Error:', err));
             });
         }

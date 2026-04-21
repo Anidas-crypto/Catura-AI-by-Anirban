@@ -407,15 +407,26 @@ function createLightIndicator() {
 }
 
 // ============================
-// 📦 USER BUBBLE
+// 📦 USER BUBBLE (supports file attachments)
 // ============================
-function createUserBubble(text) {
+function createUserBubble(text, files) {
     const wrapper = document.createElement("div");
     wrapper.classList.add("user-msg-wrapper");
 
-    const bubble = document.createElement("div");
-    bubble.classList.add("message", "user");
-    bubble.innerText = text;
+    // File attachments (images + docs) shown above text
+    if (files && files.length > 0) {
+        const filesDiv = document.createElement("div");
+        filesDiv.innerHTML = buildFileAttachHTML(files);
+        wrapper.appendChild(filesDiv);
+    }
+
+    // Text bubble (only if there is text)
+    if (text) {
+        const bubble = document.createElement("div");
+        bubble.classList.add("message", "user");
+        bubble.innerText = text;
+        wrapper.appendChild(bubble);
+    }
 
     const copyBtn = document.createElement("button");
     copyBtn.classList.add("user-copy-btn");
@@ -424,7 +435,6 @@ function createUserBubble(text) {
     copyBtn.onclick = () => copyUserMessage(copyBtn);
 
     wrapper.appendChild(copyBtn);
-    wrapper.appendChild(bubble);
     return wrapper;
 }
 
@@ -1379,13 +1389,14 @@ document.addEventListener("DOMContentLoaded", async function () {
     input.addEventListener("input", autoResize);
 
     // ============================
-    // 🔥 SEND MESSAGE - FIXED
+    // 🔥 SEND MESSAGE — with file upload support
     // ============================
     window.sendMessage = async function () {
-        const message = input.value.trim();
-        if (!message) return;
+        const message  = input.value.trim();
+        const hasFiles = (typeof attachedFiles !== 'undefined') && attachedFiles.length > 0;
+        if (!message && !hasFiles) return;
 
-        // Clear greeting and adjust layout on first message
+        // ── Layout transition on first message ──────────────────────────────
         if (firstMessage) {
             chatbox.innerHTML = "";
             inputArea.classList.remove("center");
@@ -1393,40 +1404,66 @@ document.addEventListener("DOMContentLoaded", async function () {
             app.classList.remove("greeting-mode");
         }
 
-        const userBubble = createUserBubble(message);
+        // ── Snapshot + immediately clear attached files from preview ─────────
+        const filesToSend = (typeof attachedFiles !== 'undefined') ? attachedFiles.slice() : [];
+        if (typeof attachedFiles !== 'undefined') attachedFiles = [];
+        if (typeof renderAttachedPreview === 'function') renderAttachedPreview();
+
+        // ── Build user bubble (text + file previews) ─────────────────────────
+        const userBubble = createUserBubble(message, filesToSend);
         chatbox.appendChild(userBubble);
 
+        // ── Session: create on very first message ────────────────────────────
         if (firstMessage) {
             firstMessage = false;
-            chatTitle = message.substring(0, 40);
+            chatTitle = (message || (filesToSend.length ? filesToSend[0].name : 'File Chat')).substring(0, 40);
             const { error } = await supabaseClient.from("chat_sessions").insert([{
                 session_id: currentSessionId,
-                title: chatTitle,
-                user_id: currentUser.id
+                title     : chatTitle,
+                user_id   : currentUser.id
             }]);
             if (error) console.error("❌ Session insert failed:", error.message);
         }
 
+        // ── Save user message to DB ──────────────────────────────────────────
+        const fileUrls = filesToSend.map(function(f) { return f.url; });
         const { error: userError } = await supabaseClient.from("messages").insert([{
-            role: "user",
-            content: message,
+            role      : "user",
+            content   : message,
             session_id: currentSessionId,
-            user_id: currentUser.id
+            user_id   : currentUser.id,
+            file_urls : fileUrls.length > 0 ? fileUrls : null
         }]);
         if (userError) console.error("❌ User message save failed:", userError.message);
 
+        // ── Clear input ──────────────────────────────────────────────────────
         input.value = "";
         input.style.height = "auto";
         chatbox.scrollTop = chatbox.scrollHeight;
 
-        const heavy = isHeavyQuery(message);
+        // ── Thinking indicator ───────────────────────────────────────────────
+        const heavy   = isHeavyQuery(message || (filesToSend.length ? filesToSend[0].name : ''));
         const thinking = heavy ? createThinkingIndicator() : createLightIndicator();
         chatbox.appendChild(thinking);
         chatbox.scrollTop = chatbox.scrollHeight;
 
+        // ── Build prompt text ────────────────────────────────────────────────
+        let promptText = message;
+        if (filesToSend.length > 0 && !message) {
+            promptText = "Please analyse the attached file(s) and describe what you see in detail.";
+        }
+
         try {
-            const model = getSelectedModel(); // Get selected model
-            const res = await fetch(`/chat?prompt=${encodeURIComponent(message)}&model=${model}`);
+            const model = getSelectedModel();
+            const res = await fetch("/chat", {
+                method : "POST",
+                headers: { "Content-Type": "application/json" },
+                body   : JSON.stringify({
+                    prompt    : promptText,
+                    model     : model,
+                    file_urls : fileUrls
+                })
+            });
             if (!res.ok) throw new Error("Server error " + res.status);
 
             thinking.remove();
@@ -1434,26 +1471,23 @@ document.addEventListener("DOMContentLoaded", async function () {
             const { wrapper, botMsg } = createBotWrapper();
             chatbox.appendChild(wrapper);
 
-            const reader  = res.body.getReader();
-            const decoder = new TextDecoder();
+            const reader    = res.body.getReader();
+            const decoder   = new TextDecoder();
             const fullReply = await streamWords(botMsg, wrapper, reader, decoder, chatbox);
 
             if (fullReply) {
                 const { error: botError } = await supabaseClient.from("messages").insert([{
-                    role: "bot",
-                    content: fullReply,
+                    role      : "bot",
+                    content   : fullReply,
                     session_id: currentSessionId,
-                    user_id: currentUser.id
+                    user_id   : currentUser.id
                 }]);
                 if (botError) console.error("❌ Bot message save failed:", botError.message);
             }
 
         } catch (err) {
-            // thinking may already be detached if we got past the res.ok check
             try { thinking.remove(); } catch (_) {}
             console.error("❌ AI fetch failed:", err);
-            // Only show error div if no bot wrapper was added yet
-            // (if wrapper exists, streamWords already handled the error inside it)
             const existingWrapper = chatbox.querySelector(".bot-msg-wrapper:last-child");
             if (!existingWrapper || existingWrapper.querySelector(".message.bot")?.innerHTML?.trim() === "") {
                 const errMsg = document.createElement("div");
@@ -1462,7 +1496,7 @@ document.addEventListener("DOMContentLoaded", async function () {
                 chatbox.appendChild(errMsg);
             }
         }
-    };
+    }
 
     input.addEventListener("keydown", function (e) {
         if (e.key === "Enter" && !e.shiftKey) {
@@ -1493,7 +1527,13 @@ document.addEventListener("DOMContentLoaded", async function () {
 
         data.forEach(msg => {
             if (msg.role === "user") {
-                chatbox.appendChild(createUserBubble(msg.content));
+                // Reconstruct file objects from stored URLs for history display
+                const historyFiles = (msg.file_urls && msg.file_urls.length)
+                    ? msg.file_urls.map(function(url) {
+                        return { url: url, name: url.split('/').pop().replace(/^\d+_[a-z0-9]+_/, ''), type: /\.(png|jpg|jpeg|gif|webp)$/i.test(url) ? 'image/jpeg' : 'application/octet-stream', size: 0 };
+                      })
+                    : [];
+                chatbox.appendChild(createUserBubble(msg.content, historyFiles));
             } else {
                 const { wrapper, botMsg } = createBotWrapper();
                 botMsg.innerHTML = formatMessage(repairTruncated(msg.content));
