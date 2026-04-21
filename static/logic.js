@@ -209,6 +209,22 @@ function isHeavyQuery(text) {
 }
 
 // ============================
+// 🩹 REPAIR TRUNCATED RESPONSES
+// ============================
+// If the AI was cut off mid-output (token limit or relay handoff),
+// the response may end with an unclosed code fence (```).
+// This closes any dangling fences so the markdown renderer doesn't break.
+function repairTruncated(text) {
+    const fenceMatches = (text.match(/```/g) || []).length;
+    // Odd number of ``` means one is unclosed
+    if (fenceMatches % 2 !== 0) {
+        // Close it — append newline + closing fence
+        text = text.trimEnd() + "\n```";
+    }
+    return text;
+}
+
+// ============================
 // 🧾 MARKDOWN RENDERER
 // ============================
 function formatMessage(rawText) {
@@ -505,7 +521,7 @@ async function streamWords(botMsg, wrapper, reader, decoder, chatbox) {
     // A relay handoff means the backend finished cleanly even if the SSE close
     // was abrupt from the browser's perspective.
     if (fullReply.trim()) {
-        botMsg.innerHTML = formatMessage(fullReply);
+        botMsg.innerHTML = formatMessage(repairTruncated(fullReply));
         wrapper.dataset.raw = fullReply;
         return fullReply;
     }
@@ -1479,7 +1495,7 @@ document.addEventListener("DOMContentLoaded", async function () {
                 chatbox.appendChild(createUserBubble(msg.content));
             } else {
                 const { wrapper, botMsg } = createBotWrapper();
-                botMsg.innerHTML = formatMessage(msg.content);
+                botMsg.innerHTML = formatMessage(repairTruncated(msg.content));
                 wrapper.dataset.raw = msg.content;
                 chatbox.appendChild(wrapper);
             }

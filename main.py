@@ -69,7 +69,7 @@ async def serve_sw():
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "26.4.13"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "26.4.14"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -77,7 +77,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "26.4.13", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "26.4.14", "timestamp": datetime.utcnow().isoformat()}
 
 
 # ✅ HELPER: Call OpenRouter with automatic fallback
@@ -97,7 +97,7 @@ def call_openrouter_stream(model_id, messages, api_key):
                 "messages": messages,
                 "stream": True,
                 "temperature": 0.3,
-                "max_tokens": 2048,
+                "max_tokens": 16000,
             },
             stream=True,
             timeout=60,
@@ -265,10 +265,15 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
                                 leg_tokens += 1
                                 yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
 
-                            # finish_reason=="stop" means model completed naturally
-                            # even if [DONE] hasn't arrived yet
+                            # finish_reason=="stop" → model finished naturally
                             if finish == "stop":
                                 finished_cleanly = True
+                                break
+                            # finish_reason=="length" → hit token limit mid-output
+                            # Do NOT mark as finished — let relay pick it up
+                            if finish == "length":
+                                print(f"⚠️ [{current_model}] hit token limit — relay will continue")
+                                stream_broke = True
                                 break
 
                         except (json.JSONDecodeError, Exception):
