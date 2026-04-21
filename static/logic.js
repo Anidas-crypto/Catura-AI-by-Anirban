@@ -459,9 +459,10 @@ async function streamWords(botMsg, wrapper, reader, decoder, chatbox) {
     let fullReply      = "";
     let done_streaming = false;
 
-    const liveSpan = document.createElement("span");
+    let liveSpan = document.createElement("span");
     liveSpan.style.cssText = "white-space: pre-wrap; word-break: break-word; font-size: 15px; line-height: 1.8; color: #d4d4d4;";
     botMsg.appendChild(liveSpan);
+    let tokenCount = 0;
 
     // Wrap the entire read loop so a network abort / stream error never
     // propagates as an unhandled throw into sendMessage's catch block.
@@ -505,8 +506,23 @@ async function streamWords(botMsg, wrapper, reader, decoder, chatbox) {
 
                     if (chunk.token) {
                         fullReply += chunk.token;
-                        liveSpan.textContent = fullReply;
-                        chatbox.scrollTop = chatbox.scrollHeight;
+                        tokenCount++;
+                        // Append only the new token — avoids rewriting the entire
+                        // accumulated string on every tick (huge perf win for long responses)
+                        liveSpan.textContent += chunk.token;
+                        // Every 150 tokens, do a full markdown render so code blocks
+                        // and headers form visually as the response streams in
+                        if (tokenCount % 150 === 0) {
+                            botMsg.innerHTML = formatMessage(repairTruncated(fullReply));
+                            // Re-scroll after innerHTML swap clears layout
+                            chatbox.scrollTop = chatbox.scrollHeight;
+                            // Reset liveSpan reference — innerHTML wipe destroyed it
+                            liveSpan = document.createElement("span");
+                            liveSpan.style.cssText = "white-space: pre-wrap; word-break: break-word; font-size: 15px; line-height: 1.8; color: #d4d4d4;";
+                            botMsg.appendChild(liveSpan);
+                        } else {
+                            chatbox.scrollTop = chatbox.scrollHeight;
+                        }
                     }
                 } catch { continue; }
             }

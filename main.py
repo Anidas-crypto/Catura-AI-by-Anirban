@@ -69,7 +69,7 @@ async def serve_sw():
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "26.4.14"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "26.4.15"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -77,7 +77,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "26.4.14", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "26.4.15", "timestamp": datetime.utcnow().isoformat()}
 
 
 # ✅ HELPER: Call OpenRouter with automatic fallback
@@ -100,7 +100,7 @@ def call_openrouter_stream(model_id, messages, api_key):
                 "max_tokens": 16000,
             },
             stream=True,
-            timeout=60,
+            timeout=(10, 120),  # (connect_timeout, read_timeout)
         )
         if resp.status_code != 200:
             try:
@@ -198,7 +198,7 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
             #    [DONE] arrives late or is missing.
             # 3. Handoff timeout: if a model takes >25s to connect, skip it.
 
-            MAX_HANDOFFS = 20
+            MAX_HANDOFFS = 40
             full_reply = ""
             pool_index = 0
             handoffs   = 0
@@ -264,6 +264,10 @@ def chat(request: Request, prompt: str, model: str = "dagr"):
                                 full_reply += token
                                 leg_tokens += 1
                                 yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
+                                # Heartbeat every 50 tokens to keep Render's
+                                # 30s idle-kill timer reset during slow model output
+                                if leg_tokens % 50 == 0:
+                                    yield ": heartbeat\n\n"
 
                             # finish_reason=="stop" → model finished naturally
                             if finish == "stop":
