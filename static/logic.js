@@ -1496,7 +1496,7 @@ document.addEventListener("DOMContentLoaded", async function () {
                 chatbox.appendChild(errMsg);
             }
         }
-    }
+    };
 
     input.addEventListener("keydown", function (e) {
         if (e.key === "Enter" && !e.shiftKey) {
