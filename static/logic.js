@@ -137,12 +137,14 @@ function toggleSidebar() {
     const sidebar = document.getElementById("sidebar");
     const iconRail = document.getElementById("iconRail");
     const overlay  = document.getElementById("sidebarOverlay");
+    const hamburger = document.querySelector(".mobile-hamburger");
 
     const isMobile = window.innerWidth <= 768;
 
     if (isMobile) {
         sidebar.classList.toggle("open");
         overlay.classList.toggle("show");
+        if (hamburger) hamburger.classList.toggle("is-open", sidebar.classList.contains("open"));
     } else {
         const isOpen = sidebar.classList.contains("open");
         if (isOpen) {
@@ -158,8 +160,10 @@ function toggleSidebar() {
 function closeSidebar() {
     const sidebar  = document.getElementById("sidebar");
     const overlay  = document.getElementById("sidebarOverlay");
+    const hamburger = document.querySelector(".mobile-hamburger");
     sidebar.classList.remove("open");
     overlay.classList.remove("show");
+    if (hamburger) hamburger.classList.remove("is-open");
 }
 
 window.openSidebarTo = function (section) {

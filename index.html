@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" href="static/logos.png">
     
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <link rel="stylesheet" href="static/style.css?v=26.4.20">
+    <link rel="stylesheet" href="static/style.css?v=26.4.21">
     
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#000000" />
@@ -29,6 +29,25 @@
 
     <!-- Mobile overlay backdrop -->
     <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
+    <!-- MOBILE TOP HEADER (only shows on mobile) -->
+    <div class="mobile-header" id="mobileHeader">
+        <button class="mobile-hamburger" onclick="toggleSidebar()" title="Open Menu" aria-label="Open menu">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+        <div class="mobile-header-brand">
+            <img src="static/logo.png" alt="Catura AI" class="mobile-header-logo">
+            <span>Catura AI</span>
+        </div>
+        <button class="mobile-header-new" onclick="newChat()" title="New Chat" aria-label="New chat">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+            </svg>
+        </button>
+    </div>
 
     <!-- ICON RAIL -->
     <div class="icon-rail" id="iconRail">
@@ -305,17 +324,17 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
     
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <script src="static/firebase-config.js?v=26.4.20"></script>
-    <script src="static/logic.js?v=26.4.20"></script>
-    <script src="static/feedback.js?v=26.4.20"></script>
-    <script src="static/file-upload.js?v=26.4.20"></script>
+    <script src="static/firebase-config.js?v=26.4.21"></script>
+    <script src="static/logic.js?v=26.4.21"></script>
+    <script src="static/feedback.js?v=26.4.21"></script>
+    <script src="static/file-upload.js?v=26.4.21"></script>
 
     <script>
         console.log('🚀 Catura AI v27.0.5 loaded');
         
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js?v=26.4.20')
+                navigator.serviceWorker.register('/service-worker.js?v=26.4.21')
                     .then(() => console.log('✅ Catura AI PWA Ready - v27.0.5'))
                     .catch((err) => console.log('❌ SW Error:', err));
             });
