@@ -23,9 +23,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ✅ MOUNT STATIC FILES WITH CACHE CONTROL (safe: auto-creates dir if missing)
-os.makedirs("static", exist_ok=True)
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# ✅ MOUNT STATIC FILES — permanent fix using absolute path
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+os.makedirs(STATIC_DIR, exist_ok=True)
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 # 🧠 In-memory session store
 user_memory = {}
@@ -59,25 +61,28 @@ async def add_cache_headers(request: Request, call_next):
 
 @app.get("/")
 def home():
-    return FileResponse("index.html", media_type="text/html")
+    return FileResponse(os.path.join(BASE_DIR, "index.html"), media_type="text/html")
 
 @app.get("/auth.html")
 def auth_page():
-    if not os.path.isfile("auth.html"):
+    p = os.path.join(BASE_DIR, "auth.html")
+    if not os.path.isfile(p):
         return JSONResponse({"error": "auth.html not found"}, status_code=404)
-    return FileResponse("auth.html", media_type="text/html")
+    return FileResponse(p, media_type="text/html")
 
 @app.get("/manifest.json")
 async def serve_manifest():
-    path = os.path.join(os.path.dirname(__file__), "manifest.json")
-    return FileResponse(path, media_type="application/manifest+json")
+    p = os.path.join(BASE_DIR, "manifest.json")
+    if not os.path.isfile(p):
+        return JSONResponse({"error": "manifest.json not found"}, status_code=404)
+    return FileResponse(p, media_type="application/manifest+json")
 
 @app.get("/service-worker.js")
 async def serve_sw():
-    sw_path = os.path.join(os.path.dirname(__file__), "service-worker.js")
-    if not os.path.isfile(sw_path):
+    p = os.path.join(BASE_DIR, "service-worker.js")
+    if not os.path.isfile(p):
         return JSONResponse({"error": "service-worker.js not found"}, status_code=404)
-    return FileResponse(sw_path, media_type="application/javascript")
+    return FileResponse(p, media_type="application/javascript")
 
 @app.get("/ping")
 def ping():
@@ -85,9 +90,10 @@ def ping():
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
-    if not os.path.isfile("google5869a60ba00ea65a.html"):
+    p = os.path.join(BASE_DIR, "google5869a60ba00ea65a.html")
+    if not os.path.isfile(p):
         return JSONResponse({"error": "not found"}, status_code=404)
-    return FileResponse("google5869a60ba00ea65a.html", media_type="text/html")
+    return FileResponse(p, media_type="text/html")
 
 @app.get("/health")
 def health_check():
