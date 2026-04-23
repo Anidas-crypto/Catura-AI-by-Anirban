@@ -2,3 +2,6 @@ fastapi
 uvicorn
 requests
 aiofiles
+supabase
+Pillow
+python-multipart

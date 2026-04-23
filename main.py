@@ -78,7 +78,7 @@ async def serve_sw():
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "26.4.19"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "26.4.20"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -86,7 +86,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "26.4.19", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "26.4.20", "timestamp": datetime.utcnow().isoformat()}
 
 
 # ✅ HELPER: Call OpenRouter with automatic fallback
