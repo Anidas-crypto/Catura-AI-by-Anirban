@@ -23,7 +23,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ✅ MOUNT STATIC FILES WITH CACHE CONTROL
+# ✅ MOUNT STATIC FILES WITH CACHE CONTROL (safe: auto-creates dir if missing)
+os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # 🧠 In-memory session store
@@ -62,6 +63,8 @@ def home():
 
 @app.get("/auth.html")
 def auth_page():
+    if not os.path.isfile("auth.html"):
+        return JSONResponse({"error": "auth.html not found"}, status_code=404)
     return FileResponse("auth.html", media_type="text/html")
 
 @app.get("/manifest.json")
@@ -71,10 +74,10 @@ async def serve_manifest():
 
 @app.get("/service-worker.js")
 async def serve_sw():
-    return FileResponse(
-        os.path.join(os.path.dirname(__file__), "service-worker.js"),
-        media_type="application/javascript"
-    )
+    sw_path = os.path.join(os.path.dirname(__file__), "service-worker.js")
+    if not os.path.isfile(sw_path):
+        return JSONResponse({"error": "service-worker.js not found"}, status_code=404)
+    return FileResponse(sw_path, media_type="application/javascript")
 
 @app.get("/ping")
 def ping():
@@ -82,6 +85,8 @@ def ping():
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
+    if not os.path.isfile("google5869a60ba00ea65a.html"):
+        return JSONResponse({"error": "not found"}, status_code=404)
     return FileResponse("google5869a60ba00ea65a.html", media_type="text/html")
 
 @app.get("/health")
