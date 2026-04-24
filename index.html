@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" href="static/logos.png">
     
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <link rel="stylesheet" href="static/style.css?v=26.4.21">
+    <link rel="stylesheet" href="static/style.css?v=26.4.22">
     
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#000000" />
@@ -324,17 +324,17 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
     
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <script src="static/firebase-config.js?v=26.4.21"></script>
-    <script src="static/logic.js?v=26.4.21"></script>
-    <script src="static/feedback.js?v=26.4.21"></script>
-    <script src="static/file-upload.js?v=26.4.21"></script>
+    <script src="static/firebase-config.js?v=26.4.22"></script>
+    <script src="static/logic.js?v=26.4.22"></script>
+    <script src="static/feedback.js?v=26.4.22"></script>
+    <script src="static/file-upload.js?v=26.4.22"></script>
 
     <script>
         console.log('🚀 Catura AI v27.0.5 loaded');
         
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js?v=26.4.21')
+                navigator.serviceWorker.register('/service-worker.js?v=26.4.22')
                     .then(() => console.log('✅ Catura AI PWA Ready - v27.0.5'))
                     .catch((err) => console.log('❌ SW Error:', err));
             });
