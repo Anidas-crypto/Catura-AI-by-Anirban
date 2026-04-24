@@ -45,7 +45,7 @@ APP_URL = os.getenv("APP_URL", "https://my-ai-assistant-9bbd.onrender.com/")
 async def add_cache_headers(request: Request, call_next):
     response = await call_next(request)
 
-    if request.url.path == "/" or request.url.path.endswith(".html"):
+    if request.url.path == "/" or request.url.path.endswith(".html") or request.url.path == "/auth":
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
@@ -64,6 +64,16 @@ def home():
     return FileResponse(os.path.join(BASE_DIR, "index.html"), media_type="text/html")
 
 @app.get("/auth.html")
+def auth_page_html():
+    p = os.path.join(BASE_DIR, "auth.html")
+    if not os.path.isfile(p):
+        return JSONResponse({"error": "auth.html not found"}, status_code=404)
+    return FileResponse(p, media_type="text/html")
+
+# ✅ FIX: /auth route so Supabase password-reset redirect works
+# Supabase sends users to /auth#access_token=...&type=recovery
+# FastAPI must serve auth.html at /auth or it returns "Not Found"
+@app.get("/auth")
 def auth_page():
     p = os.path.join(BASE_DIR, "auth.html")
     if not os.path.isfile(p):
@@ -86,7 +96,7 @@ async def serve_sw():
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "26.4.22"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "26.4.23"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -97,7 +107,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "26.4.22", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "26.4.23", "timestamp": datetime.utcnow().isoformat()}
 
 
 # ✅ HELPER: Call OpenRouter with automatic fallback
