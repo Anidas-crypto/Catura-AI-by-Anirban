@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Get form values
                 const name = document.getElementById('feedbackName').value.trim();
                 const email = document.getElementById('feedbackEmail').value.trim();
-                const message = document.getElementById('feedbackMessage').value.trim();
+                const message = document.getElementById('feedbackText').value.trim();
                 
                 // Validate
                 if (!name || !email || !message) {
