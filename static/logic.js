@@ -1189,8 +1189,14 @@ window.archiveAllChats = async function () {
     if (!confirm("Archive all chats? They will be hidden from your history.")) return;
     const { error } = await supabaseClient
         .from("chat_sessions").update({ archived: true }).eq("user_id", currentUser.id);
-    if (error) showToast("❌ Archive failed. Please try again.");
-    else showToast("✓ All chats archived successfully");
+    if (error) {
+        console.error("❌ Archive error:", error.code, error.message, error.details, error.hint);
+        showToast("❌ Archive failed: " + (error.message || "Check console for details"));
+    } else {
+        showToast("✓ All chats archived successfully");
+        if (typeof loadChatHistory === "function") loadChatHistory();
+        else if (typeof showHistory === "function") showHistory();
+    }
 };
 
 // ============================
