@@ -229,93 +229,216 @@ function repairTruncated(text) {
 }
 
 // ============================
-// 🧾 MARKDOWN RENDERER
+// 🧾 MARKDOWN RENDERER — v2
+// Fixes: tables, <br> literal text, bold bleed-through,
+//        nested inline formatting, proper paragraph flow.
 // ============================
 function formatMessage(rawText) {
+    if (!rawText) return "";
+
+    // ── STEP 1: Stash fenced code blocks ──────────────────────────────────
+    // Must happen FIRST so no other rule mangles code content.
     const codeBlocks = [];
-    let text = rawText.replace(/```([\w]*)\n?([\s\S]*?)```/g, (match, lang, code) => {
-        const language = lang.trim() || "code";
+    let text = rawText.replace(/```([\w+\-#]*)\n?([\s\S]*?)```/g, (_match, lang, code) => {
+        const language = lang.trim() || "text";
         const escapedCode = code
             .replace(/&/g, "&amp;")
             .replace(/</g, "&lt;")
             .replace(/>/g, "&gt;");
-        const html = `<div class="code-block">
+        codeBlocks.push(`<div class="code-block">
             <div class="code-header">
                 <span class="lang-label">${language}</span>
-                <button onclick="copyCode(this)">Copy</button>
+                <button onclick="copyCode(this)">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                    </svg> Copy</button>
             </div>
-            <pre><code>${escapedCode}</code></pre>
-        </div>`;
-        codeBlocks.push(html);
-        return `%%CODEBLOCK_${codeBlocks.length - 1}%%`;
+            <pre><code>${escapedCode.trimEnd()}</code></pre>
+        </div>`);
+        return `\x00CODE${codeBlocks.length - 1}\x00`;
     });
 
-    const parts = text.split(/(%%CODEBLOCK_\d+%%)/);
-    text = parts.map((part) => {
-        if (part.startsWith("%%CODEBLOCK_")) return part;
+    // ── STEP 2: Escape HTML in non-code sections only ─────────────────────
+    // Split on stashed code placeholders so we don't double-escape them.
+    text = text.split(/(\x00CODE\d+\x00)/).map((part, i) => {
+        if (i % 2 === 1) return part; // odd parts are code placeholders
         return part
-            .replace(/&(?!amp;|lt;|gt;)/g, "&amp;")
+            .replace(/&(?!(amp|lt|gt|quot|#\d+);)/g, "&amp;")
             .replace(/</g, "&lt;")
             .replace(/>/g, "&gt;");
     }).join("");
 
-    // Tables
-    text = text.replace(/((?:\|.+\|\n?)+)/g, (block) => {
-        const rows = block.trim().split("\n").filter(r => r.trim());
-        if (rows.length < 2) return block;
-        const isSep = r => /^\|[\s\-\|:]+\|$/.test(r.trim());
-        if (!isSep(rows[1])) return block;
-        const parseRow = (row) =>
-            row.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim());
-        const headers = parseRow(rows[0]);
-        const body    = rows.slice(2);
-        const thead = `<thead><tr>${headers.map(h => `<th>${h}</th>`).join("")}</tr></thead>`;
-        const tbody = `<tbody>${body.map(r => `<tr>${parseRow(r).map(c => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody>`;
-        return `<table>${thead}${tbody}</table>`;
+    // ── STEP 3: Tables ────────────────────────────────────────────────────
+    // Match a block of pipe-delimited rows (header | separator | body)
+    text = text.replace(/((?:[ \t]*\|.+\|\s*\n?)+)/g, (block) => {
+        const rawRows = block.trim().split("\n").map(r => r.trim()).filter(Boolean);
+        if (rawRows.length < 2) return block;
+        const isSep = r => /^\|[\s:|\-]+\|$/.test(r);
+        if (!isSep(rawRows[1])) return block;
+
+        const parseRow = r =>
+            r.replace(/^\||\|$/g, "").split("|").map(c => c.trim());
+
+        // Detect alignment from separator row
+        const sepCells = parseRow(rawRows[1]);
+        const aligns   = sepCells.map(c => {
+            if (/^:-+:$/.test(c)) return 'center';
+            if (/^-+:$/.test(c))  return 'right';
+            return 'left';
+        });
+
+        const headers = parseRow(rawRows[0]);
+        const bodyRows = rawRows.slice(2);
+
+        const thead = `<thead><tr>${
+            headers.map((h, i) =>
+                `<th style="text-align:${aligns[i] || 'left'}">${applyInline(h)}</th>`
+            ).join("")
+        }</tr></thead>`;
+
+        const tbody = `<tbody>${
+            bodyRows.map(r =>
+                `<tr>${parseRow(r).map((c, i) =>
+                    `<td style="text-align:${aligns[i] || 'left'}">${applyInline(c)}</td>`
+                ).join("")}</tr>`
+            ).join("")
+        }</tbody>`;
+
+        return `<div class="table-wrap"><table>${thead}${tbody}</table></div>`;
     });
 
-    text = text.replace(/^### (.+)$/gm, "<h3>$1</h3>");
-    text = text.replace(/^## (.+)$/gm,  "<h2>$1</h2>");
-    text = text.replace(/^# (.+)$/gm,   "<h1>$1</h1>");
-    text = text.replace(/^&gt; (.+)$/gm, "<blockquote>$1</blockquote>");
-    text = text.replace(/^---+$/gm, "<hr>");
-    text = text.replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>");
-    text = text.replace(/\*\*(.+?)\*\*/g,     "<strong>$1</strong>");
-    text = text.replace(/\*(.+?)\*/g,         "<em>$1</em>");
-    text = text.replace(/`([^`]+)`/g, '<span class="inline-code">$1</span>');
+    // ── STEP 4: Block-level elements ──────────────────────────────────────
+    // Process line-by-line to handle headings, HR, blockquotes, lists.
+    const outputLines = [];
+    const rawLines    = text.split("\n");
+    let i = 0;
 
-    text = text.replace(/((?:^\d+\. .+\n?)+)/gm, (block) => {
-        const items = block.trim().split("\n")
-            .map(l => `<li>${l.replace(/^\d+\.\s/, "")}</li>`)
-            .join("");
-        return `<ol style="list-style-type: decimal;">${items}</ol>`;
-    });
-
-    text = text.replace(/((?:^[-•*] .+\n?)+)/gm, (block) => {
-        const items = block.trim().split("\n")
-            .map(l => `<li>${l.replace(/^[-•*]\s/, "")}</li>`)
-            .join("");
-        return `<ul>${items}</ul>`;
-    });
-
-    const lines = text.split("\n");
-    let result = "";
-    let para   = "";
-    for (const line of lines) {
+    while (i < rawLines.length) {
+        const line    = rawLines[i];
         const trimmed = line.trim();
-        const isBlock = /^(<(h[123]|ul|ol|li|blockquote|hr|table|div|pre)|%%CODEBLOCK)/.test(trimmed);
-        if (!trimmed) {
-            if (para.trim()) { result += `<p>${para.trim()}</p>`; para = ""; }
-        } else if (isBlock) {
-            if (para.trim()) { result += `<p>${para.trim()}</p>`; para = ""; }
-            result += line + "\n";
-        } else {
-            para += (para ? " " : "") + trimmed;
+
+        // Headings
+        const h3 = trimmed.match(/^### (.+)$/);  if (h3) { outputLines.push(`<h3>${applyInline(h3[1])}</h3>`); i++; continue; }
+        const h2 = trimmed.match(/^## (.+)$/);   if (h2) { outputLines.push(`<h2>${applyInline(h2[1])}</h2>`); i++; continue; }
+        const h1 = trimmed.match(/^# (.+)$/);    if (h1) { outputLines.push(`<h1>${applyInline(h1[1])}</h1>`); i++; continue; }
+
+        // Horizontal rule
+        if (/^---+$/.test(trimmed)) { outputLines.push("<hr>"); i++; continue; }
+
+        // Blockquote
+        if (/^&gt;\s?/.test(trimmed)) {
+            const bqLines = [];
+            while (i < rawLines.length && /^&gt;\s?/.test(rawLines[i].trim())) {
+                bqLines.push(applyInline(rawLines[i].trim().replace(/^&gt;\s?/, "")));
+                i++;
+            }
+            outputLines.push(`<blockquote>${bqLines.join("<br>")}</blockquote>`);
+            continue;
         }
+
+        // Unordered list
+        if (/^[-*•]\s/.test(trimmed)) {
+            const items = [];
+            while (i < rawLines.length && /^[-*•]\s/.test(rawLines[i].trim())) {
+                items.push(`<li>${applyInline(rawLines[i].trim().replace(/^[-*•]\s/, ""))}</li>`);
+                i++;
+            }
+            outputLines.push(`<ul>${items.join("")}</ul>`);
+            continue;
+        }
+
+        // Ordered list
+        if (/^\d+[\.)]\s/.test(trimmed)) {
+            const items = [];
+            while (i < rawLines.length && /^\d+[\.)]\s/.test(rawLines[i].trim())) {
+                items.push(`<li>${applyInline(rawLines[i].trim().replace(/^\d+[\.)]\s/, ""))}</li>`);
+                i++;
+            }
+            outputLines.push(`<ol>${items.join("")}</ol>`);
+            continue;
+        }
+
+        // Code placeholder — pass through as-is
+        if (/^\x00CODE\d+\x00$/.test(trimmed)) {
+            outputLines.push(trimmed);
+            i++;
+            continue;
+        }
+
+        // Blank line — paragraph break signal
+        if (!trimmed) {
+            outputLines.push(""); // kept as paragraph separator
+            i++;
+            continue;
+        }
+
+        // Table div wrapper — pass through
+        if (/^<(div class="table-wrap"|table|\/div|\/table|thead|tbody|tr|th|td)/.test(trimmed)) {
+            outputLines.push(line);
+            i++;
+            continue;
+        }
+
+        // Plain text line — apply inline formatting
+        outputLines.push(applyInline(trimmed));
+        i++;
     }
-    if (para.trim()) result += `<p>${para.trim()}</p>`;
-    result = result.replace(/%%CODEBLOCK_(\d+)%%/g, (_, i) => codeBlocks[parseInt(i)]);
-    return result;
+
+    // ── STEP 5: Group plain text lines into <p> blocks ────────────────────
+    let html     = "";
+    let paraBuf  = [];
+
+    const flushPara = () => {
+        if (paraBuf.length) {
+            html += `<p>${paraBuf.join(" ")}</p>`;
+            paraBuf = [];
+        }
+    };
+
+    const BLOCK_RE = /^(<(h[123]|ul|ol|blockquote|hr|div|table|thead|tbody|tr|th|td)|<\/|<div|\x00CODE)/;
+
+    for (const ln of outputLines) {
+        if (!ln) { flushPara(); continue; }
+        if (BLOCK_RE.test(ln)) { flushPara(); html += ln; continue; }
+        // inline or plain
+        paraBuf.push(ln);
+    }
+    flushPara();
+
+    // ── STEP 6: Restore code blocks ───────────────────────────────────────
+    html = html.replace(/\x00CODE(\d+)\x00/g, (_, idx) => codeBlocks[+idx]);
+
+    return html;
+}
+
+// ── Inline formatting helper (bold, italic, inline-code, links) ──────────────
+function applyInline(text) {
+    if (!text) return text;
+    // Inline code — protect first so bold/italic don't match inside it
+    const inlineCode = [];
+    text = text.replace(/`([^`]+)`/g, (_, c) => {
+        inlineCode.push(`<span class="inline-code">${c.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</span>`);
+        return `\x01IC${inlineCode.length - 1}\x01`;
+    });
+
+    // Bold+italic
+    text = text.replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>");
+    // Bold
+    text = text.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    // Italic (only single asterisk surrounded by non-space)
+    text = text.replace(/(?<!\*)\*(?!\s)(.+?)(?<!\s)\*(?!\*)/g, "<em>$1</em>");
+    // Underline via __text__
+    text = text.replace(/__(.+?)__/g, "<u>$1</u>");
+    // Strikethrough
+    text = text.replace(/~~(.+?)~~/g, "<s>$1</s>");
+    // Links  [label](url)
+    text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g,
+        '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+
+    // Restore inline code
+    text = text.replace(/\x01IC(\d+)\x01/g, (_, i) => inlineCode[+i]);
+    return text;
 }
 
 // ============================
@@ -472,15 +595,22 @@ async function streamWords(botMsg, wrapper, reader, decoder, chatbox) {
     let buffer         = "";
     let fullReply      = "";
     let done_streaming = false;
+    let renderTimer    = null;
 
-    const liveSpan = document.createElement("span");
-    liveSpan.style.cssText = "white-space: pre-wrap; word-break: break-word; font-size: 15px; line-height: 1.8; color: #d4d4d4;";
-    botMsg.appendChild(liveSpan);
+    // Live render: re-render markdown every ~80ms during streaming
+    // so the user sees formatted output as it arrives, not plain text.
+    const scheduleRender = () => {
+        if (renderTimer) return;
+        renderTimer = setTimeout(() => {
+            renderTimer = null;
+            if (fullReply) {
+                botMsg.innerHTML = formatMessage(repairTruncated(fullReply)) +
+                    '<span class="stream-cursor"></span>';
+                chatbox.scrollTop = chatbox.scrollHeight;
+            }
+        }, 80);
+    };
 
-    // Wrap the entire read loop so a network abort / stream error never
-    // propagates as an unhandled throw into sendMessage's catch block.
-    // That catch block appends a NEW error div *after* the bot wrapper,
-    // causing the "content + error" double-render you see in the UI.
     try {
         outer:
         while (true) {
@@ -495,7 +625,6 @@ async function streamWords(botMsg, wrapper, reader, decoder, chatbox) {
                 if (!line.startsWith("data: ")) continue;
                 const payload = line.slice(6).trim();
 
-                // break outer exits BOTH loops — plain break only exits the for
                 if (payload === "[DONE]") {
                     done_streaming = true;
                     break outer;
@@ -504,44 +633,37 @@ async function streamWords(botMsg, wrapper, reader, decoder, chatbox) {
                 try {
                     const chunk = JSON.parse(payload);
 
-                    // Explicit error token from server
                     if (chunk.error) {
-                        // If we already rendered content, keep it and stop —
-                        // don't overwrite a partial valid response with an error
                         if (!fullReply.trim()) {
                             botMsg.innerHTML = `<p style="color:#e06c6c">⚠️ ${chunk.error}</p>`;
                         }
                         return fullReply || "";
                     }
 
-                    // Relay status tokens — ignore silently
                     if (chunk.status) continue;
 
                     if (chunk.token) {
                         fullReply += chunk.token;
-                        // Append only the new token — O(1) vs O(n) rewrite of entire string
-                        liveSpan.textContent += chunk.token;
-                        chatbox.scrollTop = chatbox.scrollHeight;
+                        scheduleRender();
                     }
                 } catch { continue; }
             }
         }
     } catch (networkErr) {
-        // reader.read() threw (Render killed the connection, network drop, etc.)
-        // Don't re-throw — fall through to the content check below
         console.warn("Stream read error (handled):", networkErr);
     }
 
-    // If we collected content — always render it, even if [DONE] never arrived.
-    // A relay handoff means the backend finished cleanly even if the SSE close
-    // was abrupt from the browser's perspective.
+    // Cancel any pending incremental render
+    if (renderTimer) { clearTimeout(renderTimer); renderTimer = null; }
+
+    // Final render — full, clean, no cursor
     if (fullReply.trim()) {
         botMsg.innerHTML = formatMessage(repairTruncated(fullReply));
         wrapper.dataset.raw = fullReply;
+        chatbox.scrollTop = chatbox.scrollHeight;
         return fullReply;
     }
 
-    // Truly empty — no tokens at all
     if (!done_streaming) {
         botMsg.innerHTML = `<p style="color:#e06c6c">⚠️ No response received. The model may be rate-limited — please try again.</p>`;
     }
@@ -1463,31 +1585,12 @@ document.addEventListener("DOMContentLoaded", async function () {
             promptText = "Please analyse the attached file(s) and describe what you see in detail.";
         }
 
-        // ── TOOL ROUTER: detect intent, update thinking label ────────────────
-        // The backend now handles ALL tool routing automatically.
-        // We just detect intent client-side to show the right "thinking" label.
-        let webResults = []; // kept for legacy fallback
-        const detectedIntent = message ? detectClientIntent(message) : "general";
-
-        if (message) {
-            const thinkLabel = thinking.querySelector(".thinking-label");
-            if (thinkLabel) {
-                const intentLabels = {
-                    weather:    "🌤️ Checking live weather…",
-                    finance:    "💹 Fetching market data…",
-                    sports:     "🏏 Fetching live scores…",
-                    news:       "📰 Getting latest news…",
-                    web_search: "🔍 Searching the web…",
-                    general:    null,
-                };
-                const label = intentLabels[detectedIntent];
-                if (label) thinkLabel.innerHTML = `<span class="think-icon"></span>${label}`;
-            }
-
-            // Legacy manual web search toggle (still supported)
-            if (webSearchEnabled && detectedIntent === "general") {
-                webResults = await performWebSearch(message);
-            }
+        // ── Web search (auto-detect or manually enabled) ─────────────────────
+        let webResults = [];
+        const shouldSearch = webSearchEnabled || (message && needsWebSearch(message));
+        if (shouldSearch && message) {
+            thinking.querySelector(".thinking-label") && (thinking.querySelector(".thinking-label").innerHTML = '<span class="think-icon"></span>🔍 Searching the web…');
+            webResults = await performWebSearch(message);
         }
 
         try {
@@ -1499,7 +1602,7 @@ document.addEventListener("DOMContentLoaded", async function () {
                     prompt    : promptText,
                     model     : model,
                     file_urls : fileUrls,
-                    web_results: webResults   // legacy, backend ignores if tool was used
+                    web_results: webResults
                 })
             });
             if (!res.ok) throw new Error("Server error " + res.status);
@@ -1511,30 +1614,9 @@ document.addEventListener("DOMContentLoaded", async function () {
 
             const reader    = res.body.getReader();
             const decoder   = new TextDecoder();
+            const fullReply = await streamWords(botMsg, wrapper, reader, decoder, chatbox);
 
-            // ── Stream with tool-badge support ────────────────────────────────
-            let toolUsed   = null;
-            let toolIntent = null;
-            const fullReply = await streamWordsWithTools(botMsg, wrapper, reader, decoder, chatbox,
-                (tu, ti) => { toolUsed = tu; toolIntent = ti; });
-
-            // ── Show tool badge ───────────────────────────────────────────────
-            if (toolUsed) {
-                const toolBadges = {
-                    weather:    { icon: "🌤️", label: "Live Weather" },
-                    finance:    { icon: "💹", label: "Market Data" },
-                    sports:     { icon: "🏏", label: "Live Scores" },
-                    news:       { icon: "📰", label: "Latest News" },
-                    web_search: { icon: "🔍", label: "Web Search" },
-                };
-                const badge = toolBadges[toolUsed] || { icon: "🔧", label: toolUsed };
-                const badgeDiv = document.createElement("div");
-                badgeDiv.className = "tool-badge";
-                badgeDiv.innerHTML = `<span class="tool-badge-icon">${badge.icon}</span><span class="tool-badge-label">${badge.label} used</span>`;
-                wrapper.insertBefore(badgeDiv, botMsg);
-            }
-
-            // ── Show source chips for web search ──────────────────────────────
+            // ── Show source chips if web search was used ──────────────────────
             if (fullReply && webResults.length > 0) {
                 const sourcesDiv = document.createElement("div");
                 sourcesDiv.className = "search-sources";
@@ -1716,101 +1798,27 @@ function initFontSize() {
 // ============================
 let webSearchEnabled = false;
 
-// ============================================================
-// ✅ CLIENT-SIDE INTENT DETECTOR
-// Mirrors the backend detect_intent() for UI label purposes only.
-// Actual tool execution always happens on the backend.
-// ============================================================
-function detectClientIntent(message) {
-    const lower = message.toLowerCase();
-
-    // WEATHER
-    if (/weather|temperature|humidity|forecast|sunny|cloudy|will it rain|feels like|degrees/.test(lower))
-        return "weather";
-
-    // FINANCE
-    if (/share price|stock price|stock market|nse|bse|nifty|sensex|crypto|bitcoin|ethereum|exchange rate|rupee|dividend/.test(lower))
-        return "finance";
-    if (/(tata|reliance|infosys|wipro|hdfc|icici|bajaj|sbi).*(price|stock|share)/.test(lower))
-        return "finance";
-    if (/(price|stock|share).*(tata|reliance|infosys|wipro|hdfc|icici|bajaj|sbi)/.test(lower))
-        return "finance";
-
-    // SPORTS
-    if (/cricket|ipl|test match|\bodi\b|\bt20\b|football|soccer|fifa|premier league|\bnba\b|\bnfl\b|tennis|wimbledon|live score|match score|match today/.test(lower))
-        return "sports";
-
-    // NEWS
-    if (/\bnews\b|headlines|breaking|latest news|current events|what('s| is) happening|what happened|recent news/.test(lower))
-        return "news";
-
-    // WEB SEARCH
-    if (/latest|currently?|right now|\btoday\b|recently?|who is|price of|how much|find (me|out)|search for|look up/.test(lower))
-        return "web_search";
-
-    return "general";
-}
-
-// ============================================================
-// ✅ streamWordsWithTools — like streamWords but intercepts tool_used events
-// ============================================================
-async function streamWordsWithTools(botMsg, wrapper, reader, decoder, chatbox, onToolUsed) {
-    // Try to call the existing streamWords if no tool handling needed;
-    // but we need to intercept the first SSE frame that may carry {tool_used}
-    let buffer    = "";
-    let fullReply = "";
-    const md      = window.markdownit ? window.markdownit({ html: false, linkify: true, typographer: true }) : null;
-
-    function renderMarkdown(text) {
-        if (md) return md.render(text);
-        return text.replace(/\n/g, "<br>");
-    }
-
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-
-        const lines = buffer.split("\n");
-        buffer = lines.pop(); // keep incomplete line
-
-        for (const line of lines) {
-            if (!line.startsWith("data: ")) continue;
-            const payload = line.slice(6).trim();
-            if (payload === "[DONE]") return fullReply;
-
-            try {
-                const data = JSON.parse(payload);
-
-                // Tool badge event
-                if (data.tool_used !== undefined) {
-                    if (typeof onToolUsed === "function") onToolUsed(data.tool_used, data.intent);
-                    continue;
-                }
-
-                // Error
-                if (data.error) {
-                    botMsg.innerHTML = `<p style="color:#e06c6c">⚠️ ${data.error}</p>`;
-                    return fullReply;
-                }
-
-                // Normal token
-                if (data.token) {
-                    fullReply += data.token;
-                    botMsg.innerHTML = renderMarkdown(fullReply);
-                    chatbox.scrollTop = chatbox.scrollHeight;
-                }
-            } catch (_) {}
-        }
-    }
-    return fullReply;
-}
-
-// ============================================================
-// ✅ LEGACY: needsWebSearch (kept for manual toggle compatibility)
-// ============================================================
 function needsWebSearch(message) {
-    return detectClientIntent(message) !== "general";
+    const lower = message.toLowerCase();
+    const triggers = [
+        /search (for|about|the web for)/i,
+        /look up/i,
+        /find (me |out |information about)/i,
+        /what('s| is) (happening|the latest|the current|today|trending)/i,
+        /news (about|on|today)/i,
+        /latest/i,
+        /current(ly)?/i,
+        /today('s)?/i,
+        /right now/i,
+        /who (is|are|won|leads|currently)/i,
+        /price of/i,
+        /weather in/i,
+        /stock price/i,
+        /what happened/i,
+        /recent(ly)?/i,
+        /\d{4} (results|winner|champion|election)/i,
+    ];
+    return triggers.some(r => r.test(lower));
 }
 
 async function performWebSearch(query) {

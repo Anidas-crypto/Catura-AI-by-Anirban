@@ -400,52 +400,167 @@ html { scroll-behavior: smooth; }
 }
 
 /* ============================
-   MARKDOWN RENDERING
+   MARKDOWN RENDERING — v2
+   Complete, polished styles for all
+   elements the AI can generate.
 ============================ */
-.message.bot h1, .message.bot h2, .message.bot h3 {
-    color: #f0f0f0; font-weight: 600; margin: 18px 0 8px; line-height: 1.3;
+
+/* Headings */
+.message.bot h1,
+.message.bot h2,
+.message.bot h3 {
+    color: #f0f0f0;
+    font-weight: 700;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
 }
-.message.bot h1 { font-size: 20px; }
-.message.bot h2 { font-size: 17px; }
-.message.bot h3 { font-size: 15px; }
-.message.bot p  { margin: 0 0 12px; }
+.message.bot h1 {
+    font-size: 22px;
+    margin: 22px 0 10px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #10a37f33;
+}
+.message.bot h2 {
+    font-size: 18px;
+    margin: 20px 0 8px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #252525;
+}
+.message.bot h3 {
+    font-size: 15px;
+    margin: 16px 0 6px;
+    color: #e0e0e0;
+}
+/* First heading — no top margin */
+.message.bot > h1:first-child,
+.message.bot > h2:first-child,
+.message.bot > h3:first-child { margin-top: 4px; }
+
+/* Paragraphs */
+.message.bot p {
+    margin: 0 0 14px;
+    line-height: 1.85;
+    color: #d4d4d4;
+}
 .message.bot p:last-child { margin-bottom: 0; }
+
+/* Bold / Italic */
 .message.bot strong { color: #f0f0f0; font-weight: 600; }
-.message.bot em     { color: #bbb; font-style: italic; }
+.message.bot em     { color: #c0c0c0; font-style: italic; }
+.message.bot u      { text-decoration: underline; text-underline-offset: 3px; }
+.message.bot s      { color: #888; }
 
-.message.bot ul, .message.bot ol { margin: 8px 0 12px; padding-left: 22px; }
-.message.bot li { margin: 5px 0; line-height: 1.7; color: #d4d4d4; }
-.message.bot ul li::marker { color: #10a37f; font-weight: 600; }
-.message.bot ol li::marker { color: #10a37f; font-weight: 600; }
+/* Links */
+.message.bot a {
+    color: #10a37f;
+    text-decoration: none;
+    border-bottom: 1px solid #10a37f55;
+    transition: border-color 0.15s;
+}
+.message.bot a:hover { border-bottom-color: #10a37f; }
+
+/* Lists */
+.message.bot ul,
+.message.bot ol {
+    margin: 6px 0 14px;
+    padding-left: 26px;
+}
+.message.bot li {
+    margin: 6px 0;
+    line-height: 1.75;
+    color: #d0d0d0;
+}
+.message.bot li + li { margin-top: 4px; }
+.message.bot ul li::marker { color: #10a37f; font-size: 1.1em; }
 .message.bot ol { list-style-type: decimal; }
-.message.bot ol li { display: list-item; }
+.message.bot ol li::marker { color: #10a37f; font-weight: 700; }
+/* Nested lists */
+.message.bot li > ul,
+.message.bot li > ol { margin: 4px 0 4px 8px; }
 
+/* Blockquote */
 .message.bot blockquote {
-    border-left: 4px solid #10a37f;
-    margin: 12px 0; padding: 12px 16px;
-    background: linear-gradient(90deg, #10a37f11 0%, transparent 100%);
-    border-radius: 0 8px 8px 0; color: #bbb; font-style: italic;
+    border-left: 3px solid #10a37f;
+    margin: 14px 0;
+    padding: 10px 16px;
+    background: linear-gradient(90deg, #10a37f0d 0%, transparent 80%);
+    border-radius: 0 8px 8px 0;
+    color: #b0b0b0;
+    font-style: italic;
 }
 
-.message.bot hr { border: none; border-top: 1px solid #252525; margin: 18px 0; }
+/* Horizontal rule */
+.message.bot hr {
+    border: none;
+    border-top: 1px solid #2a2a2a;
+    margin: 20px 0;
+}
 
+/* Inline code */
 .message.bot .inline-code {
-    background: #1a1a1a; border: 1px solid #2a2a2a; color: #10a37f;
-    padding: 2px 8px; border-radius: 6px;
-    font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 13px;
+    background: #141414;
+    border: 1px solid #2c2c2c;
+    color: #10a37f;
+    padding: 2px 7px;
+    border-radius: 5px;
+    font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    font-size: 0.88em;
+    letter-spacing: 0;
+    word-break: break-all;
 }
 
+/* ── TABLES ── */
+.message.bot .table-wrap {
+    width: 100%;
+    overflow-x: auto;
+    margin: 16px 0;
+    border-radius: 10px;
+    border: 1px solid #222;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.25);
+}
 .message.bot table {
-    width: 100%; border-collapse: collapse; margin: 14px 0;
-    font-size: 13px; border-radius: 8px; overflow: hidden; border: 1px solid #2a2a2a;
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13.5px;
+    min-width: 300px;
 }
+.message.bot thead { background: #161616; }
 .message.bot th {
-    background: #1a1a1a; color: #f0f0f0; padding: 12px 14px;
-    text-align: left; font-weight: 600; border-bottom: 2px solid #10a37f44;
+    padding: 11px 16px;
+    text-align: left;
+    font-weight: 600;
+    color: #f0f0f0;
+    font-size: 12.5px;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    border-bottom: 2px solid #10a37f44;
+    white-space: nowrap;
 }
-.message.bot td { padding: 10px 14px; border-bottom: 1px solid #1e1e1e; color: #ccc; }
-.message.bot tr:hover td { background: #1a1a1a; }
-.message.bot tr:last-child td { border-bottom: none; }
+.message.bot td {
+    padding: 10px 16px;
+    border-bottom: 1px solid #1e1e1e;
+    color: #ccc;
+    vertical-align: top;
+    line-height: 1.6;
+}
+/* Alternate row shading */
+.message.bot tbody tr:nth-child(even) td { background: #111; }
+.message.bot tbody tr:hover td { background: #181818; transition: background 0.15s; }
+.message.bot tbody tr:last-child td { border-bottom: none; }
+
+/* ── STREAMING CURSOR ── */
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+.stream-cursor {
+    display: inline-block;
+    width: 2px;
+    height: 1.1em;
+    background: #10a37f;
+    border-radius: 1px;
+    vertical-align: text-bottom;
+    margin-left: 2px;
+    animation: blink 0.9s step-end infinite;
+}
+
 
 /* ============================
    CODE BLOCKS
@@ -1686,7 +1801,24 @@ html { scroll-behavior: smooth; }
 [data-theme="light"] #input::placeholder { color: #aaa; }
 [data-theme="light"] .message.user { background: #e3e3e3; color: #111; }
 [data-theme="light"] .message.bot { color: #111; }
-[data-theme="light"] .message.bot p, [data-theme="light"] .message.bot li, [data-theme="light"] .message.bot td { color: #222; }
+[data-theme="light"] .message.bot p,
+[data-theme="light"] .message.bot li,
+[data-theme="light"] .message.bot td { color: #222; }
+[data-theme="light"] .message.bot h1,
+[data-theme="light"] .message.bot h2,
+[data-theme="light"] .message.bot h3 { color: #111; }
+[data-theme="light"] .message.bot h1 { border-bottom-color: #10a37f44; }
+[data-theme="light"] .message.bot h2 { border-bottom-color: #ddd; }
+[data-theme="light"] .message.bot strong { color: #000; }
+[data-theme="light"] .message.bot em { color: #444; }
+[data-theme="light"] .message.bot blockquote { color: #555; background: linear-gradient(90deg, #10a37f0d 0%, transparent 80%); }
+[data-theme="light"] .message.bot .table-wrap { border-color: #ddd; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+[data-theme="light"] .message.bot thead { background: #f5f5f5; }
+[data-theme="light"] .message.bot th { color: #111; border-bottom-color: #10a37f55; }
+[data-theme="light"] .message.bot td { color: #333; border-bottom-color: #eee; }
+[data-theme="light"] .message.bot tbody tr:nth-child(even) td { background: #fafafa; }
+[data-theme="light"] .message.bot tbody tr:hover td { background: #f0f0f0; }
+[data-theme="light"] .message.bot hr { border-top-color: #ddd; }
 [data-theme="light"] .sidebar-item { color: #333; }
 [data-theme="light"] .sidebar-item:hover { background: #dcdcdc; }
 [data-theme="light"] .sidebar-brand { color: #111; }
@@ -2482,39 +2614,3 @@ html { scroll-behavior: smooth; }
 .web-search-chip svg {
     flex-shrink: 0;
 }
-
-/* ============================
-   🔧 TOOL BADGE
-   ============================ */
-.tool-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 12px;
-    margin-bottom: 8px;
-    background: rgba(16, 163, 127, 0.08);
-    border: 1px solid rgba(16, 163, 127, 0.25);
-    border-radius: 20px;
-    font-size: 0.75rem;
-    font-weight: 500;
-    color: #10a37f;
-    animation: fadeIn 0.3s ease;
-}
-
-.tool-badge-icon {
-    font-size: 0.9rem;
-}
-
-.tool-badge-label {
-    letter-spacing: 0.01em;
-    opacity: 0.9;
-}
-
-/* Weather badge variant */
-.tool-badge[data-tool="weather"] { border-color: rgba(59, 130, 246, 0.3); color: #3b82f6; background: rgba(59, 130, 246, 0.07); }
-/* Finance badge variant */
-.tool-badge[data-tool="finance"] { border-color: rgba(245, 158, 11, 0.3); color: #d97706; background: rgba(245, 158, 11, 0.07); }
-/* Sports badge variant */
-.tool-badge[data-tool="sports"]  { border-color: rgba(239, 68, 68, 0.3);  color: #dc2626; background: rgba(239, 68, 68, 0.07); }
-/* News badge variant */
-.tool-badge[data-tool="news"]    { border-color: rgba(139, 92, 246, 0.3); color: #7c3aed; background: rgba(139, 92, 246, 0.07); }
