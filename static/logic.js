@@ -1463,6 +1463,14 @@ document.addEventListener("DOMContentLoaded", async function () {
             promptText = "Please analyse the attached file(s) and describe what you see in detail.";
         }
 
+        // ── Web search (auto-detect or manually enabled) ─────────────────────
+        let webResults = [];
+        const shouldSearch = webSearchEnabled || (message && needsWebSearch(message));
+        if (shouldSearch && message) {
+            thinking.querySelector(".thinking-label") && (thinking.querySelector(".thinking-label").innerHTML = '<span class="think-icon"></span>🔍 Searching the web…');
+            webResults = await performWebSearch(message);
+        }
+
         try {
             const model = getSelectedModel();
             const res = await fetch("/chat", {
@@ -1471,7 +1479,8 @@ document.addEventListener("DOMContentLoaded", async function () {
                 body   : JSON.stringify({
                     prompt    : promptText,
                     model     : model,
-                    file_urls : fileUrls
+                    file_urls : fileUrls,
+                    web_results: webResults
                 })
             });
             if (!res.ok) throw new Error("Server error " + res.status);
@@ -1484,6 +1493,17 @@ document.addEventListener("DOMContentLoaded", async function () {
             const reader    = res.body.getReader();
             const decoder   = new TextDecoder();
             const fullReply = await streamWords(botMsg, wrapper, reader, decoder, chatbox);
+
+            // ── Show source chips if web search was used ──────────────────────
+            if (fullReply && webResults.length > 0) {
+                const sourcesDiv = document.createElement("div");
+                sourcesDiv.className = "search-sources";
+                sourcesDiv.innerHTML = `<span class="sources-label">🌐 Sources:</span>` +
+                    webResults.slice(0, 4).map(r =>
+                        `<a href="${r.href}" target="_blank" rel="noopener" class="source-chip">${r.title}</a>`
+                    ).join('');
+                wrapper.appendChild(sourcesDiv);
+            }
 
             if (fullReply) {
                 const { error: botError } = await supabaseClient.from("messages").insert([{
@@ -1652,8 +1672,53 @@ function initFontSize() {
 }
 
 // ============================
-// ✅ PLUS MENU (+ Button dropdown)
+// 🌐 WEB SEARCH SYSTEM
 // ============================
+let webSearchEnabled = false;
+
+function needsWebSearch(message) {
+    const lower = message.toLowerCase();
+    const triggers = [
+        /search (for|about|the web for)/i,
+        /look up/i,
+        /find (me |out |information about)/i,
+        /what('s| is) (happening|the latest|the current|today|trending)/i,
+        /news (about|on|today)/i,
+        /latest/i,
+        /current(ly)?/i,
+        /today('s)?/i,
+        /right now/i,
+        /who (is|are|won|leads|currently)/i,
+        /price of/i,
+        /weather in/i,
+        /stock price/i,
+        /what happened/i,
+        /recent(ly)?/i,
+        /\d{4} (results|winner|champion|election)/i,
+    ];
+    return triggers.some(r => r.test(lower));
+}
+
+async function performWebSearch(query) {
+    try {
+        const res = await fetch(`/search?q=${encodeURIComponent(query)}&max_results=5`);
+        const data = await res.json();
+        return data.results || [];
+    } catch (e) {
+        console.error("❌ Web search failed:", e);
+        return [];
+    }
+}
+
+window.toggleWebSearch = function() {
+    webSearchEnabled = !webSearchEnabled;
+    const btn = document.getElementById("webSearchToggleBtn");
+    if (btn) {
+        btn.classList.toggle("active", webSearchEnabled);
+        btn.title = webSearchEnabled ? "Web Search ON — click to disable" : "Web Search OFF — click to enable";
+    }
+    showToast(webSearchEnabled ? "🌐 Web search enabled" : "Web search disabled", 1500);
+};
 function togglePlusMenu(e) {
     e.stopPropagation();
     const dropdown = document.getElementById('plusDropdown');
@@ -1683,7 +1748,7 @@ function handlePlusAction(action) {
     } else if (action === 'research') {
         showToast('Deep research — coming soon!');
     } else if (action === 'search') {
-        showToast('Web search — coming soon!');
+        toggleWebSearch();
     }
 }
 

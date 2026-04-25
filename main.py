@@ -11,6 +11,7 @@ from supabase import create_client, Client
 import base64
 import io
 from PIL import Image
+from duckduckgo_search import DDGS
 
 app = FastAPI()
 
@@ -96,7 +97,7 @@ async def serve_sw():
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "26.4.25"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "26.4.26"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -107,7 +108,19 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "26.4.25", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "26.4.26", "timestamp": datetime.utcnow().isoformat()}
+
+
+# ✅ WEB SEARCH ENDPOINT (DuckDuckGo)
+@app.get("/search")
+async def web_search(q: str, max_results: int = 5):
+    try:
+        with DDGS() as ddgs:
+            results = list(ddgs.text(q, max_results=max_results))
+        return {"results": results, "query": q}
+    except Exception as e:
+        print(f"❌ Search error: {str(e)}")
+        return {"results": [], "query": q, "error": str(e)}
 
 
 # ✅ HELPER: Call OpenRouter with automatic fallback
@@ -160,6 +173,7 @@ async def chat_post(request: Request):
         prompt = body.get("prompt", "")
         model = body.get("model", "dagr")
         file_urls = body.get("file_urls", [])
+        web_results = body.get("web_results", [])
 
         session_id = request.cookies.get("session_id")
         if not session_id:
@@ -211,6 +225,17 @@ async def chat_post(request: Request):
         }
 
         system_prompt = system_prompts.get(model_key, system_prompts["dagr"])
+
+        # ✅ Inject web search results into system prompt if available
+        if web_results:
+            search_context = "\n\n🌐 LIVE WEB SEARCH RESULTS (use these to answer accurately):\n"
+            for i, r in enumerate(web_results, 1):
+                title = r.get("title", "")
+                body_text = r.get("body", "")
+                href = r.get("href", "")
+                search_context += f"{i}. {title}\n{body_text}\nSource: {href}\n\n"
+            search_context += "Use the above search results to give an accurate, up-to-date answer. Cite sources naturally where relevant."
+            system_prompt += search_context
 
         messages = [
             {"role": "system", "content": system_prompt}

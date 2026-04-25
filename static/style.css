@@ -2415,3 +2415,42 @@ html { scroll-behavior: smooth; }
     .msg-file-img  { width: 170px; }
     .msg-file--doc { max-width: 200px; }
 }
+
+
+/* ============================
+   🌐 WEB SEARCH SOURCES
+   ============================ */
+.search-sources {
+    margin-top: 10px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+}
+.sources-label {
+    opacity: 0.55;
+    font-size: 0.75rem;
+    margin-right: 2px;
+}
+.source-chip {
+    display: inline-block;
+    padding: 3px 10px;
+    background: var(--surface2, #2a2a2a);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 20px;
+    color: #10a37f;
+    text-decoration: none;
+    font-size: 0.73rem;
+    max-width: 220px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: opacity 0.15s;
+}
+.source-chip:hover { opacity: 0.75; }
+
+/* Web search toggle button active state */
+#webSearchToggleBtn.active {
+    color: #10a37f;
+}

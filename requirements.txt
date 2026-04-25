@@ -5,3 +5,4 @@ aiofiles
 supabase
 Pillow
 python-multipart
+duckduckgo-search==6.3.7
