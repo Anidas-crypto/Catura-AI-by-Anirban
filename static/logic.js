@@ -1712,11 +1712,8 @@ async function performWebSearch(query) {
 
 window.toggleWebSearch = function() {
     webSearchEnabled = !webSearchEnabled;
-    const btn = document.getElementById("webSearchToggleBtn");
-    if (btn) {
-        btn.classList.toggle("active", webSearchEnabled);
-        btn.title = webSearchEnabled ? "Web Search ON — click to disable" : "Web Search OFF — click to enable";
-    }
+    const chip = document.getElementById("webSearchChip");
+    if (chip) chip.style.display = webSearchEnabled ? "flex" : "none";
     showToast(webSearchEnabled ? "🌐 Web search enabled" : "Web search disabled", 1500);
 };
 function togglePlusMenu(e) {

@@ -2454,3 +2454,31 @@ html { scroll-behavior: smooth; }
 #webSearchToggleBtn.active {
     color: #10a37f;
 }
+
+
+/* ============================
+   🌐 WEB SEARCH CHIP
+   ============================ */
+.web-search-chip {
+    display: none; /* shown via JS when enabled */
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    background: rgba(16, 163, 127, 0.12);
+    border: 1px solid rgba(16, 163, 127, 0.4);
+    border-radius: 20px;
+    color: #10a37f;
+    font-size: 0.78rem;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.2s, border-color 0.2s;
+    flex-shrink: 0;
+}
+.web-search-chip:hover {
+    background: rgba(16, 163, 127, 0.22);
+    border-color: rgba(16, 163, 127, 0.7);
+}
+.web-search-chip svg {
+    flex-shrink: 0;
+}
