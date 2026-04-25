@@ -1463,12 +1463,31 @@ document.addEventListener("DOMContentLoaded", async function () {
             promptText = "Please analyse the attached file(s) and describe what you see in detail.";
         }
 
-        // ── Web search (auto-detect or manually enabled) ─────────────────────
-        let webResults = [];
-        const shouldSearch = webSearchEnabled || (message && needsWebSearch(message));
-        if (shouldSearch && message) {
-            thinking.querySelector(".thinking-label") && (thinking.querySelector(".thinking-label").innerHTML = '<span class="think-icon"></span>🔍 Searching the web…');
-            webResults = await performWebSearch(message);
+        // ── TOOL ROUTER: detect intent, update thinking label ────────────────
+        // The backend now handles ALL tool routing automatically.
+        // We just detect intent client-side to show the right "thinking" label.
+        let webResults = []; // kept for legacy fallback
+        const detectedIntent = message ? detectClientIntent(message) : "general";
+
+        if (message) {
+            const thinkLabel = thinking.querySelector(".thinking-label");
+            if (thinkLabel) {
+                const intentLabels = {
+                    weather:    "🌤️ Checking live weather…",
+                    finance:    "💹 Fetching market data…",
+                    sports:     "🏏 Fetching live scores…",
+                    news:       "📰 Getting latest news…",
+                    web_search: "🔍 Searching the web…",
+                    general:    null,
+                };
+                const label = intentLabels[detectedIntent];
+                if (label) thinkLabel.innerHTML = `<span class="think-icon"></span>${label}`;
+            }
+
+            // Legacy manual web search toggle (still supported)
+            if (webSearchEnabled && detectedIntent === "general") {
+                webResults = await performWebSearch(message);
+            }
         }
 
         try {
@@ -1480,7 +1499,7 @@ document.addEventListener("DOMContentLoaded", async function () {
                     prompt    : promptText,
                     model     : model,
                     file_urls : fileUrls,
-                    web_results: webResults
+                    web_results: webResults   // legacy, backend ignores if tool was used
                 })
             });
             if (!res.ok) throw new Error("Server error " + res.status);
@@ -1492,9 +1511,30 @@ document.addEventListener("DOMContentLoaded", async function () {
 
             const reader    = res.body.getReader();
             const decoder   = new TextDecoder();
-            const fullReply = await streamWords(botMsg, wrapper, reader, decoder, chatbox);
 
-            // ── Show source chips if web search was used ──────────────────────
+            // ── Stream with tool-badge support ────────────────────────────────
+            let toolUsed   = null;
+            let toolIntent = null;
+            const fullReply = await streamWordsWithTools(botMsg, wrapper, reader, decoder, chatbox,
+                (tu, ti) => { toolUsed = tu; toolIntent = ti; });
+
+            // ── Show tool badge ───────────────────────────────────────────────
+            if (toolUsed) {
+                const toolBadges = {
+                    weather:    { icon: "🌤️", label: "Live Weather" },
+                    finance:    { icon: "💹", label: "Market Data" },
+                    sports:     { icon: "🏏", label: "Live Scores" },
+                    news:       { icon: "📰", label: "Latest News" },
+                    web_search: { icon: "🔍", label: "Web Search" },
+                };
+                const badge = toolBadges[toolUsed] || { icon: "🔧", label: toolUsed };
+                const badgeDiv = document.createElement("div");
+                badgeDiv.className = "tool-badge";
+                badgeDiv.innerHTML = `<span class="tool-badge-icon">${badge.icon}</span><span class="tool-badge-label">${badge.label} used</span>`;
+                wrapper.insertBefore(badgeDiv, botMsg);
+            }
+
+            // ── Show source chips for web search ──────────────────────────────
             if (fullReply && webResults.length > 0) {
                 const sourcesDiv = document.createElement("div");
                 sourcesDiv.className = "search-sources";
@@ -1676,27 +1716,101 @@ function initFontSize() {
 // ============================
 let webSearchEnabled = false;
 
-function needsWebSearch(message) {
+// ============================================================
+// ✅ CLIENT-SIDE INTENT DETECTOR
+// Mirrors the backend detect_intent() for UI label purposes only.
+// Actual tool execution always happens on the backend.
+// ============================================================
+function detectClientIntent(message) {
     const lower = message.toLowerCase();
-    const triggers = [
-        /search (for|about|the web for)/i,
-        /look up/i,
-        /find (me |out |information about)/i,
-        /what('s| is) (happening|the latest|the current|today|trending)/i,
-        /news (about|on|today)/i,
-        /latest/i,
-        /current(ly)?/i,
-        /today('s)?/i,
-        /right now/i,
-        /who (is|are|won|leads|currently)/i,
-        /price of/i,
-        /weather in/i,
-        /stock price/i,
-        /what happened/i,
-        /recent(ly)?/i,
-        /\d{4} (results|winner|champion|election)/i,
-    ];
-    return triggers.some(r => r.test(lower));
+
+    // WEATHER
+    if (/weather|temperature|humidity|forecast|sunny|cloudy|will it rain|feels like|degrees/.test(lower))
+        return "weather";
+
+    // FINANCE
+    if (/share price|stock price|stock market|nse|bse|nifty|sensex|crypto|bitcoin|ethereum|exchange rate|rupee|dividend/.test(lower))
+        return "finance";
+    if (/(tata|reliance|infosys|wipro|hdfc|icici|bajaj|sbi).*(price|stock|share)/.test(lower))
+        return "finance";
+    if (/(price|stock|share).*(tata|reliance|infosys|wipro|hdfc|icici|bajaj|sbi)/.test(lower))
+        return "finance";
+
+    // SPORTS
+    if (/cricket|ipl|test match|\bodi\b|\bt20\b|football|soccer|fifa|premier league|\bnba\b|\bnfl\b|tennis|wimbledon|live score|match score|match today/.test(lower))
+        return "sports";
+
+    // NEWS
+    if (/\bnews\b|headlines|breaking|latest news|current events|what('s| is) happening|what happened|recent news/.test(lower))
+        return "news";
+
+    // WEB SEARCH
+    if (/latest|currently?|right now|\btoday\b|recently?|who is|price of|how much|find (me|out)|search for|look up/.test(lower))
+        return "web_search";
+
+    return "general";
+}
+
+// ============================================================
+// ✅ streamWordsWithTools — like streamWords but intercepts tool_used events
+// ============================================================
+async function streamWordsWithTools(botMsg, wrapper, reader, decoder, chatbox, onToolUsed) {
+    // Try to call the existing streamWords if no tool handling needed;
+    // but we need to intercept the first SSE frame that may carry {tool_used}
+    let buffer    = "";
+    let fullReply = "";
+    const md      = window.markdownit ? window.markdownit({ html: false, linkify: true, typographer: true }) : null;
+
+    function renderMarkdown(text) {
+        if (md) return md.render(text);
+        return text.replace(/\n/g, "<br>");
+    }
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split("\n");
+        buffer = lines.pop(); // keep incomplete line
+
+        for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            const payload = line.slice(6).trim();
+            if (payload === "[DONE]") return fullReply;
+
+            try {
+                const data = JSON.parse(payload);
+
+                // Tool badge event
+                if (data.tool_used !== undefined) {
+                    if (typeof onToolUsed === "function") onToolUsed(data.tool_used, data.intent);
+                    continue;
+                }
+
+                // Error
+                if (data.error) {
+                    botMsg.innerHTML = `<p style="color:#e06c6c">⚠️ ${data.error}</p>`;
+                    return fullReply;
+                }
+
+                // Normal token
+                if (data.token) {
+                    fullReply += data.token;
+                    botMsg.innerHTML = renderMarkdown(fullReply);
+                    chatbox.scrollTop = chatbox.scrollHeight;
+                }
+            } catch (_) {}
+        }
+    }
+    return fullReply;
+}
+
+// ============================================================
+// ✅ LEGACY: needsWebSearch (kept for manual toggle compatibility)
+// ============================================================
+function needsWebSearch(message) {
+    return detectClientIntent(message) !== "general";
 }
 
 async function performWebSearch(query) {

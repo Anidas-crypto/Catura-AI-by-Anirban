@@ -2482,3 +2482,39 @@ html { scroll-behavior: smooth; }
 .web-search-chip svg {
     flex-shrink: 0;
 }
+
+/* ============================
+   🔧 TOOL BADGE
+   ============================ */
+.tool-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    margin-bottom: 8px;
+    background: rgba(16, 163, 127, 0.08);
+    border: 1px solid rgba(16, 163, 127, 0.25);
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #10a37f;
+    animation: fadeIn 0.3s ease;
+}
+
+.tool-badge-icon {
+    font-size: 0.9rem;
+}
+
+.tool-badge-label {
+    letter-spacing: 0.01em;
+    opacity: 0.9;
+}
+
+/* Weather badge variant */
+.tool-badge[data-tool="weather"] { border-color: rgba(59, 130, 246, 0.3); color: #3b82f6; background: rgba(59, 130, 246, 0.07); }
+/* Finance badge variant */
+.tool-badge[data-tool="finance"] { border-color: rgba(245, 158, 11, 0.3); color: #d97706; background: rgba(245, 158, 11, 0.07); }
+/* Sports badge variant */
+.tool-badge[data-tool="sports"]  { border-color: rgba(239, 68, 68, 0.3);  color: #dc2626; background: rgba(239, 68, 68, 0.07); }
+/* News badge variant */
+.tool-badge[data-tool="news"]    { border-color: rgba(139, 92, 246, 0.3); color: #7c3aed; background: rgba(139, 92, 246, 0.07); }
