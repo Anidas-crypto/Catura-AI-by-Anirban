@@ -150,7 +150,16 @@
       transition: width 0.3s, background 0.3s;
     }
     .pw-hint { font-size: 11px; color: #666; margin-top: 4px; }
+    /* ── Cloudflare Turnstile widget ── */
+    #cf-turnstile-container {
+      margin-top: 12px;
+      display: flex;
+      justify-content: center;
+    }
+    /* Turnstile invisible mode shows nothing, but we still need the div */
   </style>
+  <!-- Cloudflare Turnstile SDK -->
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 <body>
   <div class="card">
@@ -212,6 +221,9 @@
         <input type="password" id="confirm" placeholder="Repeat password">
       </div>
 
+      <!-- Cloudflare Turnstile Widget -->
+      <div id="cf-turnstile-container"></div>
+
       <button class="submit" id="submitBtn" onclick="doSubmit()">Log in</button>
       <div class="msg" id="msg"></div>
 
@@ -270,7 +282,273 @@
   <script>
     const SUPABASE_URL = "https://zhrjmnrfklzuxmfbdqhg.supabase.co";
     const SUPABASE_KEY = "sb_publishable_aIbByN1rFc9V3AH41Kyz6A_e1XppA1Z";
+
+    // ✅ YOUR Cloudflare Turnstile SITE KEY (the public one, safe to put here)
+    // Get it from: Cloudflare Dashboard → Turnstile → your site → Site Key
+    // This must match the site key you configured in Supabase Attack Protection.
+    const TURNSTILE_SITE_KEY = window.__TURNSTILE_SITE_KEY__ || "0x4AAAAAADDHFTkeFyoi79mt";
+
     const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    // ── Turnstile state ───────────────────────────────────────────────────
+    let turnstileToken   = null;   // filled by Turnstile callback
+    let turnstileWidgetId = null;  // used to reset the widget after use
+
+    // Called by Turnstile SDK once the user passes the challenge
+    function onTurnstileSuccess(token) {
+      turnstileToken = token;
+      console.log("✅ Turnstile token received");
+    }
+
+    // Called when Turnstile token expires (they last ~5 min)
+    function onTurnstileExpired() {
+      turnstileToken = null;
+      console.log("⏳ Turnstile token expired — will re-challenge on next submit");
+    }
+
+    // Called on Turnstile error
+    function onTurnstileError() {
+      turnstileToken = null;
+      showMsg("msg", "CAPTCHA error — please refresh the page.", "error");
+    }
+
+    // Render Turnstile widget (invisible mode — no puzzle for users, just bot detection)
+    function initTurnstile() {
+      if (!window.turnstile) {
+        // SDK not ready yet — retry in 200ms
+        setTimeout(initTurnstile, 200);
+        return;
+      }
+      if (turnstileWidgetId !== null) {
+        // Already rendered — just reset it
+        window.turnstile.reset(turnstileWidgetId);
+        return;
+      }
+      turnstileWidgetId = window.turnstile.render("#cf-turnstile-container", {
+        sitekey:           TURNSTILE_SITE_KEY,
+        callback:          onTurnstileSuccess,
+        "expired-callback": onTurnstileExpired,
+        "error-callback":  onTurnstileError,
+        // "invisible" appearance — no widget shown to user, just runs in background
+        appearance:        "interaction-only",
+        theme:             "dark",
+      });
+    }
+
+    // ── Detect password-reset flow from URL hash ──────────────
+    function getHashParams() {
+      const hash = window.location.hash.substring(1);
+      return Object.fromEntries(new URLSearchParams(hash));
+    }
+
+    const hashParams = getHashParams();
+    const isRecovery = hashParams.type === "recovery" && hashParams.access_token;
+
+    if (isRecovery) {
+      sb.auth.setSession({
+        access_token:  hashParams.access_token,
+        refresh_token: hashParams.refresh_token || ""
+      }).then(() => {
+        document.getElementById("authScreen").style.display  = "none";
+        document.getElementById("resetScreen").style.display = "block";
+        history.replaceState(null, "", window.location.pathname);
+      });
+    } else {
+      sb.auth.onAuthStateChange((event, session) => {
+        if (event === "SIGNED_IN" && session) window.location.href = "/";
+      });
+      sb.auth.getSession().then(({ data }) => {
+        if (data.session) window.location.href = "/";
+      });
+
+      // Start Turnstile as soon as the page loads
+      window.addEventListener("DOMContentLoaded", initTurnstile);
+      // Also fire immediately in case DOMContentLoaded already fired
+      if (document.readyState !== "loading") initTurnstile();
+    }
+
+    // ── Login / Signup ────────────────────────────────────────
+    let currentTab = "login";
+
+    function switchTab(tab) {
+      currentTab = tab;
+      const isLogin = tab === "login";
+      document.getElementById("tab-login").className  = "tab" + (isLogin ? " active" : "");
+      document.getElementById("tab-signup").className = "tab" + (!isLogin ? " active" : "");
+      document.getElementById("confirmField").style.display = isLogin ? "none" : "block";
+      document.getElementById("forgotBtn").style.display    = isLogin ? "inline" : "none";
+      document.getElementById("submitBtn").textContent      = isLogin ? "Log in" : "Create account";
+      document.getElementById("switchRow").innerHTML = isLogin
+        ? `Don't have an account? <span onclick="switchTab('signup')">Sign up</span>`
+        : `Already have an account? <span onclick="switchTab('login')">Log in</span>`;
+      clearMsg("msg");
+      // Re-challenge Turnstile on tab switch so token is fresh
+      if (turnstileWidgetId !== null) window.turnstile.reset(turnstileWidgetId);
+      turnstileToken = null;
+    }
+
+    function showMsg(id, text, type) {
+      const el = document.getElementById(id);
+      el.textContent = text;
+      el.className = "msg " + type;
+    }
+    function clearMsg(id) {
+      document.getElementById(id).className = "msg";
+    }
+
+    async function doSubmit() {
+      const email    = document.getElementById("email").value.trim();
+      const password = document.getElementById("password").value;
+      const btn      = document.getElementById("submitBtn");
+
+      if (!email || !password) return showMsg("msg", "Please fill in all fields.", "error");
+
+      // ✅ CAPTCHA CHECK — wait up to 5s for Turnstile token if not yet ready
+      if (!turnstileToken) {
+        btn.disabled = true;
+        btn.textContent = "Verifying…";
+        const tokenAcquired = await waitForTurnstile(5000);
+        if (!tokenAcquired) {
+          btn.disabled = false;
+          btn.textContent = currentTab === "login" ? "Log in" : "Create account";
+          return showMsg("msg", "CAPTCHA verification timed out. Please try again.", "error");
+        }
+      }
+
+      if (currentTab === "signup") {
+        const confirm = document.getElementById("confirm").value;
+        if (password !== confirm) return showMsg("msg", "Passwords do not match.", "error");
+        if (password.length < 6)  return showMsg("msg", "Password must be at least 6 characters.", "error");
+
+        btn.disabled = true; btn.textContent = "Creating account…";
+        const { error } = await sb.auth.signUp({
+          email,
+          password,
+          options: { captchaToken: turnstileToken }  // ✅ pass token
+        });
+        turnstileToken = null;
+        if (turnstileWidgetId !== null) window.turnstile.reset(turnstileWidgetId);
+
+        if (error) {
+          showMsg("msg", error.message, "error");
+          btn.disabled = false; btn.textContent = "Create account";
+        } else {
+          showMsg("msg", "✅ Account created! Check your email to confirm, then log in.", "success");
+          btn.disabled = false; btn.textContent = "Create account";
+        }
+
+      } else {
+        btn.disabled = true; btn.textContent = "Logging in…";
+        const { error } = await sb.auth.signInWithPassword({
+          email,
+          password,
+          options: { captchaToken: turnstileToken }  // ✅ pass token
+        });
+        turnstileToken = null;
+        if (turnstileWidgetId !== null) window.turnstile.reset(turnstileWidgetId);
+
+        if (error) {
+          showMsg("msg", error.message, "error");
+          btn.disabled = false; btn.textContent = "Log in";
+        } else {
+          window.location.href = "/";
+        }
+      }
+    }
+
+    // Helper: poll for Turnstile token with a timeout
+    function waitForTurnstile(timeoutMs) {
+      return new Promise((resolve) => {
+        const start    = Date.now();
+        const interval = setInterval(() => {
+          if (turnstileToken) {
+            clearInterval(interval);
+            resolve(true);
+          } else if (Date.now() - start > timeoutMs) {
+            clearInterval(interval);
+            resolve(false);
+          }
+        }, 100);
+      });
+    }
+
+    async function doGitHub() {
+      await sb.auth.signInWithOAuth({
+        provider: "github",
+        options: { redirectTo: window.location.origin }
+      });
+    }
+
+    async function doGoogle() {
+      await sb.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: window.location.origin }
+      });
+    }
+
+    async function doForgot() {
+      const email = document.getElementById("email").value.trim();
+      if (!email) return showMsg("msg", "Enter your email above first.", "error");
+      const { error } = await sb.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + "/auth"
+      });
+      if (error) showMsg("msg", error.message, "error");
+      else showMsg("msg", "✅ Password reset email sent! Check your inbox.", "success");
+    }
+
+    // Enter key support
+    document.addEventListener("keydown", e => {
+      if (e.key === "Enter") {
+        if (isRecovery) doResetPassword();
+        else doSubmit();
+      }
+    });
+
+    // ── Password strength meter ───────────────────────────────
+    function checkStrength(pw) {
+      const bar  = document.getElementById("strengthBar");
+      const hint = document.getElementById("strengthHint");
+      let score = 0;
+      if (pw.length >= 6)  score++;
+      if (pw.length >= 10) score++;
+      if (/[A-Z]/.test(pw)) score++;
+      if (/[0-9]/.test(pw)) score++;
+      if (/[^A-Za-z0-9]/.test(pw)) score++;
+      const levels = [
+        { pct: "0%",   color: "#333",    label: "At least 6 characters" },
+        { pct: "25%",  color: "#e06c6c", label: "Weak" },
+        { pct: "50%",  color: "#e0a46c", label: "Fair" },
+        { pct: "75%",  color: "#d4e06c", label: "Good" },
+        { pct: "100%", color: "#10a37f", label: "Strong 💪" },
+      ];
+      const lvl = levels[Math.min(score, 4)];
+      bar.style.width      = lvl.pct;
+      bar.style.background = lvl.color;
+      hint.textContent     = lvl.label;
+    }
+
+    // ── Handle actual password update ─────────────────────────
+    async function doResetPassword() {
+      const newPw  = document.getElementById("newPassword").value;
+      const confPw = document.getElementById("newConfirm").value;
+      const btn    = document.getElementById("resetBtn");
+
+      if (!newPw || !confPw) return showMsg("resetMsg", "Please fill in both fields.", "error");
+      if (newPw !== confPw)  return showMsg("resetMsg", "Passwords do not match.", "error");
+      if (newPw.length < 6)  return showMsg("resetMsg", "Password must be at least 6 characters.", "error");
+
+      btn.disabled = true; btn.textContent = "Updating…";
+      const { error } = await sb.auth.updateUser({ password: newPw });
+      if (error) {
+        showMsg("resetMsg", error.message, "error");
+        btn.disabled = false; btn.textContent = "Update password";
+      } else {
+        showMsg("resetMsg", "✅ Password updated! Redirecting to login…", "success");
+        await sb.auth.signOut();
+        setTimeout(() => { window.location.href = "/auth"; }, 2000);
+      }
+    }
+  </script>
 
     // ── Detect password-reset flow from URL hash ──────────────
     // Supabase appends #access_token=...&type=recovery to the redirectTo URL
@@ -305,23 +583,6 @@
       sb.auth.getSession().then(({ data }) => {
         if (data.session) window.location.href = "/";
       });
-    }
-
-    // ── Login / Signup ────────────────────────────────────────
-    let currentTab = "login";
-
-    function switchTab(tab) {
-      currentTab = tab;
-      const isLogin = tab === "login";
-      document.getElementById("tab-login").className  = "tab" + (isLogin ? " active" : "");
-      document.getElementById("tab-signup").className = "tab" + (!isLogin ? " active" : "");
-      document.getElementById("confirmField").style.display = isLogin ? "none" : "block";
-      document.getElementById("forgotBtn").style.display    = isLogin ? "inline" : "none";
-      document.getElementById("submitBtn").textContent      = isLogin ? "Log in" : "Create account";
-      document.getElementById("switchRow").innerHTML        = isLogin
-        ? 'Don\'t have an account? <span onclick="switchTab(\'signup\')">Sign up</span>'
-        : 'Already have an account? <span onclick="switchTab(\'login\')">Log in</span>';
-      clearMsg("msg");
     }
 
     function showMsg(id, text, type) {
