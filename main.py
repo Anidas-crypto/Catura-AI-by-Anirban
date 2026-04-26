@@ -99,7 +99,7 @@ async def serve_sw():
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "26.4.31"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "26.4.32"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -109,7 +109,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "26.4.31", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "26.4.32", "timestamp": datetime.utcnow().isoformat()}
 
 
 # ============================================================
@@ -557,6 +557,66 @@ async def detect_intent_endpoint(q: str):
 async def web_search_endpoint(q: str, max_results: int = 5):
     result = tool_web_search(q, max_results)
     return {"results": result.get("results", []), "query": q}
+
+
+# ============================================================
+# ✅ DELETE ACCOUNT ENDPOINT
+# Deletes the user from Supabase using the Admin API.
+# The session cookie identifies who is making the request.
+# ============================================================
+@app.post("/delete_account")
+async def delete_account(request: Request):
+    """
+    Deletes the authenticated user's Supabase account.
+    Requires SUPABASE_SERVICE_KEY (service_role key — keep secret, server-only).
+    """
+    try:
+        # Get the user's JWT from the Authorization header or cookie
+        auth_header = request.headers.get("Authorization", "")
+        token = auth_header.replace("Bearer ", "").strip()
+
+        if not token:
+            return JSONResponse({"error": "Not authenticated"}, status_code=401)
+
+        # Verify the token and get the user ID using the regular client
+        try:
+            user_resp = supabase.auth.get_user(token)
+            user_id   = user_resp.user.id
+        except Exception as e:
+            return JSONResponse({"error": f"Auth verification failed: {str(e)}"}, status_code=401)
+
+        if not user_id:
+            return JSONResponse({"error": "Could not identify user"}, status_code=401)
+
+        # Use the Admin API (requires service_role key) to hard-delete the user
+        service_key = os.getenv("SUPABASE_SERVICE_KEY", "")
+        if not service_key:
+            return JSONResponse(
+                {"error": "Account deletion is not configured yet. Please contact support."},
+                status_code=501
+            )
+
+        admin_resp = requests.delete(
+            f"{SUPABASE_URL}/auth/v1/admin/users/{user_id}",
+            headers={
+                "apikey":        service_key,
+                "Authorization": f"Bearer {service_key}",
+                "Content-Type":  "application/json",
+            },
+            timeout=10,
+        )
+
+        if admin_resp.status_code in (200, 204):
+            print(f"✅ [DELETE_ACCOUNT] User {user_id} deleted successfully")
+            return JSONResponse({"success": True, "message": "Account deleted successfully"})
+        else:
+            err = admin_resp.json().get("message", f"HTTP {admin_resp.status_code}")
+            print(f"❌ [DELETE_ACCOUNT] Failed for {user_id}: {err}")
+            return JSONResponse({"error": err}, status_code=admin_resp.status_code)
+
+    except Exception as e:
+        print(f"❌ [DELETE_ACCOUNT] Exception: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 
 # ============================================================

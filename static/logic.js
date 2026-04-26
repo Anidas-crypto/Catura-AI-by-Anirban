@@ -1084,23 +1084,80 @@ window.showSettingsTab = function (tab, clickedEl) {
         privacy: `
             <div class="sc-section">
                 <div class="sc-section-title">Privacy controls</div>
-                <div class="sc-row disabled">
+
+                <!-- ✅ Data & Privacy — clickable, opens modal -->
+                <div class="sc-row" onclick="showPrivacyModal()" style="cursor:pointer;">
                     <svg class="sc-row-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
                     </svg>
                     <div class="sc-row-body">
                         <p class="sc-row-label">Data & privacy</p>
-                        <p class="sc-row-sub soon">Coming soon</p>
+                        <p class="sc-row-sub">View how we collect and use your data</p>
                     </div>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-left:8px;">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
                 </div>
-                <div class="sc-row disabled">
+
+                <!-- ✅ Delete my account — clickable, opens confirm popup -->
+                <div class="sc-row danger" onclick="showDeleteAccountModal()" style="cursor:pointer;">
                     <svg class="sc-row-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-                        <path d="M12 8v4M12 16h.01"></path>
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                        <path d="M10 11v6M14 11v6"></path>
+                        <path d="M9 6V4h6v2"></path>
                     </svg>
                     <div class="sc-row-body">
-                        <p class="sc-row-label">Delete my account</p>
-                        <p class="sc-row-sub soon">Coming soon</p>
+                        <p class="sc-row-label" style="color:#e06c6c;">Delete my account</p>
+                        <p class="sc-row-sub">Permanently delete your account and all data</p>
+                    </div>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#e06c6c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-left:8px;">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                </div>
+            </div>
+
+            <!-- Toggles section -->
+            <div class="sc-section">
+                <div class="sc-section-title">Data preferences</div>
+
+                <!-- Toggle 1: Location metadata — coming soon -->
+                <div class="sc-row-block">
+                    <div class="sc-row-top">
+                        <div class="sc-row-icon-wrap">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+                                <circle cx="12" cy="10" r="3"></circle>
+                            </svg>
+                        </div>
+                        <div class="sc-row-body">
+                            <p class="sc-row-label">Location metadata</p>
+                            <p class="sc-row-sub">Allow approximate location to improve responses <span class="badge-soon">Coming soon</span></p>
+                        </div>
+                        <label class="toggle-switch disabled-toggle" title="Coming soon">
+                            <input type="checkbox" disabled>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Toggle 2: Help to improve us — coming soon -->
+                <div class="sc-row-block">
+                    <div class="sc-row-top">
+                        <div class="sc-row-icon-wrap">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"></path>
+                                <path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"></path>
+                            </svg>
+                        </div>
+                        <div class="sc-row-body">
+                            <p class="sc-row-label">Help to improve us</p>
+                            <p class="sc-row-sub">Share anonymized usage data to help improve Catura AI <span class="badge-soon">Coming soon</span></p>
+                        </div>
+                        <label class="toggle-switch disabled-toggle" title="Coming soon">
+                            <input type="checkbox" disabled>
+                            <span class="toggle-slider"></span>
+                        </label>
                     </div>
                 </div>
             </div>`,
@@ -1943,3 +2000,219 @@ document.addEventListener('click', function (e) {
 function getSelectedModel() {
     return selectedModel;
 }
+
+// ============================================================
+// ✅ PRIVACY POLICY MODAL
+// ============================================================
+window.showPrivacyModal = function () {
+    // Remove any existing
+    document.getElementById('privacyModal')?.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'privacyModal';
+    modal.className = 'priv-modal-overlay';
+    modal.innerHTML = `
+        <div class="priv-modal-box" role="dialog" aria-modal="true" aria-label="Data & Privacy">
+            <div class="priv-modal-header">
+                <div class="priv-modal-title-wrap">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10a37f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                    </svg>
+                    <h2 class="priv-modal-title">Data &amp; Privacy</h2>
+                </div>
+                <button class="priv-modal-close" onclick="document.getElementById('privacyModal').remove()" aria-label="Close">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="priv-modal-body">
+                <p class="priv-intro">We respect your privacy and are committed to protecting your data.</p>
+
+                <div class="priv-item">
+                    <div class="priv-num">1</div>
+                    <div>
+                        <p class="priv-item-title">Data We Collect</p>
+                        <p class="priv-item-text">We may collect basic information such as your email address, chat messages, and usage data to improve our AI services.</p>
+                    </div>
+                </div>
+                <div class="priv-item">
+                    <div class="priv-num">2</div>
+                    <div>
+                        <p class="priv-item-title">How We Use Your Data</p>
+                        <p class="priv-item-text">Your data is used to provide responses, improve AI performance, and ensure security. We do not sell your personal data to third parties.</p>
+                    </div>
+                </div>
+                <div class="priv-item">
+                    <div class="priv-num">3</div>
+                    <div>
+                        <p class="priv-item-title">AI Conversations</p>
+                        <p class="priv-item-text">Your conversations may be stored and analyzed to improve the quality of responses. Avoid sharing sensitive or personal information.</p>
+                    </div>
+                </div>
+                <div class="priv-item">
+                    <div class="priv-num">4</div>
+                    <div>
+                        <p class="priv-item-title">Email &amp; Authentication</p>
+                        <p class="priv-item-text">We use your email for account creation, login verification (OTP), and password recovery. We do not send spam.</p>
+                    </div>
+                </div>
+                <div class="priv-item">
+                    <div class="priv-num">5</div>
+                    <div>
+                        <p class="priv-item-title">Data Security</p>
+                        <p class="priv-item-text">We implement reasonable security measures to protect your data, but no system is completely secure.</p>
+                    </div>
+                </div>
+                <div class="priv-item">
+                    <div class="priv-num">6</div>
+                    <div>
+                        <p class="priv-item-title">Third-Party Services</p>
+                        <p class="priv-item-text">We may use trusted third-party services (such as authentication and email providers) to operate our platform.</p>
+                    </div>
+                </div>
+                <div class="priv-item">
+                    <div class="priv-num">7</div>
+                    <div>
+                        <p class="priv-item-title">Your Control</p>
+                        <p class="priv-item-text">You can request deletion of your data at any time by contacting support.</p>
+                    </div>
+                </div>
+                <div class="priv-item">
+                    <div class="priv-num">8</div>
+                    <div>
+                        <p class="priv-item-title">Changes to Policy</p>
+                        <p class="priv-item-text">We may update this policy from time to time. Continued use of the service means you accept the changes.</p>
+                    </div>
+                </div>
+
+                <div class="priv-contact">
+                    <p class="priv-contact-title">Contact Us</p>
+                    <div class="priv-contact-row">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10a37f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                            <polyline points="22,6 12,13 2,6"></polyline>
+                        </svg>
+                        <a href="mailto:support@yourdomain.co" class="priv-link">support@yourdomain.co</a>
+                    </div>
+                    <div class="priv-contact-row">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10a37f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path>
+                        </svg>
+                        <a href="https://github.com/**************" target="_blank" rel="noopener" class="priv-link">github.com/**************</a>
+                    </div>
+                    <div class="priv-contact-row">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10a37f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"></path>
+                            <rect x="2" y="9" width="4" height="12"></rect>
+                            <circle cx="4" cy="4" r="2"></circle>
+                        </svg>
+                        <a href="https://linkedin.com/in/************************" target="_blank" rel="noopener" class="priv-link">linkedin.com/in/************************</a>
+                    </div>
+                </div>
+            </div>
+            <div class="priv-modal-footer">
+                <button class="priv-close-btn" onclick="document.getElementById('privacyModal').remove()">Close</button>
+            </div>
+        </div>
+    `;
+
+    // Close on backdrop click
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.remove();
+    });
+
+    document.body.appendChild(modal);
+    // Animate in
+    requestAnimationFrame(() => modal.classList.add('priv-modal-open'));
+};
+
+// ============================================================
+// ✅ DELETE ACCOUNT MODAL
+// ============================================================
+window.showDeleteAccountModal = function () {
+    document.getElementById('deleteAccountModal')?.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'deleteAccountModal';
+    modal.className = 'priv-modal-overlay';
+    modal.innerHTML = `
+        <div class="priv-modal-box del-modal-box" role="dialog" aria-modal="true" aria-label="Delete Account">
+            <div class="del-modal-icon-wrap">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#e06c6c" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                    <path d="M10 11v6M14 11v6"></path>
+                    <path d="M9 6V4h6v2"></path>
+                </svg>
+            </div>
+            <h2 class="del-modal-title">Delete Account</h2>
+            <p class="del-modal-desc">This action is <strong>permanent and irreversible</strong>. All your conversations, settings, and account data will be deleted forever.</p>
+            <p class="del-modal-confirm-label">Type <span class="del-confirm-word">DELETE</span> to confirm:</p>
+            <input type="text" id="deleteConfirmInput" class="del-confirm-input" placeholder="Type DELETE here" autocomplete="off" oninput="checkDeleteConfirm()">
+            <div class="del-modal-actions">
+                <button class="del-cancel-btn" onclick="document.getElementById('deleteAccountModal').remove()">Cancel</button>
+                <button class="del-confirm-btn" id="deleteConfirmBtn" disabled onclick="executeDeleteAccount()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                    </svg>
+                    Delete my account
+                </button>
+            </div>
+        </div>
+    `;
+
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.remove();
+    });
+
+    document.body.appendChild(modal);
+    requestAnimationFrame(() => modal.classList.add('priv-modal-open'));
+
+    // Focus input
+    setTimeout(() => document.getElementById('deleteConfirmInput')?.focus(), 100);
+};
+
+// Enable the delete button only when user types "DELETE"
+window.checkDeleteConfirm = function () {
+    const val = document.getElementById('deleteConfirmInput')?.value || '';
+    const btn = document.getElementById('deleteConfirmBtn');
+    if (btn) btn.disabled = val !== 'DELETE';
+};
+
+// Execute account deletion via Supabase
+window.executeDeleteAccount = async function () {
+    const btn = document.getElementById('deleteConfirmBtn');
+    if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Deleting…'; }
+
+    try {
+        // Get the current session token to authenticate the request
+        const { data: sessionData } = await supabaseClient.auth.getSession();
+        const token = sessionData?.session?.access_token;
+
+        if (!token) {
+            alert('You are not logged in. Please refresh and try again.');
+            if (btn) { btn.disabled = false; btn.textContent = 'Delete my account'; }
+            return;
+        }
+
+        const res = await fetch('/delete_account', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (res.ok) {
+            document.getElementById('deleteAccountModal').remove();
+            await supabaseClient.auth.signOut();
+            window.location.href = '/auth';
+        } else {
+            const data = await res.json().catch(() => ({}));
+            alert(data.error || 'Failed to delete account. Please contact support.');
+            if (btn) { btn.disabled = false; btn.textContent = 'Delete my account'; }
+        }
+    } catch (e) {
+        alert('Network error. Please try again.');
+        if (btn) { btn.disabled = false; btn.textContent = 'Delete my account'; }
+    }
+};

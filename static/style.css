@@ -2614,3 +2614,359 @@ html { scroll-behavior: smooth; }
 .web-search-chip svg {
     flex-shrink: 0;
 }
+
+/* ============================================================
+   ✅ PRIVACY MODAL & DELETE ACCOUNT MODAL
+   ============================================================ */
+
+/* Shared overlay */
+.priv-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(4px);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+.priv-modal-overlay.priv-modal-open { opacity: 1; }
+
+/* Shared modal box */
+.priv-modal-box {
+    background: #141414;
+    border: 1px solid #222;
+    border-radius: 16px;
+    width: 100%;
+    max-width: 520px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+    transform: translateY(16px);
+    transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+    overflow: hidden;
+}
+.priv-modal-overlay.priv-modal-open .priv-modal-box {
+    transform: translateY(0);
+}
+
+/* Privacy modal header */
+.priv-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid #1e1e1e;
+    flex-shrink: 0;
+}
+.priv-modal-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.priv-modal-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: #f0f0f0;
+    margin: 0;
+}
+.priv-modal-close {
+    background: none;
+    border: none;
+    color: #666;
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    transition: background 0.15s, color 0.15s;
+}
+.priv-modal-close:hover { background: #222; color: #ccc; }
+
+/* Privacy modal scrollable body */
+.priv-modal-body {
+    overflow-y: auto;
+    padding: 20px 24px;
+    flex: 1;
+    scrollbar-width: thin;
+    scrollbar-color: #333 transparent;
+}
+.priv-modal-body::-webkit-scrollbar { width: 4px; }
+.priv-modal-body::-webkit-scrollbar-track { background: transparent; }
+.priv-modal-body::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+
+.priv-intro {
+    font-size: 13.5px;
+    color: #aaa;
+    margin: 0 0 20px;
+    line-height: 1.6;
+    font-style: italic;
+}
+
+/* Numbered policy items */
+.priv-item {
+    display: flex;
+    gap: 14px;
+    margin-bottom: 16px;
+    align-items: flex-start;
+}
+.priv-num {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    background: #10a37f22;
+    border: 1px solid #10a37f44;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: #10a37f;
+    margin-top: 1px;
+}
+.priv-item-title {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #e0e0e0;
+    margin: 0 0 4px;
+}
+.priv-item-text {
+    font-size: 12.5px;
+    color: #888;
+    margin: 0;
+    line-height: 1.6;
+}
+
+/* Contact section */
+.priv-contact {
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid #1e1e1e;
+}
+.priv-contact-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #ccc;
+    margin: 0 0 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+.priv-contact-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+.priv-link {
+    font-size: 12.5px;
+    color: #10a37f;
+    text-decoration: none;
+    border-bottom: 1px solid #10a37f44;
+    transition: border-color 0.15s;
+}
+.priv-link:hover { border-bottom-color: #10a37f; }
+
+/* Privacy modal footer */
+.priv-modal-footer {
+    padding: 14px 24px;
+    border-top: 1px solid #1e1e1e;
+    display: flex;
+    justify-content: flex-end;
+    flex-shrink: 0;
+}
+.priv-close-btn {
+    background: #1e1e1e;
+    border: 1px solid #2a2a2a;
+    color: #ccc;
+    padding: 8px 20px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+.priv-close-btn:hover { background: #252525; border-color: #333; }
+
+/* ── Delete Account Modal ── */
+.del-modal-box {
+    max-width: 420px;
+    text-align: center;
+    padding: 36px 32px 28px;
+}
+.del-modal-icon-wrap {
+    width: 72px;
+    height: 72px;
+    background: rgba(224, 108, 108, 0.08);
+    border: 1px solid rgba(224, 108, 108, 0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 20px;
+}
+.del-modal-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: #f0f0f0;
+    margin: 0 0 12px;
+}
+.del-modal-desc {
+    font-size: 13.5px;
+    color: #888;
+    line-height: 1.65;
+    margin: 0 0 20px;
+}
+.del-modal-desc strong { color: #e06c6c; }
+.del-modal-confirm-label {
+    font-size: 13px;
+    color: #aaa;
+    margin: 0 0 10px;
+    text-align: left;
+}
+.del-confirm-word {
+    font-family: monospace;
+    font-weight: 700;
+    color: #e06c6c;
+    background: rgba(224,108,108,0.1);
+    padding: 1px 6px;
+    border-radius: 4px;
+}
+.del-confirm-input {
+    width: 100%;
+    background: #0e0e0e;
+    border: 1px solid #2a2a2a;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 14px;
+    color: #f0f0f0;
+    margin-bottom: 20px;
+    box-sizing: border-box;
+    outline: none;
+    transition: border-color 0.15s;
+    text-align: center;
+    letter-spacing: 0.08em;
+}
+.del-confirm-input:focus { border-color: #e06c6c55; }
+.del-confirm-input::placeholder { color: #444; letter-spacing: 0; }
+.del-modal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+.del-cancel-btn {
+    flex: 1;
+    background: #1e1e1e;
+    border: 1px solid #2a2a2a;
+    color: #ccc;
+    padding: 10px 0;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.del-cancel-btn:hover { background: #252525; }
+.del-confirm-btn {
+    flex: 1;
+    background: #e06c6c;
+    border: none;
+    color: #fff;
+    padding: 10px 0;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: background 0.15s, opacity 0.15s;
+}
+.del-confirm-btn:hover:not(:disabled) { background: #c85c5c; }
+.del-confirm-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ── Toggle switches (coming soon) ── */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 22px;
+    flex-shrink: 0;
+}
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-slider {
+    position: absolute;
+    inset: 0;
+    background: #2a2a2a;
+    border-radius: 22px;
+    cursor: pointer;
+    transition: background 0.2s;
+    border: 1px solid #333;
+}
+.toggle-slider::before {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    left: 2px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: #555;
+    border-radius: 50%;
+    transition: transform 0.2s, background 0.2s;
+}
+.toggle-switch input:checked + .toggle-slider { background: #10a37f; border-color: #10a37f; }
+.toggle-switch input:checked + .toggle-slider::before {
+    transform: translateX(18px) translateY(-50%);
+    background: #fff;
+}
+.toggle-switch.disabled-toggle { opacity: 0.4; cursor: not-allowed; }
+.toggle-switch.disabled-toggle .toggle-slider { cursor: not-allowed; }
+
+/* "Coming soon" inline badge */
+.badge-soon {
+    display: inline-block;
+    background: rgba(16, 163, 127, 0.12);
+    border: 1px solid rgba(16, 163, 127, 0.3);
+    color: #10a37f;
+    font-size: 10px;
+    font-style: italic;
+    padding: 1px 6px;
+    border-radius: 10px;
+    margin-left: 6px;
+    vertical-align: middle;
+    font-weight: 500;
+}
+
+/* sc-row-icon-wrap used in toggle rows */
+.sc-row-icon-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    flex-shrink: 0;
+    color: #666;
+}
+
+/* Light theme overrides */
+[data-theme="light"] .priv-modal-box,
+[data-theme="light"] .del-modal-box { background: #fff; border-color: #ddd; }
+[data-theme="light"] .priv-modal-header,
+[data-theme="light"] .priv-modal-footer,
+[data-theme="light"] .priv-contact { border-color: #eee; }
+[data-theme="light"] .priv-modal-title,
+[data-theme="light"] .priv-item-title,
+[data-theme="light"] .del-modal-title { color: #111; }
+[data-theme="light"] .priv-intro,
+[data-theme="light"] .priv-item-text,
+[data-theme="light"] .del-modal-desc { color: #666; }
+[data-theme="light"] .priv-modal-close:hover { background: #f0f0f0; }
+[data-theme="light"] .priv-close-btn,
+[data-theme="light"] .del-cancel-btn { background: #f5f5f5; border-color: #ddd; color: #333; }
+[data-theme="light"] .del-confirm-input { background: #fafafa; border-color: #ddd; color: #111; }
+[data-theme="light"] .toggle-slider { background: #e0e0e0; border-color: #ccc; }
+[data-theme="light"] .toggle-slider::before { background: #aaa; }
+[data-theme="light"] .del-modal-icon-wrap { background: rgba(224,108,108,0.06); }
