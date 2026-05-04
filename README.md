@@ -185,6 +185,6 @@ Apache 2.0
 
 Built by **Anirban Das**
 
-Catura AI — Open AI Workspace
+Catura AI — modern open-source conversational intelligence.
 
 </div>
