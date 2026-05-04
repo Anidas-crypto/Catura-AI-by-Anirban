@@ -47,6 +47,7 @@ OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY", "")       # https://openw
 NEWSDATA_API_KEY    = os.getenv("NEWSDATA_API_KEY", "")           # https://newsdata.io (free)
 ALPHAVANTAGE_KEY    = os.getenv("ALPHAVANTAGE_API_KEY", "")       # https://www.alphavantage.co (free)
 CRICAPI_KEY         = os.getenv("CRICAPI_KEY", "")                # https://www.cricapi.com (free)
+GEMINI_API_KEY      = os.getenv("GEMINI_API_KEY", "")               # https://aistudio.google.com (free)
 
 
 # ============================================================
@@ -99,7 +100,7 @@ async def serve_sw():
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "26.4.33"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "26.4.34"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -109,7 +110,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "26.4.33", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "26.4.34", "timestamp": datetime.utcnow().isoformat()}
 
 
 # ============================================================
@@ -662,6 +663,69 @@ def call_openrouter_stream(model_id, messages, api_key, file_urls=None):
 
 
 # ============================================================
+# ✅ HELPER: Call Google Gemini with streaming
+# ============================================================
+def call_gemini_stream(messages, system_prompt):
+    """
+    Calls Gemini 2.5 Flash via Google AI Studio REST API with streaming.
+    Converts OpenAI-style messages to Gemini format.
+    """
+    if not GEMINI_API_KEY:
+        return None, "GEMINI_API_KEY not set in environment variables"
+
+    try:
+        # Build Gemini contents from messages (skip system role)
+        contents = []
+        for msg in messages:
+            role = msg["role"]
+            if role == "system":
+                continue  # handled via system_instruction
+            gemini_role = "user" if role == "user" else "model"
+            contents.append({
+                "role": gemini_role,
+                "parts": [{"text": msg["content"]}]
+            })
+
+        payload = {
+            "system_instruction": {"parts": [{"text": system_prompt}]},
+            "contents": contents,
+            "generationConfig": {
+                "temperature": 0.3,
+                "maxOutputTokens": 16000,
+            }
+        }
+
+        url = (
+            f"https://generativelanguage.googleapis.com/v1beta/models/"
+            f"gemini-2.5-flash-preview-04-17:streamGenerateContent"
+            f"?alt=sse&key={GEMINI_API_KEY}"
+        )
+
+        resp = requests.post(
+            url,
+            headers={"Content-Type": "application/json"},
+            json=payload,
+            stream=True,
+            timeout=(10, 120),
+        )
+
+        if resp.status_code != 200:
+            try:
+                err_body = resp.json()
+                err_msg = err_body.get("error", {}).get("message", f"HTTP {resp.status_code}")
+            except Exception:
+                err_msg = f"HTTP {resp.status_code}"
+            return None, err_msg
+
+        return resp, None
+
+    except requests.exceptions.Timeout:
+        return None, "Request timed out"
+    except Exception as e:
+        return None, str(e)
+
+
+# ============================================================
 # ✅ MAIN CHAT ENDPOINT (POST)
 # Full pipeline: intent → tool → context → AI → stream
 # ============================================================
@@ -702,6 +766,7 @@ async def chat_post(request: Request):
         model_pools = {
             "dagr": ["openai/gpt-oss-20b:free", "openai/gpt-oss-120b:free"],
             "apep": ["openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"],
+            "sambhav": [],  # Gemini — handled separately below
         }
         model_key  = model.lower().strip()
         model_pool = model_pools.get(model_key, model_pools["dagr"])
@@ -724,6 +789,40 @@ async def chat_post(request: Request):
         )
 
         system_prompts = {
+            "sambhav": (
+                # ── Identity ──
+                "Your name is Catura (pronounced kuh-CHUR-uh). You are a creative, thoughtful, and "
+                "highly capable AI assistant created by Anirban — an independent developer based in India. "
+                "You are Catura AI Sambhav, powered by advanced multimodal intelligence. "
+
+                # ── Personality & tone ──
+                "You are articulate, insightful, and adaptable. You speak clearly and helpfully. "
+                "Never start a response with 'Certainly!', 'Of course!', 'Great question!', "
+                "'Absolutely!', or similar hollow openers. Just answer directly. "
+
+                # ── Language behaviour ──
+                "If the user writes in Bengali, Hindi, or any other language, "
+                "respond naturally in that same language. Match the user's language automatically. "
+
+                # ── Response style ──
+                "Keep answers concise unless the user explicitly asks for detail. "
+                "Use bullet points or headers only when they genuinely improve clarity. "
+                "For simple questions, give simple answers. Don't pad responses. "
+
+                # ── Expertise ──
+                "You are knowledgeable about technology, science, reasoning, analysis, and creative tasks. "
+                "You excel at nuanced understanding and multi-step reasoning. "
+
+                # ── Identity rules ──
+                "If asked what model or AI you are, say you are Catura AI Sambhav and cannot share "
+                "details about the underlying technology. "
+                "If asked who made you, say 'I was created by Anirban.' "
+
+                # ── Hard rules ──
+                "Never make up facts. If you don't know something, say so honestly. "
+                "Never say 'I don't have real-time data' — if live data is provided in context, use it."
+                + NO_TOOL_CALL_RULE
+            ),
             "dagr": (
                 # ── Identity ──
                 "Your name is Catura (pronounced kuh-CHUR-uh). You are a smart, warm, and witty "
@@ -831,6 +930,63 @@ async def chat_post(request: Request):
         # Step 5: build final messages list
         messages = [{"role": "system", "content": system_prompt}] + user_memory[session_id][-20:]
         api_key  = os.getenv("OPENROUTER_API_KEY")
+
+        # ── SAMBHAV: Gemini direct streaming (bypass OpenRouter) ──────────
+        if model_key == "sambhav":
+            def generate_gemini():
+                full_reply = ""
+                if tool_result:
+                    badge_payload = json.dumps({"tool_used": tool_result.get("tool", ""), "intent": intent})
+                    yield f"data: {badge_payload}\n\n"
+
+                yield ": heartbeat\n\n"
+                resp, err = call_gemini_stream(user_memory[session_id][-20:], system_prompt)
+
+                if resp is None:
+                    yield f"data: {json.dumps({'error': f'Sambhav unavailable: {err}'})}\n\n"
+                    yield "data: [DONE]\n\n"
+                    return
+
+                try:
+                    for line in resp.iter_lines():
+                        if not line:
+                            continue
+                        decoded = line.decode("utf-8")
+                        if not decoded.startswith("data: "):
+                            continue
+                        payload = decoded[6:]
+                        if payload.strip() == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(payload)
+                            candidates = chunk.get("candidates", [])
+                            if not candidates:
+                                continue
+                            parts = candidates[0].get("content", {}).get("parts", [])
+                            for part in parts:
+                                token = part.get("text", "")
+                                if token:
+                                    full_reply += token
+                                    yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
+                        except (json.JSONDecodeError, Exception):
+                            continue
+                except Exception as e:
+                    print(f"❌ [Gemini] stream exception: {e}")
+
+                if full_reply.strip():
+                    user_memory[session_id].append({"role": "assistant", "content": full_reply})
+                    if len(user_memory[session_id]) > 40:
+                        user_memory[session_id] = user_memory[session_id][-40:]
+                yield "data: [DONE]\n\n"
+
+            return StreamingResponse(
+                generate_gemini(),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Set-Cookie": f"session_id={session_id}; Path=/; SameSite=Lax; Max-Age=31536000",
+                }
+            )
 
         # ── STREAMING GENERATOR ────────────────────────────────────────────
         def generate():
@@ -974,6 +1130,7 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
         model_pools = {
             "dagr": ["openai/gpt-oss-20b:free", "openai/gpt-oss-120b:free"],
             "apep": ["openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"],
+            "sambhav": [],  # Gemini — handled separately below
         }
         model_key  = model.lower().strip()
         model_pool = model_pools.get(model_key, model_pools["dagr"])
@@ -988,6 +1145,40 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
             "4. Always respond in clean, readable prose or markdown. Never output raw JSON."
         )
         system_prompts = {
+            "sambhav": (
+                # ── Identity ──
+                "Your name is Catura (pronounced kuh-CHUR-uh). You are a creative, thoughtful, and "
+                "highly capable AI assistant created by Anirban — an independent developer based in India. "
+                "You are Catura AI Sambhav, powered by advanced multimodal intelligence. "
+
+                # ── Personality & tone ──
+                "You are articulate, insightful, and adaptable. You speak clearly and helpfully. "
+                "Never start a response with 'Certainly!', 'Of course!', 'Great question!', "
+                "'Absolutely!', or similar hollow openers. Just answer directly. "
+
+                # ── Language behaviour ──
+                "If the user writes in Bengali, Hindi, or any other language, "
+                "respond naturally in that same language. Match the user's language automatically. "
+
+                # ── Response style ──
+                "Keep answers concise unless the user explicitly asks for detail. "
+                "Use bullet points or headers only when they genuinely improve clarity. "
+                "For simple questions, give simple answers. Don't pad responses. "
+
+                # ── Expertise ──
+                "You are knowledgeable about technology, science, reasoning, analysis, and creative tasks. "
+                "You excel at nuanced understanding and multi-step reasoning. "
+
+                # ── Identity rules ──
+                "If asked what model or AI you are, say you are Catura AI Sambhav and cannot share "
+                "details about the underlying technology. "
+                "If asked who made you, say 'I was created by Anirban.' "
+
+                # ── Hard rules ──
+                "Never make up facts. If you don't know something, say so honestly. "
+                "Never say 'I don't have real-time data' — if live data is provided in context, use it."
+                + NO_TOOL_CALL_RULE
+            ),
             "dagr": (
                 "Your name is Catura. You are a smart, warm, and witty AI assistant created by Anirban. "
                 "You are Catura AI Dagr, the general-purpose model. "
