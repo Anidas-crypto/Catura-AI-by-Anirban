@@ -1,99 +1,130 @@
 <div align="center">
 
-<img src="static/icons/catura ai official.png" alt="Catura AI Logo" width="200"/>
+[![Catura AI](static/icons/catura-ai-official.png)](https://my-ai-assistant-9bbd.onrender.com/)
+
+[![✨ Live Demo](https://img.shields.io/badge/✨_Live_Demo-Visit_App-6366f1?style=for-the-badge)](https://my-ai-assistant-9bbd.onrender.com/)
+[![📦 Open Source](https://img.shields.io/badge/Open_Source-Yes-8b5cf6?style=for-the-badge)](https://github.com/Anidas-crypto/Catura-AI-by-Anirban)
+[![⚡ FastAPI](https://img.shields.io/badge/Backend-FastAPI-10b981?style=for-the-badge)]
+[![License](https://img.shields.io/badge/License-Apache_2.0-yellow?style=for-the-badge)]
 
 # Catura AI
 
 ### A modern AI workspace for chat, web search, memory, and code generation.
 
 <p align="center">
-  <img src="https://readme-typing-svg.demolab.com?font=Inter&weight=500&size=20&duration=2800&pause=900&center=true&vCenter=true&width=700&lines=Modern+AI+Conversations;Web+Search+and+Contextual+Memory;Markdown+Support+and+Code+Generation;Built+for+Developers%2C+Learners+and+Productivity" alt="Typing SVG" />
-</p>
-
-<p align="center">
-  <a href="https://my-ai-assistant-9bbd.onrender.com/"><img src="https://img.shields.io/badge/Live-Demo-0f172a?style=for-the-badge" /></a>
-  <a href="https://github.com/Anidas-crypto/Catura-AI-by-Anirban"><img src="https://img.shields.io/badge/GitHub-Repository-0f172a?style=for-the-badge" /></a>
-  <img src="https://img.shields.io/badge/Open%20Source-Yes-0f172a?style=for-the-badge" />
+  <img src="https://readme-typing-svg.demolab.com?font=Inter&size=20&duration=2500&pause=800&center=true&vCenter=true&width=750&lines=Chat+Smarter.;Search+Faster.;Remember+Context.;Generate+Code." />
 </p>
 
 </div>
 
 ---
 
-## Overview
+## 🧠 What is Catura AI?
 
-**Catura AI** is a modern conversational AI platform designed for fast, contextual, and productive interactions.
+Catura AI is not just another chatbot.
 
-Built with a clean and focused interface, Catura AI combines intelligent conversation, web-assisted search, memory-aware responses, markdown rendering, and code generation in a single workspace.
+It is a **working AI environment** designed to handle real tasks — combining conversation, web search, memory, and code generation into a single system.
 
-The project is designed to provide a smooth user experience for developers, learners, researchers, and everyday users who need a capable AI assistant for modern workflows.
-
----
-
-## Open Source
-
-Catura AI is **fully open source**.
-
-Anyone can:
-
-- study the architecture
-- use the source code
-- modify and extend the project
-- build their own AI products on top of it
-
-Contributions, experimentation, and community improvements are welcome.
+Instead of switching tools, everything happens in one place.
 
 ---
 
-## Core Features
+## ⚡ Why Catura AI?
 
-- **AI Chat** — fast conversational interaction
-- **Web Search** — external knowledge access
-- **Memory** — context-aware conversations
-- **Markdown Support** — clean rendering of structured responses
-- **Authentication / Login** — user account access
-- **Code Generation** — development-oriented assistance
-- **File Upload** — currently in active development
+Most AI tools:
+- forget context  
+- give generic answers  
+- don’t integrate workflows  
+
+**Catura AI is built differently:**
+
+- remembers context  
+- searches when needed  
+- formats responses cleanly  
+- assists in real development tasks  
+
+> It behaves more like a system than a chatbot.
 
 ---
 
-## Technology Stack
+## 🔁 How it works
 
-### Frontend
-- HTML
-- CSS
-- JavaScript
+```
+User Input
+   ↓
+Context Engine
+   ↓
+Memory + Web Search
+   ↓
+AI Processing (OpenRouter)
+   ↓
+Structured Response (Markdown / Code)
+```
 
-### Backend
-- Python
-- FastAPI
+Everything is handled behind the scenes — so you just focus on the task.
 
-### Database
+---
+
+## 🚀 Core Capabilities
+
+| Capability | What it actually means |
+|-----------|----------------------|
+| 💬 **Smart Chat** | Context-aware conversations that don’t reset every message |
+| 🌐 **Web Search** | Pulls real-time information when needed |
+| 🧠 **Memory** | Keeps track of context across interactions |
+| 🧾 **Markdown Output** | Clean, structured, readable responses |
+| 🔐 **Authentication** | Secure user sessions |
+| 💻 **Code Generation** | Practical help for developers |
+| 📁 **File Upload (WIP)** | Expanding toward document-aware AI |
+
+---
+
+## 🌍 Live Project
+
+| | |
+|--|--|
+| 🔗 **Live App** | https://my-ai-assistant-9bbd.onrender.com/ |
+| 💻 **Repository** | https://github.com/Anidas-crypto/Catura-AI-by-Anirban |
+
+---
+
+## 🛠 Tech Stack
+
+**Frontend**
+- HTML, CSS, JavaScript
+
+**Backend**
+- Python (FastAPI)
+
+**Database**
 - PostgreSQL
 
-### AI Integration
+**AI Layer**
 - OpenRouter API
 
-### Hosting
+**Hosting**
 - Render
 
 ---
 
-## Live Deployment
+## 📦 Open Source
 
-**Website**  
-https://my-ai-assistant-9bbd.onrender.com/
+Catura AI is fully open source.
 
-**GitHub Repository**  
-https://github.com/Anidas-crypto/Catura-AI-by-Anirban
+You can:
+- use the code
+- modify it
+- build your own AI tools
+- extend features
+
+No restrictions — build on top of it.
 
 ---
 
-## Local Installation
+## ⚙️ Run Locally
 
 ```bash
 git clone https://github.com/Anidas-crypto/Catura-AI-by-Anirban.git
-
 cd Catura-AI-by-Anirban
 
 pip install -r requirements.txt
@@ -101,69 +132,59 @@ pip install -r requirements.txt
 uvicorn main:app --reload
 ```
 
-Then open your browser and visit:
-
-```bash
+Open:
+```
 http://127.0.0.1:8000
 ```
 
 ---
 
-## Product Vision
+## 🧩 System Design
 
-Catura AI is being developed as a modern AI workspace where users can interact naturally, search the web, retain context, and generate useful output inside a minimal and elegant environment.
-
-The long-term goal is to build an open, flexible, and extensible AI platform that developers and users can adapt to their own workflows.
-
----
-
-## Screenshots
-
-### Home Interface
-
-_Add your screenshots here._
-
-```md
-![Home](your-screenshot-path)
+```
+Frontend (UI)
+     ↓
+FastAPI Backend
+     ↓
+├── PostgreSQL (data)
+├── Memory Layer
+└── OpenRouter (AI models)
 ```
 
 ---
 
-## Current Development
+## 🔮 Future Direction
 
-Currently being improved with:
+Catura AI is evolving toward:
 
-- file upload workflow
-- richer contextual memory
-- improved reasoning flow
-- expanded developer tooling
-- future voice interaction support
-
----
-
-## Contributing
-
-Contributions are welcome.
-
-If you want to improve the platform, fix issues, or build additional capabilities:
-
-1. Fork the repository
-2. Create a new branch
-3. Commit changes
-4. Open a pull request
+- persistent long-term memory  
+- file understanding  
+- better reasoning pipelines  
+- voice interaction  
+- developer-focused AI tooling  
 
 ---
 
-## License
+## 🤝 Contributing
 
-This project is open source and available under the **Apache-2.0 license**.
+Want to improve Catura AI?
+
+- Fork the repo  
+- Make changes  
+- Submit a PR  
+
+---
+
+## 📜 License
+
+Apache 2.0
 
 ---
 
 <div align="center">
 
-**Built by Anirban Das**
+Built by **Anirban Das**
 
-Catura AI — modern open-source conversational intelligence.
+Catura AI — Open AI Workspace
 
 </div>
