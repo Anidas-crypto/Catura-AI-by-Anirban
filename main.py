@@ -100,7 +100,7 @@ async def serve_sw():
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "26.4.34"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "26.4.35"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -110,7 +110,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "26.4.34", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "26.4.35", "timestamp": datetime.utcnow().isoformat()}
 
 
 # ============================================================
@@ -697,7 +697,7 @@ def call_gemini_stream(messages, system_prompt):
 
         url = (
             f"https://generativelanguage.googleapis.com/v1beta/models/"
-            f"gemini-2.5-flash-preview-04-17:streamGenerateContent"
+            f"gemini-2.5-flash-preview-05-20:streamGenerateContent"
             f"?alt=sse&key={GEMINI_API_KEY}"
         )
 
