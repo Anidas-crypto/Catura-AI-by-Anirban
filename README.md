@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="static/icons/Cature-ai.jpg" alt="Catura AI Logo" width="200"/>
+<img src="static/icons/catura ai official.png" alt="Catura AI Logo" width="200"/>
 
 # Catura AI
 
