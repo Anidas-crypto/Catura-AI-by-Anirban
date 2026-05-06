@@ -2172,8 +2172,11 @@ window.toggleMoreModels = function (e) {
 
 // Close dropdown when clicking outside
 document.addEventListener('click', function (e) {
-    const wrap = document.getElementById('modelSelectorWrap');
-    if (wrap && !wrap.contains(e.target)) {
+    const wrap  = document.getElementById('modelSelectorWrap');
+    const panel = document.getElementById('moreModelsPanel');
+    const insideWrap  = wrap  && wrap.contains(e.target);
+    const insidePanel = panel && panel.contains(e.target);
+    if (!insideWrap && !insidePanel) {
         closeAllModelMenus();
     }
 });
