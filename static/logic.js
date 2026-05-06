@@ -2051,13 +2051,10 @@ window.toggleModelSelector = function (e) {
     if (!isOpen) {
         dropdown.classList.add('open');
         btn.classList.add('open');
-        // Auto-show more panel if a "more model" is currently active
+        // Auto-show floating panel if a "more model" is active
         const moreModels = ['apep', 'gemma', 'gemma4'];
         if (moreModels.includes(selectedModel)) {
-            setTimeout(() => {
-                const row = document.getElementById('moreModelsRow');
-                if (row) toggleMoreModels({ stopPropagation: () => {} });
-            }, 50);
+            setTimeout(() => { toggleMoreModels({ stopPropagation: ()=>{} }); }, 60);
         }
     }
 };
@@ -2106,18 +2103,33 @@ window.toggleMoreModels = function (e) {
     if (!panel || !row) return;
 
     const isOpen = panel.classList.contains('open');
-
-    if (!isOpen) {
-        // Position the panel to the LEFT of the main dropdown using getBoundingClientRect
-        const rowRect = row.getBoundingClientRect();
-        panel.style.top  = rowRect.top + 'px';
-        panel.style.left = (rowRect.left - 238) + 'px'; // 230px wide + 8px gap
-        panel.classList.add('open');
-        row.classList.add('open');
-    } else {
+    if (isOpen) {
         panel.classList.remove('open');
         row.classList.remove('open');
+        return;
     }
+
+    // Position the panel using fixed coordinates from the row's screen position
+    const rect = row.getBoundingClientRect();
+    const panelWidth = 240;
+    const gap = 8;
+
+    // Place to the LEFT of the main dropdown by default
+    let left = rect.left - panelWidth - gap;
+    // If not enough space on left, place to the RIGHT instead
+    if (left < 8) left = rect.right + gap;
+    // Align top of panel with top of row
+    let top = rect.top;
+    // Make sure it doesn't go off bottom of screen
+    const panelHeight = 180; // approx
+    if (top + panelHeight > window.innerHeight - 8) {
+        top = window.innerHeight - panelHeight - 8;
+    }
+
+    panel.style.left = left + 'px';
+    panel.style.top  = top + 'px';
+    panel.classList.add('open');
+    row.classList.add('open');
 };
 
 // Close dropdown when clicking outside
