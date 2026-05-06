@@ -2051,10 +2051,10 @@ window.toggleModelSelector = function (e) {
     if (!isOpen) {
         dropdown.classList.add('open');
         btn.classList.add('open');
-        // Auto-show floating panel if a "more model" is active
+        // Auto-show floating panel if a secondary model is active
         const moreModels = ['apep', 'gemma', 'gemma4'];
         if (moreModels.includes(selectedModel)) {
-            setTimeout(() => { toggleMoreModels({ stopPropagation: ()=>{} }); }, 60);
+            setTimeout(() => { toggleMoreModels(null); }, 60);
         }
     }
 };
@@ -2109,22 +2109,33 @@ window.toggleMoreModels = function (e) {
         return;
     }
 
-    // Position the panel using fixed coordinates from the row's screen position
-    const rect = row.getBoundingClientRect();
-    const panelWidth = 240;
+    // Use the model-selector-wrap (the trigger button area) for stable positioning.
+    // This works whether the input is centered (welcome) or at the bottom (chat mode).
+    const anchor = document.getElementById('modelSelectorWrap') || row;
+    const rect = anchor.getBoundingClientRect();
+    const panelW = 230;
     const gap = 8;
 
-    // Place to the LEFT of the main dropdown by default
-    let left = rect.left - panelWidth - gap;
-    // If not enough space on left, place to the RIGHT instead
-    if (left < 8) left = rect.right + gap;
-    // Align top of panel with top of row
-    let top = rect.top;
-    // Make sure it doesn't go off bottom of screen
-    const panelHeight = 180; // approx
-    if (top + panelHeight > window.innerHeight - 8) {
-        top = window.innerHeight - panelHeight - 8;
+    // Open to the RIGHT of the main dropdown, aligned to top of dropdown
+    let left = rect.right + gap;
+    // If not enough room on the right, flip to the left
+    if (left + panelW > window.innerWidth - 8) {
+        left = rect.left - panelW - gap;
     }
+
+    // Align the bottom of the panel with the bottom of the dropdown
+    const dropdownEl = document.getElementById('modelDropdown');
+    let top;
+    if (dropdownEl) {
+        const dropRect = dropdownEl.getBoundingClientRect();
+        top = dropRect.bottom - panel.offsetHeight;
+        // offsetHeight is 0 before open — estimate with 3 items * ~58px + title ~30px
+        if (panel.offsetHeight === 0) top = dropRect.bottom - 210;
+    } else {
+        top = rect.top;
+    }
+    // Clamp so it stays on screen
+    top = Math.max(8, Math.min(top, window.innerHeight - 220));
 
     panel.style.left = left + 'px';
     panel.style.top  = top + 'px';

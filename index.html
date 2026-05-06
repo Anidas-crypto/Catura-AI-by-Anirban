@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" href="static/logos.png">
     
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <link rel="stylesheet" href="static/style.css?v=0.0.26">
+    <link rel="stylesheet" href="static/style.css?v=0.0.27">
     
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#000000" />
@@ -268,41 +268,36 @@
                         </div>
                     </div>
                     <!-- end .model-dropdown -->
-
-                    <!-- ── MORE MODELS FLOATING PANEL (outside dropdown, escapes overflow:hidden) ── -->
-                    <div class="model-more-panel" id="moreModelsPanel">
-                        <div class="model-more-panel-title">More models</div>
-                        <div class="model-option" data-model="apep" data-name="Apep" onclick="selectModel('apep', 'Apep')">
-                            <div class="model-option-info">
-                                <div class="model-option-name">Apep</div>
-                                <div class="model-option-desc">Expert at coding & technical problems</div>
-                            </div>
-                            <div class="model-option-check">✓</div>
-                        </div>
-                        <div class="model-option" data-model="gemma" data-name="Gemma" onclick="selectModel('gemma', 'Gemma')">
-                            <div class="model-option-info">
-                                <div class="model-option-name">Gemma</div>
-                                <div class="model-option-desc">Fast & efficient · Google Gemma 4 26B</div>
-                            </div>
-                            <div class="model-option-check">✓</div>
-                        </div>
-                        <div class="model-option" data-model="gemma4" data-name="Gemma4" onclick="selectModel('gemma4', 'Gemma4')">
-                            <div class="model-option-info">
-                                <div class="model-option-name">Gemma4</div>
-                                <div class="model-option-desc">Most capable · Google Gemma 4 31B</div>
-                            </div>
-                            <div class="model-option-check">✓</div>
-                        </div>
-                        <div class="model-option" data-model="ra" data-name="Ra" onclick="selectModel('ra', 'Ra')">
-                            <div class="model-option-info">
-                                <div class="model-option-name">Ra</div>
-                                <div class="model-option-desc">Specialized in creative tasks</div>
-                            </div>
-                            <div class="model-option-check">✓</div>
-                        </div>
-                    </div>
                 </div>
                 <!-- end .model-selector-wrap -->
+
+                <!-- ── MORE MODELS FLOATING PANEL
+                     Placed OUTSIDE model-dropdown so overflow:hidden never clips it.
+                     position:fixed + JS coords = always visible anywhere on page. ── -->
+                <div class="model-more-panel" id="moreModelsPanel">
+                    <div class="model-more-panel-title">More models</div>
+                    <div class="model-option" data-model="apep" data-name="Apep" onclick="selectModel('apep', 'Apep')">
+                        <div class="model-option-info">
+                            <div class="model-option-name">Apep</div>
+                            <div class="model-option-desc">Expert at coding & technical problems</div>
+                        </div>
+                        <div class="model-option-check">✓</div>
+                    </div>
+                    <div class="model-option" data-model="gemma" data-name="Gemma" onclick="selectModel('gemma', 'Gemma')">
+                        <div class="model-option-info">
+                            <div class="model-option-name">Gemma</div>
+                            <div class="model-option-desc">Fast & efficient · Google Gemma 4 26B</div>
+                        </div>
+                        <div class="model-option-check">✓</div>
+                    </div>
+                    <div class="model-option" data-model="gemma4" data-name="Gemma4" onclick="selectModel('gemma4', 'Gemma4')">
+                        <div class="model-option-info">
+                            <div class="model-option-name">Gemma4</div>
+                            <div class="model-option-desc">Most capable · Google Gemma 4 31B</div>
+                        </div>
+                        <div class="model-option-check">✓</div>
+                    </div>
+                </div>
 
                 <button class="send-btn" onclick="sendMessage()" id="sendBtn">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -377,17 +372,17 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
     
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <script src="static/firebase-config.js?v=0.0.26"></script>
-    <script src="static/logic.js?v=0.0.26"></script>
-    <script src="static/feedback.js?v=0.0.26"></script>
-    <script src="static/file-upload.js?v=0.0.26"></script>
+    <script src="static/firebase-config.js?v=0.0.27"></script>
+    <script src="static/logic.js?v=0.0.27"></script>
+    <script src="static/feedback.js?v=0.0.27"></script>
+    <script src="static/file-upload.js?v=0.0.27"></script>
 
     <script>
         console.log('🚀 Catura AI v27.0.5 loaded');
         
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js?v=0.0.26')
+                navigator.serviceWorker.register('/service-worker.js?v=0.0.27')
                     .then(() => console.log('✅ Catura AI PWA Ready - v27.0.5'))
                     .catch((err) => console.log('❌ SW Error:', err));
             });
