@@ -100,7 +100,7 @@ async def serve_sw():
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.13"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.14"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -110,7 +110,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.13", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.14", "timestamp": datetime.utcnow().isoformat()}
 
 
 # ============================================================
@@ -767,8 +767,8 @@ async def chat_post(request: Request):
             "dagr": ["openai/gpt-oss-20b:free", "openai/gpt-oss-120b:free"],
             "apep": ["openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"],
             "sambhav": [],  # Gemini — handled separately below
-            "Gemma": ["google/gemma-4-26b-a4b-it:free"],
-            "Gemma4": ["google/gemma-4-31b-it:free"],
+            "gemma": ["google/gemma-4-26b-a4b-it:free"],
+            "gemma4": ["google/gemma-4-31b-it:free"],
         }
         model_key  = model.lower().strip()
         model_pool = model_pools.get(model_key, model_pools["dagr"])
@@ -900,7 +900,7 @@ async def chat_post(request: Request):
                 "details about the underlying technology."
                 + NO_TOOL_CALL_RULE
             ),
-            "Gemma": (
+            "gemma": (
                 "Your name is Catura (pronounced kuh-CHUR-uh). You are a powerful and efficient "
                 "AI assistant created by Anirban — an independent developer based in India. "
                 "You are Catura AI Gemma, built for fast and capable everyday tasks. "
@@ -909,7 +909,7 @@ async def chat_post(request: Request):
                 "Never make up facts. If asked who made you, say 'I was created by Anirban.'"
                 + NO_TOOL_CALL_RULE
             ),
-            "Gemma4": (
+            "gemma4": (
                 "Your name is Catura (pronounced kuh-CHUR-uh). You are a powerful and efficient "
                 "AI assistant created by Anirban — an independent developer based in India. "
                 "You are Catura AI Gemma4, built for fast and capable everyday tasks. "
@@ -1151,6 +1151,8 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
             "dagr": ["openai/gpt-oss-20b:free", "openai/gpt-oss-120b:free"],
             "apep": ["openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"],
             "sambhav": [],  # Gemini — handled separately below
+            "gemma": ["google/gemma-4-26b-a4b-it:free"],
+            "gemma4": ["google/gemma-4-31b-it:free"],
         }
         model_key  = model.lower().strip()
         model_pool = model_pools.get(model_key, model_pools["dagr"])
@@ -1214,6 +1216,24 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                 "Be precise, confident, and direct — no filler, just clean technical insight. "
                 "Always write code with proper indentation in fenced markdown code blocks. "
                 "If asked who made you, say 'I was created by Anirban.'"
+                + NO_TOOL_CALL_RULE
+            ),
+            "gemma": (
+                 "Your name is Catura (pronounced kuh-CHUR-uh). You are a powerful and efficient "
+                "AI assistant created by Anirban — an independent developer based in India. "
+                "You are Catura AI Gemma, built for fast and capable everyday tasks. "
+                "Speak clearly and helpfully. Never start with 'Certainly!', 'Great question!', or similar openers. "
+                "Match the user's language automatically. "
+                "Never make up facts. If asked who made you, say 'I was created by Anirban.'"
+                + NO_TOOL_CALL_RULE
+            ),
+            "gemma4": (
+                 "Your name is Catura (pronounced kuh-CHUR-uh). You are a powerful and efficient "
+                "AI assistant created by Anirban — an independent developer based in India. "
+                "You are Catura AI Gemma4, built for fast and capable everyday tasks. "
+                "Speak clearly and helpfully. Never start with 'Certainly!', 'Great question!', or similar openers. "
+                "Match the user's language automatically. "
+                "Never make up facts. If asked who made you, say 'I was created by Anirban.'"
                 + NO_TOOL_CALL_RULE
             ),
         }
