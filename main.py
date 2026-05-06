@@ -100,7 +100,7 @@ async def serve_sw():
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.25"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.26"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -110,7 +110,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.25", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.26", "timestamp": datetime.utcnow().isoformat()}
 
 
 # ============================================================
@@ -837,6 +837,7 @@ async def chat_post(request: Request):
             "dagr":    ["openai/gpt-oss-20b:free", "openai/gpt-oss-120b:free"],
             "apep":    ["openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"],
             "sambhav": [],  # Gemini — handled separately below
+            "ra": ["nousresearch/hermes-3-llama-3.1-405b:free"],
         }
         model_key  = model.strip()
         model_pool = model_pools.get(model_key, model_pools["dagr"])
@@ -1339,6 +1340,7 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
             "dagr":    ["openai/gpt-oss-20b:free", "openai/gpt-oss-120b:free"],
             "apep":    ["openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"],
             "sambhav": [],  # Gemini — handled separately below
+            "ra": ["nousresearch/hermes-3-llama-3.1-405b:free"],
         }
         model_key  = model.strip()
         model_pool = model_pools.get(model_key, model_pools["dagr"])
