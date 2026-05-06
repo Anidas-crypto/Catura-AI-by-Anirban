@@ -100,7 +100,7 @@ async def serve_sw():
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.10"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.11"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -110,7 +110,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.10", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.11", "timestamp": datetime.utcnow().isoformat()}
 
 
 # ============================================================
@@ -764,16 +764,11 @@ async def chat_post(request: Request):
 
         # ── MODEL POOLS ────────────────────────────────────────────────────
         model_pools = {
-            "dagr":          [],      # Gemini 2.5 Flash via Google AI Studio — handled separately below
-            "apep":          ["openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"],
-            "sambhav":       ["openai/gpt-oss-20b:free", "openai/gpt-oss-120b:free"],
-            "Gemma":         ["google/gemma-4-26b-a4b-it:free"],
-            "Gemma4":        ["google/gemma-4-31b-it:free"],
-            "gpt20b":        ["openai/gpt-oss-20b:free"],
-            "gpt120b":       ["openai/gpt-oss-120b:free"],
-            "gemma27b":      ["google/gemma-4-27b-it:free"],
-            "gemma31b":      ["google/gemma-4-31b-it:free"],
-            "gemini25flash": [],      # Gemini 2.5 Flash via Google AI Studio — handled separately below
+            "dagr": ["openai/gpt-oss-20b:free", "openai/gpt-oss-120b:free"],
+            "apep": ["openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"],
+            "sambhav": [],  # Gemini — handled separately below
+            "Gemma": ["google/gemma-4-26b-a4b-it:free"],
+            "Gemma4": ["google/gemma-4-31b-it:free"],
         }
         model_key  = model.lower().strip()
         model_pool = model_pools.get(model_key, model_pools["dagr"])
@@ -956,8 +951,8 @@ async def chat_post(request: Request):
         messages = [{"role": "system", "content": system_prompt}] + user_memory[session_id][-20:]
         api_key  = os.getenv("OPENROUTER_API_KEY")
 
-        # ── DAGR / GEMINI 2.5 FLASH: Google AI Studio (bypass OpenRouter) ──
-        if model_key in ("dagr", "gemini25flash"):
+        # ── SAMBHAV: Gemini direct streaming (bypass OpenRouter) ──────────
+        if model_key == "sambhav":
             def generate_gemini():
                 full_reply = ""
                 if tool_result:
@@ -968,7 +963,7 @@ async def chat_post(request: Request):
                 resp, err = call_gemini_stream(user_memory[session_id][-20:], system_prompt)
 
                 if resp is None:
-                    yield f"data: {json.dumps({'error': f'Dagr unavailable: {err}'})}\n\n"
+                    yield f"data: {json.dumps({'error': f'Sambhav unavailable: {err}'})}\n\n"
                     yield "data: [DONE]\n\n"
                     return
 
@@ -1153,9 +1148,9 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
         user_memory[session_id].append({"role": "user", "content": prompt})
 
         model_pools = {
-            "dagr": [],  # Gemini — handled separately
+            "dagr": ["openai/gpt-oss-20b:free", "openai/gpt-oss-120b:free"],
             "apep": ["openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"],
-            "sambhav": ["openai/gpt-oss-20b:free", "openai/gpt-oss-120b:free"],
+            "sambhav": [],  # Gemini — handled separately below
         }
         model_key  = model.lower().strip()
         model_pool = model_pools.get(model_key, model_pools["dagr"])
@@ -1235,46 +1230,6 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
 
         messages = [{"role": "system", "content": system_prompt}] + user_memory[session_id][-20:]
         api_key  = os.getenv("OPENROUTER_API_KEY")
-
-        # ── DAGR: Gemini 2.5 Flash via Google AI Studio (GET /chat) ──────────
-        if model_key == "dagr":
-            def generate_dagr_get():
-                full_reply = ""
-                if tool_result:
-                    yield f"data: {json.dumps({'tool_used': tool_result.get('tool', ''), 'intent': intent})}\n\n"
-                yield ": heartbeat\n\n"
-                resp, err = call_gemini_stream(user_memory[session_id][-20:], system_prompt)
-                if resp is None:
-                    yield f"data: {json.dumps({'error': f'Dagr unavailable: {err}'})}\n\n"
-                    yield "data: [DONE]\n\n"
-                    return
-                try:
-                    for line in resp.iter_lines():
-                        if not line: continue
-                        decoded = line.decode("utf-8")
-                        if not decoded.startswith("data: "): continue
-                        payload = decoded[6:]
-                        if payload.strip() == "[DONE]": break
-                        try:
-                            chunk = json.loads(payload)
-                            candidates = chunk.get("candidates", [])
-                            if not candidates: continue
-                            parts = candidates[0].get("content", {}).get("parts", [])
-                            for part in parts:
-                                token = part.get("text", "")
-                                if token:
-                                    full_reply += token
-                                    yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
-                        except: continue
-                except Exception as e:
-                    print(f"❌ [Gemini/Dagr GET] stream exception: {e}")
-                if full_reply.strip():
-                    user_memory[session_id].append({"role": "assistant", "content": full_reply})
-                    if len(user_memory[session_id]) > 40:
-                        user_memory[session_id] = user_memory[session_id][-40:]
-                yield "data: [DONE]\n\n"
-            return StreamingResponse(generate_dagr_get(), media_type="text/event-stream",
-                headers={"Set-Cookie": f"session_id={session_id}; Path=/; SameSite=Lax; Max-Age=31536000"})
 
         def generate():
             MAX_HANDOFFS = 40

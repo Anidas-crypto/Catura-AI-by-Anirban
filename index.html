@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" href="static/logos.png">
     
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <link rel="stylesheet" href="static/style.css?v=0.0.10">
+    <link rel="stylesheet" href="static/style.css?v=0.0.11">
     
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#000000" />
@@ -243,91 +243,41 @@
                             <polyline points="6 9 12 15 18 9"></polyline>
                         </svg>
                     </button>
-
-                    <!-- Main dropdown: only Dagr + Apep + More models row -->
                     <div class="model-dropdown" id="modelDropdown">
                         <div class="model-option active" data-model="dagr" data-name="Dagr" onclick="selectModel('dagr', 'Dagr')">
                             <div class="model-option-info">
                                 <div class="model-option-name">Dagr</div>
-                                <div class="model-option-desc">Responsive everyday work</div>
+                                <div class="model-option-desc">Your intelligent everyday companion</div>
                             </div>
                             <div class="model-option-check">✓</div>
                         </div>
                         <div class="model-option" data-model="apep" data-name="Apep" onclick="selectModel('apep', 'Apep')">
                             <div class="model-option-info">
                                 <div class="model-option-name">Apep</div>
-                                <div class="model-option-desc">Expert at coding &amp; technical problems</div>
+                                 <div class="model-option-desc">Expert at coding & technical problems</div>
                             </div>
                             <div class="model-option-check">✓</div>
                         </div>
-
-                        <!-- Divider -->
-                        <div class="model-dropdown-divider"></div>
-
-                        <!-- More models row — opens the side panel -->
-                        <div class="model-more-row" id="moreModelsRow" onclick="toggleMoreModels(event)">
-                            <span class="model-more-label">More models</span>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                <polyline points="9 18 15 12 9 6"></polyline>
-                            </svg>
-                        </div>
-                    </div>
-
-                    <!-- Side panel: floats to the RIGHT of the main dropdown -->
-                    <div class="model-side-panel" id="moreModelsPanel">
                         <div class="model-option" data-model="sambhav" data-name="Sambhav" onclick="selectModel('sambhav', 'Sambhav')">
                             <div class="model-option-info">
                                 <div class="model-option-name">Sambhav</div>
-                                <div class="model-option-desc">GPT-OSS 20B · General purpose</div>
+                                <div class="model-option-desc">Powered by Gemini · Deep reasoning & analysis</div>
                             </div>
                             <div class="model-option-check">✓</div>
                         </div>
+
                         <div class="model-option" data-model="gemma" data-name="Gemma" onclick="selectModel('gemma', 'Gemma')">
                             <div class="model-option-info">
                                 <div class="model-option-name">Gemma</div>
-                                <div class="model-option-desc">Fast &amp; capable · Powered by Google</div>
+                                <div class="model-option-desc">Fast & capable · Powered by Google</div>
                             </div>
                             <div class="model-option-check">✓</div>
                         </div>
+
                         <div class="model-option" data-model="ra" data-name="Ra" onclick="selectModel('ra', 'Ra')">
                             <div class="model-option-info">
                                 <div class="model-option-name">Ra</div>
-                                <div class="model-option-desc">Fast &amp; capable · Powered by Gemma 4</div>
-                            </div>
-                            <div class="model-option-check">✓</div>
-                        </div>
-                        <div class="model-option" data-model="gpt20b" data-name="GPT OSS 20B" onclick="selectModel('gpt20b', 'GPT OSS 20B')">
-                            <div class="model-option-info">
-                                <div class="model-option-name">GPT OSS 20B</div>
-                                <div class="model-option-desc">OpenAI open-source · Fast</div>
-                            </div>
-                            <div class="model-option-check">✓</div>
-                        </div>
-                        <div class="model-option" data-model="gpt120b" data-name="GPT OSS 120B" onclick="selectModel('gpt120b', 'GPT OSS 120B')">
-                            <div class="model-option-info">
-                                <div class="model-option-name">GPT OSS 120B</div>
-                                <div class="model-option-desc">OpenAI open-source · Powerful</div>
-                            </div>
-                            <div class="model-option-check">✓</div>
-                        </div>
-                        <div class="model-option" data-model="gemma27b" data-name="Gemma 4 27B" onclick="selectModel('gemma27b', 'Gemma 4 27B')">
-                            <div class="model-option-info">
-                                <div class="model-option-name">Gemma 4 27B</div>
-                                <div class="model-option-desc">Google Gemma 4 · Efficient</div>
-                            </div>
-                            <div class="model-option-check">✓</div>
-                        </div>
-                        <div class="model-option" data-model="gemma31b" data-name="Gemma 4 31B" onclick="selectModel('gemma31b', 'Gemma 4 31B')">
-                            <div class="model-option-info">
-                                <div class="model-option-name">Gemma 4 31B</div>
-                                <div class="model-option-desc">Google Gemma 4 · Capable</div>
-                            </div>
-                            <div class="model-option-check">✓</div>
-                        </div>
-                        <div class="model-option" data-model="gemini25flash" data-name="Gemini 2.5 Flash" onclick="selectModel('gemini25flash', 'Gemini 2.5 Flash')">
-                            <div class="model-option-info">
-                                <div class="model-option-name">Gemini 2.5 Flash</div>
-                                <div class="model-option-desc">Google AI Studio · Fast multimodal</div>
+                                <div class="model-option-desc">Fast & capable · Powered by Gemma 4</div>
                             </div>
                             <div class="model-option-check">✓</div>
                         </div>
@@ -407,17 +357,17 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
     
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <script src="static/firebase-config.js?v=0.0.10"></script>
-    <script src="static/logic.js?v=0.0.10"></script>
-    <script src="static/feedback.js?v=0.0.10"></script>
-    <script src="static/file-upload.js?v=0.0.10"></script>
+    <script src="static/firebase-config.js?v=0.0.11"></script>
+    <script src="static/logic.js?v=0.0.11"></script>
+    <script src="static/feedback.js?v=0.0.11"></script>
+    <script src="static/file-upload.js?v=0.0.11"></script>
 
     <script>
         console.log('🚀 Catura AI v27.0.5 loaded');
         
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js?v=0.0.10')
+                navigator.serviceWorker.register('/service-worker.js?v=0.0.11')
                     .then(() => console.log('✅ Catura AI PWA Ready - v27.0.5'))
                     .catch((err) => console.log('❌ SW Error:', err));
             });

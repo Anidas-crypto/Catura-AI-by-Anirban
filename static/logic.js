@@ -2083,20 +2083,11 @@ window.selectModel = function (modelId, modelName) {
 function closeAllModelMenus() {
     const dropdown = document.getElementById('modelDropdown');
     const btn = document.getElementById('modelSelectorBtn');
-    const panel = document.getElementById('moreModelsPanel');
     if (dropdown) dropdown.classList.remove('open');
     if (btn) btn.classList.remove('open');
-    if (panel) panel.classList.remove('open');
 }
 
-window.toggleMoreModels = function (e) {
-    e.stopPropagation();
-    const panel = document.getElementById('moreModelsPanel');
-    if (!panel) return;
-    panel.classList.toggle('open');
-};
-
-// Close all model menus when clicking outside
+// Close dropdown when clicking outside
 document.addEventListener('click', function (e) {
     const wrap = document.getElementById('modelSelectorWrap');
     if (wrap && !wrap.contains(e.target)) {
@@ -2104,22 +2095,9 @@ document.addEventListener('click', function (e) {
     }
 });
 
-// Get currently selected model — maps frontend IDs to backend model keys
+// Get currently selected model
 function getSelectedModel() {
-    // Map frontend model IDs → backend model_key
-    const modelMap = {
-        'dagr':        'dagr',
-        'apep':        'apep',
-        'sambhav':     'sambhav',
-        'gemma':       'Gemma',
-        'ra':          'Gemma4',
-        'gpt20b':      'gpt20b',
-        'gpt120b':     'gpt120b',
-        'gemma27b':    'gemma27b',
-        'gemma31b':    'gemma31b',
-        'gemini25flash': 'gemini25flash',
-    };
-    return modelMap[selectedModel] || selectedModel;
+    return selectedModel;
 }
 
 // ============================================================
