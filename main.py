@@ -100,7 +100,7 @@ async def serve_sw():
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.19"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.20"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -110,7 +110,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.19", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.20", "timestamp": datetime.utcnow().isoformat()}
 
 
 # ============================================================
@@ -725,17 +725,17 @@ def call_gemini_stream(messages, system_prompt):
         return None, str(e)
 
 
+
 # ============================================================
 # ✅ HELPER: Call Google Gemma via Google AI Studio (same key as Gemini)
 # ============================================================
 def call_gemma_google_stream(messages, system_prompt, model_id):
     """
-    Calls Gemma 4 models (gemma-4-26b-a4b-it / gemma-4-31b-it) via
-    Google AI Studio REST API — same GEMINI_API_KEY, same endpoint pattern.
+    Calls Gemma 4 models via Google AI Studio REST API —
+    same GEMINI_API_KEY and endpoint pattern as Gemini 2.5 Flash.
     """
     if not GEMINI_API_KEY:
         return None, "GEMINI_API_KEY not set in environment variables"
-
     try:
         contents = []
         for msg in messages:
@@ -747,7 +747,6 @@ def call_gemma_google_stream(messages, system_prompt, model_id):
                 "role": gemini_role,
                 "parts": [{"text": msg["content"]}]
             })
-
         payload = {
             "system_instruction": {"parts": [{"text": system_prompt}]},
             "contents": contents,
@@ -756,13 +755,11 @@ def call_gemma_google_stream(messages, system_prompt, model_id):
                 "maxOutputTokens": 16000,
             }
         }
-
         url = (
             f"https://generativelanguage.googleapis.com/v1beta/models/"
             f"{model_id}:streamGenerateContent"
             f"?alt=sse&key={GEMINI_API_KEY}"
         )
-
         resp = requests.post(
             url,
             headers={"Content-Type": "application/json"},
@@ -770,7 +767,6 @@ def call_gemma_google_stream(messages, system_prompt, model_id):
             stream=True,
             timeout=(10, 120),
         )
-
         if resp.status_code != 200:
             try:
                 err_body = resp.json()
@@ -778,14 +774,11 @@ def call_gemma_google_stream(messages, system_prompt, model_id):
             except Exception:
                 err_msg = f"HTTP {resp.status_code}"
             return None, err_msg
-
         return resp, None
-
     except requests.exceptions.Timeout:
         return None, "Request timed out"
     except Exception as e:
         return None, str(e)
-
 
 # ============================================================
 # ✅ MAIN CHAT ENDPOINT (POST)
@@ -825,12 +818,11 @@ async def chat_post(request: Request):
         user_memory[session_id].append({"role": "user", "content": prompt})
 
         # ── MODEL POOLS ────────────────────────────────────────────────────
-        # Gemma models are routed via Google AI Studio (GEMINI_API_KEY), not OpenRouter
+        # Gemma models → Google AI Studio (GEMINI_API_KEY), NOT OpenRouter
         GEMMA_GOOGLE_MODELS = {
             "Gemma":  "gemma-4-26b-a4b-it",
             "Gemma4": "gemma-4-31b-it",
         }
-
         model_pools = {
             "dagr":    ["openai/gpt-oss-20b:free", "openai/gpt-oss-120b:free"],
             "apep":    ["openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"],
@@ -1077,21 +1069,19 @@ async def chat_post(request: Request):
         # ── GEMMA: Google AI Studio direct streaming (bypass OpenRouter) ──
         if model_key in GEMMA_GOOGLE_MODELS:
             google_model_id = GEMMA_GOOGLE_MODELS[model_key]
+            print(f"🟢 [Gemma POST] Routing '{model_key}' → Google AI Studio model: {google_model_id}")
 
             def generate_gemma():
                 full_reply = ""
                 if tool_result:
                     badge_payload = json.dumps({"tool_used": tool_result.get("tool", ""), "intent": intent})
                     yield f"data: {badge_payload}\n\n"
-
                 yield ": heartbeat\n\n"
                 resp, err = call_gemma_google_stream(user_memory[session_id][-20:], system_prompt, google_model_id)
-
                 if resp is None:
-                    yield f"data: {json.dumps({'error': f'{model_key} unavailable: {err}'})} \n\n"
+                    yield f"data: {json.dumps({'error': f'{model_key} unavailable: {err}'})}\n\n"
                     yield "data: [DONE]\n\n"
                     return
-
                 try:
                     for line in resp.iter_lines():
                         if not line:
@@ -1116,8 +1106,7 @@ async def chat_post(request: Request):
                         except (json.JSONDecodeError, Exception):
                             continue
                 except Exception as e:
-                    print(f"❌ [Gemma] stream exception: {e}")
-
+                    print(f"❌ [Gemma POST] stream exception: {e}")
                 if full_reply.strip():
                     user_memory[session_id].append({"role": "assistant", "content": full_reply})
                     if len(user_memory[session_id]) > 40:
@@ -1134,6 +1123,61 @@ async def chat_post(request: Request):
             )
 
         # ── STREAMING GENERATOR ────────────────────────────────────────────
+        # ── GEMMA: Google AI Studio direct streaming (bypass OpenRouter) ──
+        if model_key in GEMMA_GOOGLE_MODELS:
+            google_model_id = GEMMA_GOOGLE_MODELS[model_key]
+            print(f"🟢 [Gemma GET] Routing '{model_key}' → Google AI Studio model: {google_model_id}")
+
+            def generate_gemma_get():
+                full_reply = ""
+                if tool_result:
+                    yield f"data: {json.dumps({'tool_used': tool_result.get('tool', ''), 'intent': intent})}\n\n"
+                yield ": heartbeat\n\n"
+                resp, err = call_gemma_google_stream(user_memory[session_id][-20:], system_prompt, google_model_id)
+                if resp is None:
+                    yield f"data: {json.dumps({'error': f'{model_key} unavailable: {err}'})}\n\n"
+                    yield "data: [DONE]\n\n"
+                    return
+                try:
+                    for line in resp.iter_lines():
+                        if not line:
+                            continue
+                        decoded = line.decode("utf-8")
+                        if not decoded.startswith("data: "):
+                            continue
+                        payload = decoded[6:]
+                        if payload.strip() == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(payload)
+                            candidates = chunk.get("candidates", [])
+                            if not candidates:
+                                continue
+                            parts = candidates[0].get("content", {}).get("parts", [])
+                            for part in parts:
+                                token = part.get("text", "")
+                                if token:
+                                    full_reply += token
+                                    yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
+                        except (json.JSONDecodeError, Exception):
+                            continue
+                except Exception as e:
+                    print(f"❌ [Gemma GET] stream exception: {e}")
+                if full_reply.strip():
+                    user_memory[session_id].append({"role": "assistant", "content": full_reply})
+                    if len(user_memory[session_id]) > 40:
+                        user_memory[session_id] = user_memory[session_id][-40:]
+                yield "data: [DONE]\n\n"
+
+            return StreamingResponse(
+                generate_gemma_get(),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Set-Cookie": f"session_id={session_id}; Path=/; SameSite=Lax; Max-Age=31536000",
+                }
+            )
+
         def generate():
             MAX_HANDOFFS = 40
             full_reply   = ""
@@ -1272,17 +1316,19 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
 
         user_memory[session_id].append({"role": "user", "content": prompt})
 
-        # Gemma models are routed via Google AI Studio (GEMINI_API_KEY), not OpenRouter
+        # Gemma models → Google AI Studio (GEMINI_API_KEY), NOT OpenRouter
         GEMMA_GOOGLE_MODELS = {
             "Gemma":  "gemma-4-26b-a4b-it",
             "Gemma4": "gemma-4-31b-it",
         }
-
         model_pools = {
             "dagr":    ["openai/gpt-oss-20b:free", "openai/gpt-oss-120b:free"],
             "apep":    ["openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"],
             "sambhav": [],  # Gemini — handled separately below
         }
+        model_key  = model.strip()
+        model_pool = model_pools.get(model_key, model_pools["dagr"])
+
         NO_TOOL_CALL_RULE = (
             "\n\nCRITICAL RULES — FOLLOW THESE WITHOUT EXCEPTION:\n"
             "1. You do NOT have any tools, functions, or APIs to call.\n"
@@ -1358,64 +1404,6 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
 
         messages = [{"role": "system", "content": system_prompt}] + user_memory[session_id][-20:]
         api_key  = os.getenv("OPENROUTER_API_KEY")
-
-        # ── GEMMA: Google AI Studio direct streaming (bypass OpenRouter) ──
-        if model_key in GEMMA_GOOGLE_MODELS:
-            google_model_id = GEMMA_GOOGLE_MODELS[model_key]
-
-            def generate_gemma_get():
-                full_reply = ""
-                if tool_result:
-                    yield f"data: {json.dumps({'tool_used': tool_result.get('tool', ''), 'intent': intent})}\n\n"
-
-                yield ": heartbeat\n\n"
-                resp, err = call_gemma_google_stream(user_memory[session_id][-20:], system_prompt, google_model_id)
-
-                if resp is None:
-                    yield f"data: {json.dumps({'error': f'{model_key} unavailable: {err}'})}\n\n"
-                    yield "data: [DONE]\n\n"
-                    return
-
-                try:
-                    for line in resp.iter_lines():
-                        if not line:
-                            continue
-                        decoded = line.decode("utf-8")
-                        if not decoded.startswith("data: "):
-                            continue
-                        payload = decoded[6:]
-                        if payload.strip() == "[DONE]":
-                            break
-                        try:
-                            chunk = json.loads(payload)
-                            candidates = chunk.get("candidates", [])
-                            if not candidates:
-                                continue
-                            parts = candidates[0].get("content", {}).get("parts", [])
-                            for part in parts:
-                                token = part.get("text", "")
-                                if token:
-                                    full_reply += token
-                                    yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
-                        except (json.JSONDecodeError, Exception):
-                            continue
-                except Exception as e:
-                    print(f"❌ [Gemma GET] stream exception: {e}")
-
-                if full_reply.strip():
-                    user_memory[session_id].append({"role": "assistant", "content": full_reply})
-                    if len(user_memory[session_id]) > 40:
-                        user_memory[session_id] = user_memory[session_id][-40:]
-                yield "data: [DONE]\n\n"
-
-            return StreamingResponse(
-                generate_gemma_get(),
-                media_type="text/event-stream",
-                headers={
-                    "Cache-Control": "no-cache",
-                    "Set-Cookie": f"session_id={session_id}; Path=/; SameSite=Lax; Max-Age=31536000",
-                }
-            )
 
         def generate():
             MAX_HANDOFFS = 40
