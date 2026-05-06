@@ -726,7 +726,7 @@ html { scroll-behavior: smooth; }
     width: calc(100% - 40px);
     max-width: 720px;
     background: #1a1a1a;
-    backdrop-filter: blur(8px);
+    /* backdrop-filter removed: traps position:fixed children (model dropdown) inside input-area bounds */
     border-color: #333;
     margin: 0 auto 20px auto;
     z-index: 50;
@@ -1676,8 +1676,7 @@ html { scroll-behavior: smooth; }
         right: 0;
         box-sizing: border-box;
         background: rgba(22, 22, 22, 0.98);
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
+        /* backdrop-filter removed: traps position:fixed children (model dropdown) */
         box-shadow: 0 -1px 0 #1e1e1e, 0 -8px 32px rgba(0,0,0,0.5);
         z-index: 100;
         /* Safe area for iPhone home bar */
