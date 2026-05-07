@@ -100,7 +100,7 @@ async def serve_sw():
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.35"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.36"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -110,7 +110,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.35", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.36", "timestamp": datetime.utcnow().isoformat()}
 
 
 # ============================================================
@@ -830,13 +830,14 @@ async def chat_post(request: Request):
         # ── MODEL POOLS ────────────────────────────────────────────────────
         # Gemma models → Google AI Studio (GEMINI_API_KEY), NOT OpenRouter
         GEMMA_GOOGLE_MODELS = {
-            "Gemma":  "gemma-4-26b-a4b-it",
-            "Gemma4": "gemma-4-31b-it",
+            "Gemma":    "gemma-4-26b-a4b-it",
+            "Gemma4":   "gemma-4-31b-it",
+            "sambhav":  "gemma-4-e4b-it",  # Replaced Gemini 2.5 Flash → Gemma 4 E4B (Apache 2.0, no geo-restrictions)
         }
         model_pools = {
             "dagr":    ["openai/gpt-oss-20b:free", "openai/gpt-oss-120b:free"],
             "apep":    ["openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"],
-            "sambhav": [],  # Gemini — handled separately below
+            "sambhav": [],  # Routed via Google AI Studio (Gemma 4 E4B) — see GEMMA_GOOGLE_MODELS
             "ra": ["nousresearch/hermes-3-llama-3.1-405b:free"],
         }
         model_key  = model.strip()
@@ -1024,7 +1025,7 @@ async def chat_post(request: Request):
         messages = [{"role": "system", "content": system_prompt}] + user_memory[session_id][-20:]
         api_key  = os.getenv("OPENROUTER_API_KEY")
 
-        # ── SAMBHAV: Gemini direct streaming (bypass OpenRouter) ──────────
+        # ── SAMBHAV: Gemma 4 E4B via Google AI Studio (replaces Gemini 2.5 Flash, no geo-restrictions) ──
         if model_key == "sambhav":
             def generate_gemini():
                 full_reply = ""
@@ -1033,7 +1034,7 @@ async def chat_post(request: Request):
                     yield f"data: {badge_payload}\n\n"
 
                 yield ": heartbeat\n\n"
-                resp, err = call_gemini_stream(user_memory[session_id][-20:], system_prompt)
+                resp, err = call_gemma_google_stream(user_memory[session_id][-20:], system_prompt, "gemma-4-e4b-it")
 
                 if resp is None:
                     yield f"data: {json.dumps({'error': f'Sambhav unavailable: {err}'})}\n\n"
@@ -1333,13 +1334,14 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
 
         # Gemma models → Google AI Studio (GEMINI_API_KEY), NOT OpenRouter
         GEMMA_GOOGLE_MODELS = {
-            "Gemma":  "gemma-4-26b-a4b-it",
-            "Gemma4": "gemma-4-31b-it",
+            "Gemma":    "gemma-4-26b-a4b-it",
+            "Gemma4":   "gemma-4-31b-it",
+            "sambhav":  "gemma-4-e4b-it",  # Replaced Gemini 2.5 Flash → Gemma 4 E4B
         }
         model_pools = {
             "dagr":    ["openai/gpt-oss-20b:free", "openai/gpt-oss-120b:free"],
             "apep":    ["openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"],
-            "sambhav": [],  # Gemini — handled separately below
+            "sambhav": [],  # Routed via Google AI Studio (Gemma 4 E4B) — see GEMMA_GOOGLE_MODELS
             "ra": ["nousresearch/hermes-3-llama-3.1-405b:free"],
         }
         model_key  = model.strip()
