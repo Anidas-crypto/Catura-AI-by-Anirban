@@ -101,7 +101,7 @@ async def serve_sw():
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.43"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.44"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -111,7 +111,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.43", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.44", "timestamp": datetime.utcnow().isoformat()}
 
 
 # ============================================================
@@ -135,7 +135,17 @@ def detect_intent(text: str) -> str:
     if any(re.search(p, lower) for p in identity_patterns):
         return "general"
 
-    # ── WEATHER ────────────────────────────────────────────────────────────
+    # ── CLOCK / TIME ────────────────────────────────────────────────────────
+    clock_patterns = [
+        r'\btime\b', r'\bclock\b', r'\bwhat time\b', r'\bcurrent time\b',
+        r'\btime (in|at|of|now)\b', r'\btime (is it|right now)\b',
+        r'\bwhat.*(time|hour|clock)\b', r'\b(hour|minute|second)s?\b',
+        r'\bam\b.*\bpm\b', r'\bist\b', r'\butc\b', r'\bgmt\b',
+        r'\btimezone\b', r'\btime zone\b',
+        r'\b(morning|afternoon|evening|night)\b.*\bthere\b',
+    ]
+    if any(re.search(p, lower) for p in clock_patterns):
+        return "clock"
     weather_patterns = [
         r'\bweather\b', r'\btemperature\b', r'\bhumidity\b', r'\brain\b',
         r'\bsnow\b', r'\bwind\b', r'\bforecast\b', r'\bclimate\b',
@@ -194,6 +204,298 @@ def detect_intent(text: str) -> str:
         return "web_search"
 
     return "general"
+
+
+# ============================================================
+# ✅ TOOL: CLOCK — exact live time for any country/city/timezone
+# Uses Python stdlib zoneinfo (no external API needed)
+# ============================================================
+
+# ── Comprehensive location → IANA timezone mapping ──────────────────────────
+TIMEZONE_MAP: dict[str, str] = {
+    # ── INDIA (default + states/cities) ─────────────────────────────────────
+    "india": "Asia/Kolkata", "indian": "Asia/Kolkata", "ist": "Asia/Kolkata",
+    "kolkata": "Asia/Kolkata", "calcutta": "Asia/Kolkata",
+    "mumbai": "Asia/Kolkata", "bombay": "Asia/Kolkata",
+    "delhi": "Asia/Kolkata", "new delhi": "Asia/Kolkata",
+    "bangalore": "Asia/Kolkata", "bengaluru": "Asia/Kolkata",
+    "chennai": "Asia/Kolkata", "madras": "Asia/Kolkata",
+    "hyderabad": "Asia/Kolkata", "pune": "Asia/Kolkata",
+    "ahmedabad": "Asia/Kolkata", "jaipur": "Asia/Kolkata",
+    "lucknow": "Asia/Kolkata", "kanpur": "Asia/Kolkata",
+    "nagpur": "Asia/Kolkata", "indore": "Asia/Kolkata",
+    "bhopal": "Asia/Kolkata", "patna": "Asia/Kolkata",
+    "vadodara": "Asia/Kolkata", "ludhiana": "Asia/Kolkata",
+    "agra": "Asia/Kolkata", "nashik": "Asia/Kolkata",
+    "surat": "Asia/Kolkata", "varanasi": "Asia/Kolkata",
+    "siliguri": "Asia/Kolkata", "guwahati": "Asia/Kolkata",
+    "bhubaneswar": "Asia/Kolkata", "thiruvananthapuram": "Asia/Kolkata",
+    "kochi": "Asia/Kolkata", "coimbatore": "Asia/Kolkata",
+    "visakhapatnam": "Asia/Kolkata", "vijayawada": "Asia/Kolkata",
+    "chandigarh": "Asia/Kolkata", "amritsar": "Asia/Kolkata",
+    "ranchi": "Asia/Kolkata", "raipur": "Asia/Kolkata",
+    "goa": "Asia/Kolkata", "panaji": "Asia/Kolkata",
+    "jammu": "Asia/Kolkata", "srinagar": "Asia/Kolkata",
+    "shimla": "Asia/Kolkata", "dehradun": "Asia/Kolkata",
+    "imphal": "Asia/Kolkata", "aizawl": "Asia/Kolkata",
+    "shillong": "Asia/Kolkata", "kohima": "Asia/Kolkata",
+    "itanagar": "Asia/Kolkata", "agartala": "Asia/Kolkata",
+    "gangtok": "Asia/Kolkata", "dispur": "Asia/Kolkata",
+    # Indian states
+    "maharashtra": "Asia/Kolkata", "karnataka": "Asia/Kolkata",
+    "tamil nadu": "Asia/Kolkata", "telangana": "Asia/Kolkata",
+    "andhra pradesh": "Asia/Kolkata", "kerala": "Asia/Kolkata",
+    "gujarat": "Asia/Kolkata", "rajasthan": "Asia/Kolkata",
+    "uttar pradesh": "Asia/Kolkata", "madhya pradesh": "Asia/Kolkata",
+    "bihar": "Asia/Kolkata", "west bengal": "Asia/Kolkata",
+    "odisha": "Asia/Kolkata", "jharkhand": "Asia/Kolkata",
+    "haryana": "Asia/Kolkata", "punjab": "Asia/Kolkata",
+    "himachal pradesh": "Asia/Kolkata", "uttarakhand": "Asia/Kolkata",
+    "chhattisgarh": "Asia/Kolkata", "assam": "Asia/Kolkata",
+    "tripura": "Asia/Kolkata", "meghalaya": "Asia/Kolkata",
+    "manipur": "Asia/Kolkata", "mizoram": "Asia/Kolkata",
+    "nagaland": "Asia/Kolkata", "arunachal pradesh": "Asia/Kolkata",
+    "sikkim": "Asia/Kolkata",
+
+    # ── ASIA ──────────────────────────────────────────────────────────────────
+    "pakistan": "Asia/Karachi", "karachi": "Asia/Karachi",
+    "lahore": "Asia/Karachi", "islamabad": "Asia/Karachi",
+    "bangladesh": "Asia/Dhaka", "dhaka": "Asia/Dhaka",
+    "sri lanka": "Asia/Colombo", "colombo": "Asia/Colombo",
+    "nepal": "Asia/Kathmandu", "kathmandu": "Asia/Kathmandu",
+    "bhutan": "Asia/Thimphu", "thimphu": "Asia/Thimphu",
+    "myanmar": "Asia/Yangon", "yangon": "Asia/Yangon", "rangoon": "Asia/Yangon",
+    "thailand": "Asia/Bangkok", "bangkok": "Asia/Bangkok",
+    "vietnam": "Asia/Ho_Chi_Minh", "ho chi minh": "Asia/Ho_Chi_Minh",
+    "hanoi": "Asia/Bangkok",
+    "cambodia": "Asia/Phnom_Penh", "phnom penh": "Asia/Phnom_Penh",
+    "laos": "Asia/Vientiane", "vientiane": "Asia/Vientiane",
+    "malaysia": "Asia/Kuala_Lumpur", "kuala lumpur": "Asia/Kuala_Lumpur",
+    "singapore": "Asia/Singapore",
+    "indonesia": "Asia/Jakarta", "jakarta": "Asia/Jakarta",
+    "bali": "Asia/Makassar",
+    "philippines": "Asia/Manila", "manila": "Asia/Manila",
+    "china": "Asia/Shanghai", "beijing": "Asia/Shanghai",
+    "shanghai": "Asia/Shanghai", "hong kong": "Asia/Hong_Kong",
+    "taiwan": "Asia/Taipei", "taipei": "Asia/Taipei",
+    "japan": "Asia/Tokyo", "tokyo": "Asia/Tokyo", "osaka": "Asia/Tokyo",
+    "south korea": "Asia/Seoul", "korea": "Asia/Seoul", "seoul": "Asia/Seoul",
+    "north korea": "Asia/Pyongyang", "pyongyang": "Asia/Pyongyang",
+    "mongolia": "Asia/Ulaanbaatar", "ulaanbaatar": "Asia/Ulaanbaatar",
+    "afghanistan": "Asia/Kabul", "kabul": "Asia/Kabul",
+    "iran": "Asia/Tehran", "tehran": "Asia/Tehran",
+    "iraq": "Asia/Baghdad", "baghdad": "Asia/Baghdad",
+    "saudi arabia": "Asia/Riyadh", "riyadh": "Asia/Riyadh",
+    "uae": "Asia/Dubai", "dubai": "Asia/Dubai",
+    "abu dhabi": "Asia/Dubai", "sharjah": "Asia/Dubai",
+    "qatar": "Asia/Qatar", "doha": "Asia/Qatar",
+    "bahrain": "Asia/Bahrain", "manama": "Asia/Bahrain",
+    "kuwait": "Asia/Kuwait", "kuwait city": "Asia/Kuwait",
+    "oman": "Asia/Muscat", "muscat": "Asia/Muscat",
+    "yemen": "Asia/Aden", "aden": "Asia/Aden", "sanaa": "Asia/Aden",
+    "jordan": "Asia/Amman", "amman": "Asia/Amman",
+    "israel": "Asia/Jerusalem", "jerusalem": "Asia/Jerusalem",
+    "tel aviv": "Asia/Jerusalem",
+    "lebanon": "Asia/Beirut", "beirut": "Asia/Beirut",
+    "syria": "Asia/Damascus", "damascus": "Asia/Damascus",
+    "turkey": "Europe/Istanbul", "istanbul": "Europe/Istanbul",
+    "ankara": "Europe/Istanbul",
+    "azerbaijan": "Asia/Baku", "baku": "Asia/Baku",
+    "georgia": "Asia/Tbilisi", "tbilisi": "Asia/Tbilisi",
+    "armenia": "Asia/Yerevan", "yerevan": "Asia/Yerevan",
+    "kazakhstan": "Asia/Almaty", "almaty": "Asia/Almaty",
+    "uzbekistan": "Asia/Tashkent", "tashkent": "Asia/Tashkent",
+    "kyrgyzstan": "Asia/Bishkek", "bishkek": "Asia/Bishkek",
+    "tajikistan": "Asia/Dushanbe", "dushanbe": "Asia/Dushanbe",
+    "turkmenistan": "Asia/Ashgabat", "ashgabat": "Asia/Ashgabat",
+
+    # ── EUROPE ────────────────────────────────────────────────────────────────
+    "uk": "Europe/London", "united kingdom": "Europe/London",
+    "england": "Europe/London", "london": "Europe/London",
+    "scotland": "Europe/London", "wales": "Europe/London",
+    "ireland": "Europe/Dublin", "dublin": "Europe/Dublin",
+    "france": "Europe/Paris", "paris": "Europe/Paris",
+    "germany": "Europe/Berlin", "berlin": "Europe/Berlin",
+    "frankfurt": "Europe/Berlin", "munich": "Europe/Berlin",
+    "italy": "Europe/Rome", "rome": "Europe/Rome", "milan": "Europe/Rome",
+    "spain": "Europe/Madrid", "madrid": "Europe/Madrid",
+    "barcelona": "Europe/Madrid",
+    "portugal": "Europe/Lisbon", "lisbon": "Europe/Lisbon",
+    "netherlands": "Europe/Amsterdam", "amsterdam": "Europe/Amsterdam",
+    "belgium": "Europe/Brussels", "brussels": "Europe/Brussels",
+    "switzerland": "Europe/Zurich", "zurich": "Europe/Zurich",
+    "geneva": "Europe/Zurich",
+    "austria": "Europe/Vienna", "vienna": "Europe/Vienna",
+    "sweden": "Europe/Stockholm", "stockholm": "Europe/Stockholm",
+    "norway": "Europe/Oslo", "oslo": "Europe/Oslo",
+    "denmark": "Europe/Copenhagen", "copenhagen": "Europe/Copenhagen",
+    "finland": "Europe/Helsinki", "helsinki": "Europe/Helsinki",
+    "poland": "Europe/Warsaw", "warsaw": "Europe/Warsaw",
+    "czech republic": "Europe/Prague", "czechia": "Europe/Prague",
+    "prague": "Europe/Prague",
+    "hungary": "Europe/Budapest", "budapest": "Europe/Budapest",
+    "romania": "Europe/Bucharest", "bucharest": "Europe/Bucharest",
+    "bulgaria": "Europe/Sofia", "sofia": "Europe/Sofia",
+    "greece": "Europe/Athens", "athens": "Europe/Athens",
+    "russia": "Europe/Moscow", "moscow": "Europe/Moscow",
+    "saint petersburg": "Europe/Moscow",
+    "ukraine": "Europe/Kiev", "kyiv": "Europe/Kiev", "kiev": "Europe/Kiev",
+    "serbia": "Europe/Belgrade", "belgrade": "Europe/Belgrade",
+    "croatia": "Europe/Zagreb", "zagreb": "Europe/Zagreb",
+    "slovenia": "Europe/Ljubljana", "ljubljana": "Europe/Ljubljana",
+    "slovakia": "Europe/Bratislava", "bratislava": "Europe/Bratislava",
+    "estonia": "Europe/Tallinn", "tallinn": "Europe/Tallinn",
+    "latvia": "Europe/Riga", "riga": "Europe/Riga",
+    "lithuania": "Europe/Vilnius", "vilnius": "Europe/Vilnius",
+    "iceland": "Atlantic/Reykjavik", "reykjavik": "Atlantic/Reykjavik",
+    "luxembourg": "Europe/Luxembourg",
+    "malta": "Europe/Malta",
+    "cyprus": "Asia/Nicosia", "nicosia": "Asia/Nicosia",
+
+    # ── AFRICA ────────────────────────────────────────────────────────────────
+    "nigeria": "Africa/Lagos", "lagos": "Africa/Lagos", "abuja": "Africa/Lagos",
+    "egypt": "Africa/Cairo", "cairo": "Africa/Cairo",
+    "south africa": "Africa/Johannesburg", "johannesburg": "Africa/Johannesburg",
+    "cape town": "Africa/Johannesburg",
+    "kenya": "Africa/Nairobi", "nairobi": "Africa/Nairobi",
+    "ethiopia": "Africa/Addis_Ababa", "addis ababa": "Africa/Addis_Ababa",
+    "ghana": "Africa/Accra", "accra": "Africa/Accra",
+    "tanzania": "Africa/Dar_es_Salaam", "dar es salaam": "Africa/Dar_es_Salaam",
+    "uganda": "Africa/Kampala", "kampala": "Africa/Kampala",
+    "morocco": "Africa/Casablanca", "casablanca": "Africa/Casablanca",
+    "algiers": "Africa/Algiers", "algeria": "Africa/Algiers",
+    "tunisia": "Africa/Tunis", "tunis": "Africa/Tunis",
+    "libya": "Africa/Tripoli", "tripoli": "Africa/Tripoli",
+    "sudan": "Africa/Khartoum", "khartoum": "Africa/Khartoum",
+    "zimbabwe": "Africa/Harare", "harare": "Africa/Harare",
+    "zambia": "Africa/Lusaka", "lusaka": "Africa/Lusaka",
+    "angola": "Africa/Luanda", "luanda": "Africa/Luanda",
+    "cameroon": "Africa/Douala", "douala": "Africa/Douala",
+    "senegal": "Africa/Dakar", "dakar": "Africa/Dakar",
+
+    # ── AMERICAS ──────────────────────────────────────────────────────────────
+    "usa": "America/New_York", "us": "America/New_York",
+    "united states": "America/New_York", "america": "America/New_York",
+    "new york": "America/New_York", "nyc": "America/New_York",
+    "boston": "America/New_York", "miami": "America/New_York",
+    "washington": "America/New_York", "dc": "America/New_York",
+    "chicago": "America/Chicago",
+    "houston": "America/Chicago", "dallas": "America/Chicago",
+    "denver": "America/Denver",
+    "los angeles": "America/Los_Angeles", "la": "America/Los_Angeles",
+    "san francisco": "America/Los_Angeles", "seattle": "America/Los_Angeles",
+    "las vegas": "America/Los_Angeles", "phoenix": "America/Phoenix",
+    "alaska": "America/Anchorage", "anchorage": "America/Anchorage",
+    "hawaii": "Pacific/Honolulu", "honolulu": "Pacific/Honolulu",
+    "canada": "America/Toronto", "toronto": "America/Toronto",
+    "vancouver": "America/Vancouver", "montreal": "America/Toronto",
+    "calgary": "America/Edmonton",
+    "mexico": "America/Mexico_City", "mexico city": "America/Mexico_City",
+    "brazil": "America/Sao_Paulo", "sao paulo": "America/Sao_Paulo",
+    "brasilia": "America/Sao_Paulo", "rio": "America/Sao_Paulo",
+    "rio de janeiro": "America/Sao_Paulo",
+    "argentina": "America/Argentina/Buenos_Aires",
+    "buenos aires": "America/Argentina/Buenos_Aires",
+    "chile": "America/Santiago", "santiago": "America/Santiago",
+    "colombia": "America/Bogota", "bogota": "America/Bogota",
+    "peru": "America/Lima", "lima": "America/Lima",
+    "venezuela": "America/Caracas", "caracas": "America/Caracas",
+    "ecuador": "America/Guayaquil", "quito": "America/Guayaquil",
+    "cuba": "America/Havana", "havana": "America/Havana",
+    "jamaica": "America/Jamaica", "kingston": "America/Jamaica",
+
+    # ── OCEANIA ───────────────────────────────────────────────────────────────
+    "australia": "Australia/Sydney", "sydney": "Australia/Sydney",
+    "melbourne": "Australia/Melbourne", "brisbane": "Australia/Brisbane",
+    "perth": "Australia/Perth", "adelaide": "Australia/Adelaide",
+    "new zealand": "Pacific/Auckland", "auckland": "Pacific/Auckland",
+    "wellington": "Pacific/Auckland",
+    "fiji": "Pacific/Fiji", "suva": "Pacific/Fiji",
+    "papua new guinea": "Pacific/Port_Moresby",
+
+    # ── UTC / GMT ──────────────────────────────────────────────────────────────
+    "utc": "UTC", "gmt": "UTC", "greenwich": "UTC",
+}
+
+def tool_clock(prompt: str) -> dict:
+    """
+    Returns the exact current time (with seconds) for a detected location.
+    Default: India (Asia/Kolkata / IST).
+    Falls back gracefully if zoneinfo is unavailable.
+    """
+    from datetime import datetime
+    try:
+        from zoneinfo import ZoneInfo
+    except ImportError:
+        try:
+            from backports.zoneinfo import ZoneInfo
+        except ImportError:
+            ZoneInfo = None
+
+    print(f"🕐 [TOOL] clock | prompt: {prompt[:80]}")
+
+    lower = prompt.lower()
+    tz_key   = "Asia/Kolkata"
+    location = "India"
+
+    # Try longest-match first so "new york" beats "york"
+    best_match_len = 0
+    for key, tz in TIMEZONE_MAP.items():
+        if key in lower and len(key) > best_match_len:
+            tz_key = tz
+            location = key.title()
+            best_match_len = len(key)
+
+    try:
+        if ZoneInfo:
+            tz     = ZoneInfo(tz_key)
+            now    = datetime.now(tz)
+        else:
+            import pytz
+            tz  = pytz.timezone(tz_key)
+            now = datetime.now(tz)
+
+        # UTC offset string e.g. "+05:30"
+        offset_secs  = int(now.utcoffset().total_seconds())
+        sign         = "+" if offset_secs >= 0 else "-"
+        offset_secs  = abs(offset_secs)
+        offset_h, r  = divmod(offset_secs, 3600)
+        offset_m     = r // 60
+        utc_offset   = f"{sign}{offset_h:02d}:{offset_m:02d}"
+
+        # Abbrev from tzname
+        tz_abbrev = now.strftime("%Z") or tz_key.split("/")[-1]
+
+        result = {
+            "tool"      : "clock",
+            "location"  : location,
+            "timezone"  : tz_key,
+            "tz_abbrev" : tz_abbrev,
+            "utc_offset": utc_offset,
+            "time_12h"  : now.strftime("%I:%M:%S %p"),
+            "time_24h"  : now.strftime("%H:%M:%S"),
+            "date"      : now.strftime("%A, %d %B %Y"),
+            "day"       : now.strftime("%A"),
+        }
+        print(f"✅ [TOOL] clock: {result['time_12h']} — {location} ({tz_key})")
+        return result
+
+    except Exception as e:
+        print(f"❌ [TOOL] clock exception: {e}")
+        # Pure UTC fallback
+        from datetime import timezone
+        now = datetime.now(timezone.utc)
+        return {
+            "tool"      : "clock",
+            "location"  : location,
+            "timezone"  : "UTC",
+            "tz_abbrev" : "UTC",
+            "utc_offset": "+00:00",
+            "time_12h"  : now.strftime("%I:%M:%S %p"),
+            "time_24h"  : now.strftime("%H:%M:%S"),
+            "date"      : now.strftime("%A, %d %B %Y"),
+            "day"       : now.strftime("%A"),
+        }
 
 
 # ============================================================
@@ -480,6 +782,7 @@ def run_tool(intent: str, prompt: str) -> dict | None:
     Returns tool output dict, or None for 'general' (no tool needed).
     """
     print(f"🗺️ [ROUTER] intent={intent}")
+    if intent == "clock":        return tool_clock(prompt)
     if intent == "weather":     return tool_weather(prompt)
     if intent == "finance":     return tool_finance(prompt)
     if intent == "news":        return tool_news(prompt)
@@ -502,7 +805,16 @@ def build_tool_context(tool_result: dict) -> str:
     tool = tool_result.get("tool", "")
     lines = [f"📡 LIVE DATA FROM TOOL [{tool.upper()}] — use this to answer accurately:\n"]
 
-    if tool == "weather":
+    if tool == "clock":
+        lines += [
+            f"Location  : {tool_result['location']}",
+            f"Timezone  : {tool_result['timezone']} ({tool_result['tz_abbrev']}, UTC{tool_result['utc_offset']})",
+            f"Time (12h): {tool_result['time_12h']}",
+            f"Time (24h): {tool_result['time_24h']}",
+            f"Date      : {tool_result['date']}",
+        ]
+
+    elif tool == "weather":
         lines += [
             f"City: {tool_result['city']}",
             f"Temperature: {tool_result['temperature']}°C (feels like {tool_result['feels_like']}°C)",

@@ -1576,6 +1576,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             const thinkLabel = thinking.querySelector(".thinking-label");
             if (thinkLabel) {
                 const intentLabels = {
+                    clock:      "🕐 Checking live time…",
                     weather:    "🌤️ Checking live weather…",
                     finance:    "💹 Fetching market data…",
                     sports:     "🏏 Fetching live scores…",
@@ -1628,6 +1629,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             // ── Show tool badge above message ────────────────────────────────
             if (toolUsed) {
                 const toolBadges = {
+                    clock:      { icon: "🕐", label: "Live Clock" },
                     weather:    { icon: "🌤️", label: "Live Weather" },
                     finance:    { icon: "💹", label: "Market Data" },
                     sports:     { icon: "🏏", label: "Live Scores" },
@@ -1833,6 +1835,7 @@ let webSearchEnabled = true;  // ✅ ON by default — like Claude
 // Actual tool execution always happens on the backend.
 function detectClientIntent(message) {
     const lower = message.toLowerCase();
+    if (/\btime\b|\bclock\b|\bwhat time\b|\bcurrent time\b|\btimezone\b|\btime zone\b|\bist\b|\butc\b|\bgmt\b/.test(lower)) return "clock";
     if (/weather|temperature|humidity|forecast|sunny|cloudy|will it rain|feels like/.test(lower)) return "weather";
     if (/share price|stock price|stock market|nse|bse|nifty|sensex|crypto|bitcoin|ethereum|exchange rate|rupee/.test(lower)) return "finance";
     if (/(tata|reliance|infosys|wipro|hdfc|icici|bajaj|sbi).*(price|stock|share)|(price|stock|share).*(tata|reliance|infosys|wipro|hdfc|icici|bajaj|sbi)/.test(lower)) return "finance";
