@@ -1475,6 +1475,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     initTheme();
     initFontSize();
+    initWebSearchUI();
 
     await getUser();
 
@@ -1555,6 +1556,10 @@ document.addEventListener("DOMContentLoaded", async function () {
         chatbox.appendChild(thinking);
         chatbox.scrollTop = chatbox.scrollHeight;
 
+        // ── Set streaming state + create abort controller ────────────────────
+        activeAbortController = new AbortController();
+        setStreamingState(true);
+
         // ── Build prompt text ────────────────────────────────────────────────
         let promptText = message;
         if (filesToSend.length > 0 && !message) {
@@ -1591,6 +1596,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             const res = await fetch("/chat", {
                 method : "POST",
                 headers: { "Content-Type": "application/json" },
+                signal : activeAbortController ? activeAbortController.signal : undefined,
                 body   : JSON.stringify({
                     prompt    : promptText,
                     model     : model,
@@ -1614,6 +1620,10 @@ document.addEventListener("DOMContentLoaded", async function () {
                 botMsg, wrapper, reader, decoder, chatbox,
                 (tu) => { toolUsed = tu; }
             );
+
+            // ── Reset streaming state ────────────────────────────────────────
+            activeAbortController = null;
+            setStreamingState(false);
 
             // ── Show tool badge above message ────────────────────────────────
             if (toolUsed) {
@@ -1654,7 +1664,11 @@ document.addEventListener("DOMContentLoaded", async function () {
             }
 
         } catch (err) {
+            activeAbortController = null;
+            setStreamingState(false);
             try { thinking.remove(); } catch (_) {}
+            // Don't show error if user intentionally stopped the response
+            if (err && err.name === 'AbortError') return;
             console.error("❌ AI fetch failed:", err);
             const existingWrapper = chatbox.querySelector(".bot-msg-wrapper:last-child");
             if (!existingWrapper || existingWrapper.querySelector(".message.bot")?.innerHTML?.trim() === "") {
@@ -1812,7 +1826,7 @@ function initFontSize() {
 // ============================
 // 🌐 WEB SEARCH & INTENT SYSTEM
 // ============================
-let webSearchEnabled = false;
+let webSearchEnabled = true;  // ✅ ON by default — like Claude
 
 // ── Client-side intent detector ─────────────────────────────────────────────
 // Mirrors backend detect_intent() — used ONLY for UI labels (thinking text).
@@ -1902,11 +1916,47 @@ async function streamWordsWithTools(botMsg, wrapper, reader, decoder, chatbox, o
     return "";
 }
 
-window.toggleWebSearch = function() {
+// ============================================================
+// 🛑 STOP BUTTON — abort controller for streaming responses
+// ============================================================
+let activeAbortController = null;
+let isStreaming = false;
+
+function setStreamingState(streaming) {
+    isStreaming = streaming;
+    const btn = document.getElementById('sendBtn');
+    if (!btn) return;
+    if (streaming) {
+        btn.classList.add('is-stopping');
+        btn.title = 'Stop generating';
+    } else {
+        btn.classList.remove('is-stopping');
+        btn.title = 'Send message';
+    }
+}
+
+window.handleSendOrStop = function () {
+    if (isStreaming) {
+        // Abort the current stream
+        if (activeAbortController) {
+            activeAbortController.abort();
+            activeAbortController = null;
+        }
+        setStreamingState(false);
+        showToast('Response stopped', 1500);
+    } else {
+        sendMessage();
+    }
+};
     webSearchEnabled = !webSearchEnabled;
-    const chip = document.getElementById("webSearchChip");
-    if (chip) chip.style.display = webSearchEnabled ? "flex" : "none";
-    showToast(webSearchEnabled ? "🌐 Web search enabled" : "Web search disabled", 1500);
+
+    // Update the plus-dropdown item to show active state (green background + tick)
+    const searchItem = document.querySelector('.plus-dropdown-item[data-action="search"]');
+    if (searchItem) {
+        searchItem.classList.toggle('search-active', webSearchEnabled);
+    }
+
+    showToast(webSearchEnabled ? '🌐 Web search enabled' : 'Web search disabled', 1500);
 };
 function togglePlusMenu(e) {
     e.stopPropagation();
@@ -1938,6 +1988,14 @@ function handlePlusAction(action) {
         showToast('Deep research — coming soon!');
     } else if (action === 'search') {
         toggleWebSearch();
+    }
+}
+
+// ── Init web-search active state in the plus dropdown on page load ─────────
+function initWebSearchUI() {
+    const searchItem = document.querySelector('.plus-dropdown-item[data-action="search"]');
+    if (searchItem) {
+        searchItem.classList.toggle('search-active', webSearchEnabled);
     }
 }
 

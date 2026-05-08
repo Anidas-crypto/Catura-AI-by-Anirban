@@ -916,6 +916,84 @@ html { scroll-behavior: smooth; }
     transform: scale(1);
 }
 
+/* ── Stop button state ────────────────────────────────────────────────────── */
+/* Default: show send-icon, hide stop elements */
+.send-btn .stop-icon,
+.send-btn .stop-ring {
+    display: none;
+    position: absolute;
+}
+
+.send-btn {
+    position: relative;
+    overflow: visible;
+}
+
+/* When streaming: flip to stop mode */
+.send-btn.is-stopping {
+    background: transparent !important;
+    box-shadow: none !important;
+    border: none;
+}
+
+.send-btn.is-stopping:hover {
+    transform: scale(1.07);
+    box-shadow: none !important;
+    background: transparent !important;
+}
+
+.send-btn.is-stopping .send-icon {
+    display: none;
+}
+
+.send-btn.is-stopping .stop-icon {
+    display: block;
+    color: #10a37f;
+    position: relative;
+    z-index: 2;
+}
+
+.send-btn.is-stopping .stop-ring {
+    display: block;
+    width: 44px;
+    height: 44px;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    animation: spin-ring 1s linear infinite;
+    z-index: 1;
+}
+
+@keyframes spin-ring {
+    from { transform: translate(-50%, -50%) rotate(0deg); }
+    to   { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* ── Web search active state in plus dropdown ────────────────────────────── */
+.plus-dropdown-item .search-active-tick {
+    display: none;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+.plus-dropdown-item.search-active {
+    background: rgba(16, 163, 127, 0.12);
+    border-radius: 8px;
+}
+
+.plus-dropdown-item.search-active .search-active-tick {
+    display: block;
+}
+
+.plus-dropdown-item.search-active span:first-of-type {
+    color: #10a37f;
+}
+
+.plus-dropdown-item.search-active .plus-item-icon svg {
+    stroke: #10a37f;
+}
+
 /* Keep old .input-area button rule for any leftover refs */
 .input-area button.legacy-send {
     width: 36px;

@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" href="static/logos.png">
     
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <link rel="stylesheet" href="static/style.css?v=0.0.40">
+    <link rel="stylesheet" href="static/style.css?v=0.0.41">
     
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#000000" />
@@ -211,7 +211,7 @@
                             </span>
                             <span>Deep research</span>
                         </div>
-                        <div class="plus-dropdown-item" onclick="handlePlusAction('search')">
+                        <div class="plus-dropdown-item" data-action="search" onclick="handlePlusAction('search')">
                             <span class="plus-item-icon">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <circle cx="12" cy="12" r="10"></circle>
@@ -220,19 +220,16 @@
                                 </svg>
                             </span>
                             <span>Web search</span>
+                            <!-- Active indicator tick — visible when search-active class is set -->
+                            <svg class="search-active-tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10a37f" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
                         </div>
                     </div>
                 </div>
 
-                <!-- 🌐 WEB SEARCH CHIP — shown when web search is enabled -->
-                <button id="webSearchChip" class="web-search-chip" onclick="toggleWebSearch()" title="Web search ON — click to disable" style="display:none;">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <line x1="2" y1="12" x2="22" y2="12"></line>
-                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-                    </svg>
-                    Search
-                </button>
+                <!-- 🌐 WEB SEARCH CHIP — hidden, no bubble shown -->
+                <button id="webSearchChip" class="web-search-chip" onclick="toggleWebSearch()" title="Web search ON — click to disable" style="display:none;"></button>
 
                 <div class="input-bottom-spacer"></div>
 
@@ -299,10 +296,19 @@
                     </div>
                 </div>
 
-                <button class="send-btn" onclick="sendMessage()" id="sendBtn">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <button class="send-btn" onclick="handleSendOrStop()" id="sendBtn" title="Send message">
+                    <!-- Send icon (default) -->
+                    <svg class="send-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                         <line x1="12" y1="19" x2="12" y2="5"></line>
                         <polyline points="5 12 12 5 19 12"></polyline>
+                    </svg>
+                    <!-- Stop icon (shown during streaming) -->
+                    <svg class="stop-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                        <rect x="4" y="4" width="16" height="16" rx="2"/>
+                    </svg>
+                    <!-- Green ring spinner (shown during streaming) -->
+                    <svg class="stop-ring" viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="22" cy="22" r="18" fill="none" stroke="#10a37f" stroke-width="3" stroke-dasharray="90 30" stroke-linecap="round"/>
                     </svg>
                 </button>
             </div>
@@ -377,17 +383,17 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
     
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <script src="static/firebase-config.js?v=0.0.40"></script>
-    <script src="static/logic.js?v=0.0.40"></script>
-    <script src="static/feedback.js?v=0.0.40"></script>
-    <script src="static/file-upload.js?v=0.0.40"></script>
+    <script src="static/firebase-config.js?v=0.0.41"></script>
+    <script src="static/logic.js?v=0.0.41"></script>
+    <script src="static/feedback.js?v=0.0.41"></script>
+    <script src="static/file-upload.js?v=0.0.41"></script>
 
     <script>
         console.log('🚀 Catura AI v27.0.5 loaded');
         
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js?v=0.0.40')
+                navigator.serviceWorker.register('/service-worker.js?v=0.0.41')
                     .then(() => console.log('✅ Catura AI PWA Ready - v27.0.5'))
                     .catch((err) => console.log('❌ SW Error:', err));
             });
