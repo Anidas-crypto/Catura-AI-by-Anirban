@@ -101,7 +101,7 @@ async def serve_sw():
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.44"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.45"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -111,7 +111,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.44", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.45", "timestamp": datetime.utcnow().isoformat()}
 
 
 # ============================================================
@@ -564,6 +564,7 @@ def tool_weather(prompt: str) -> dict:
             "wind_speed": wind.get("speed", "N/A"),
             "min_temp": m["temp_min"],
             "max_temp": m["temp_max"],
+            "data_quality": "LIVE — fetched right now from OpenWeatherMap",
         }
         print(f"✅ [TOOL] weather success: {result}")
         return result
@@ -575,70 +576,217 @@ def tool_weather(prompt: str) -> dict:
 
 # ============================================================
 # ✅ TOOL: FINANCE
-# Uses Alpha Vantage (stock) or DuckDuckGo fallback
+# PRIMARY: Yahoo Finance API (no key needed, always-live Indian prices)
+# FALLBACK: DuckDuckGo web search with precise query
 # ============================================================
 def tool_finance(prompt: str) -> dict:
     """
-    Extract stock ticker or crypto symbol, fetch live price.
+    Fetch live stock price from Yahoo Finance.
+    Uses .NS suffix for NSE (most liquid Indian stocks) and
+    .BO suffix for BSE-only listings (e.g. Reliance Power).
+    Never falls back to the LLM's memory — always returns live data or
+    an explicit 'unavailable' signal so the AI doesn't hallucinate.
     """
     print(f"💹 [TOOL] finance | prompt: {prompt[:80]}")
 
-    # Indian company → NSE ticker mapping
-    indian_tickers = {
-        "tata steel": "TATASTEEL.BSE", "tata": "TCS.BSE",
-        "reliance": "RELIANCE.BSE", "infosys": "INFY",
-        "wipro": "WIT", "hdfc": "HDB", "icici": "IBN",
-        "bajaj": "BAJFINANCE.BSE", "sbi": "SBIN.BSE",
-        "nifty": "NSEI", "sensex": "BSESN",
-        "bitcoin": "BTC", "ethereum": "ETH", "crypto": "BTC",
-    }
+    # ── Indian company → Yahoo Finance ticker (NSE .NS / BSE .BO) ──────────
+    # Ordered from most-specific to least-specific to avoid false matches
+    INDIAN_TICKERS: list[tuple[str, str, str]] = [
+        # (keyword_in_lowercase, yahoo_symbol, display_name)
+        # ── Reliance group ──
+        ("reliance power",          "RPOWER.NS",        "Reliance Power"),
+        ("reliance infrastructure", "RELINFRA.NS",      "Reliance Infrastructure"),
+        ("reliance capital",        "RELCAPITAL.NS",    "Reliance Capital"),
+        ("reliance communications", "RCOM.NS",          "Reliance Communications"),
+        ("reliance industries",     "RELIANCE.NS",      "Reliance Industries"),
+        ("reliance",                "RELIANCE.NS",      "Reliance Industries"),
+        # ── Tata group ──
+        ("tata consultancy",        "TCS.NS",           "Tata Consultancy Services"),
+        ("tcs",                     "TCS.NS",           "TCS"),
+        ("tata steel",              "TATASTEEL.NS",     "Tata Steel"),
+        ("tata motors",             "TATAMOTORS.NS",    "Tata Motors"),
+        ("tata power",              "TATAPOWER.NS",     "Tata Power"),
+        ("tata",                    "TCS.NS",           "TCS (Tata)"),
+        # ── IT ──
+        ("infosys",                 "INFY.NS",          "Infosys"),
+        ("wipro",                   "WIPRO.NS",         "Wipro"),
+        ("hcl tech",                "HCLTECH.NS",       "HCL Technologies"),
+        ("hcl technologies",        "HCLTECH.NS",       "HCL Technologies"),
+        ("tech mahindra",           "TECHM.NS",         "Tech Mahindra"),
+        # ── Banking & Finance ──
+        ("hdfc bank",               "HDFCBANK.NS",      "HDFC Bank"),
+        ("hdfc life",               "HDFCLIFE.NS",      "HDFC Life"),
+        ("hdfc",                    "HDFCBANK.NS",      "HDFC Bank"),
+        ("icici bank",              "ICICIBANK.NS",     "ICICI Bank"),
+        ("icici",                   "ICICIBANK.NS",     "ICICI Bank"),
+        ("sbi",                     "SBIN.NS",          "SBI"),
+        ("state bank",              "SBIN.NS",          "State Bank of India"),
+        ("axis bank",               "AXISBANK.NS",      "Axis Bank"),
+        ("kotak",                   "KOTAKBANK.NS",     "Kotak Mahindra Bank"),
+        ("bajaj finance",           "BAJFINANCE.NS",    "Bajaj Finance"),
+        ("bajaj finserv",           "BAJAJFINSV.NS",    "Bajaj Finserv"),
+        ("bajaj",                   "BAJAJ-AUTO.NS",    "Bajaj Auto"),
+        # ── Energy & Power ──
+        ("adani power",             "ADANIPOWER.NS",    "Adani Power"),
+        ("adani green",             "ADANIGREEN.NS",    "Adani Green Energy"),
+        ("adani enterprises",       "ADANIENT.NS",      "Adani Enterprises"),
+        ("adani ports",             "ADANIPORTS.NS",    "Adani Ports"),
+        ("adani",                   "ADANIENT.NS",      "Adani Enterprises"),
+        ("ntpc",                    "NTPC.NS",          "NTPC"),
+        ("power grid",              "POWERGRID.NS",     "Power Grid Corp"),
+        ("bhel",                    "BHEL.NS",          "BHEL"),
+        ("ongc",                    "ONGC.NS",          "ONGC"),
+        ("coal india",              "COALINDIA.NS",     "Coal India"),
+        ("ioc",                     "IOC.NS",           "Indian Oil Corp"),
+        ("indian oil",              "IOC.NS",           "Indian Oil Corp"),
+        ("bpcl",                    "BPCL.NS",          "BPCL"),
+        ("hpcl",                    "HPCL.NS",          "HPCL"),
+        # ── Auto ──
+        ("maruti",                  "MARUTI.NS",        "Maruti Suzuki"),
+        ("hero motocorp",           "HEROMOTOCO.NS",    "Hero MotoCorp"),
+        ("m&m",                     "M&M.NS",           "Mahindra & Mahindra"),
+        ("mahindra",                "M&M.NS",           "Mahindra & Mahindra"),
+        ("ashok leyland",           "ASHOKLEY.NS",      "Ashok Leyland"),
+        # ── Pharma ──
+        ("sun pharma",              "SUNPHARMA.NS",     "Sun Pharma"),
+        ("dr reddy",                "DRREDDY.NS",       "Dr. Reddy's"),
+        ("cipla",                   "CIPLA.NS",         "Cipla"),
+        ("divi's",                  "DIVISLAB.NS",      "Divi's Laboratories"),
+        ("divis",                   "DIVISLAB.NS",      "Divi's Laboratories"),
+        # ── FMCG ──
+        ("hindustan unilever",      "HINDUNILVR.NS",    "Hindustan Unilever"),
+        ("hul",                     "HINDUNILVR.NS",    "HUL"),
+        ("itc",                     "ITC.NS",           "ITC"),
+        ("nestle",                  "NESTLEIND.NS",     "Nestlé India"),
+        ("asian paints",            "ASIANPAINT.NS",    "Asian Paints"),
+        # ── Telecom ──
+        ("bharti airtel",           "BHARTIARTL.NS",    "Bharti Airtel"),
+        ("airtel",                  "BHARTIARTL.NS",    "Bharti Airtel"),
+        ("vodafone",                "IDEA.NS",          "Vodafone Idea"),
+        ("vi ",                     "IDEA.NS",          "Vodafone Idea"),
+        # ── Indices ──
+        ("nifty",                   "^NSEI",            "Nifty 50"),
+        ("sensex",                  "^BSESN",           "BSE Sensex"),
+        ("nifty bank",              "^NSEBANK",         "Nifty Bank"),
+        # ── Crypto ──
+        ("bitcoin",                 "BTC-USD",          "Bitcoin"),
+        ("ethereum",                "ETH-USD",          "Ethereum"),
+        ("btc",                     "BTC-USD",          "Bitcoin"),
+        ("eth",                     "ETH-USD",          "Ethereum"),
+    ]
 
-    ticker = None
     lower = prompt.lower()
-    for company, sym in indian_tickers.items():
-        if company in lower:
-            ticker = sym
+    ticker = None
+    display_name = None
+
+    # Longest-match wins (list is already ordered specific → generic)
+    for keyword, symbol, name in INDIAN_TICKERS:
+        if keyword in lower:
+            ticker = symbol
+            display_name = name
             break
 
-    # Also check for explicit ticker symbols (e.g., RELIANCE, INFY)
+    # If no match found → fall back to DDG web search
     if not ticker:
-        m = re.search(r'\b([A-Z]{2,6})\b', prompt)
-        if m:
-            ticker = m.group(1)
+        print("⚠️ [TOOL] finance — no ticker matched, using web search")
+        return tool_web_search(f"{prompt.strip()} stock share price today NSE BSE live")
 
-    if not ticker:
-        # Generic finance search
-        return tool_web_search(prompt + " stock price today")
-
-    if not ALPHAVANTAGE_KEY:
-        print("⚠️ [TOOL] finance — no API key, falling back to web search")
-        return tool_web_search(f"{ticker} stock price today")
-
+    # ── PRIMARY: Yahoo Finance v8 quote API (no key, always live) ──────────
     try:
-        url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={ticker}&apikey={ALPHAVANTAGE_KEY}"
-        resp = requests.get(url, timeout=8)
-        data = resp.json()
-        quote = data.get("Global Quote", {})
-
-        if not quote:
-            return tool_web_search(f"{ticker} stock price today live")
-
-        result = {
-            "tool": "finance",
-            "symbol": quote.get("01. symbol", ticker),
-            "price": quote.get("05. price", "N/A"),
-            "change": quote.get("09. change", "N/A"),
-            "change_pct": quote.get("10. change percent", "N/A"),
-            "volume": quote.get("06. volume", "N/A"),
-            "latest_trading_day": quote.get("07. latest trading day", "N/A"),
-            "previous_close": quote.get("08. previous close", "N/A"),
+        yf_url = (
+            f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}"
+            f"?interval=1d&range=1d"
+        )
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            ),
+            "Accept": "application/json",
         }
-        print(f"✅ [TOOL] finance success: {result}")
-        return result
+        resp = requests.get(yf_url, headers=headers, timeout=10)
+
+        if resp.status_code == 200:
+            data = resp.json()
+            meta = data.get("chart", {}).get("result", [{}])[0].get("meta", {})
+
+            price          = meta.get("regularMarketPrice")
+            prev_close     = meta.get("chartPreviousClose") or meta.get("previousClose")
+            currency       = meta.get("currency", "INR")
+            exchange       = meta.get("exchangeName", "NSE")
+            market_state   = meta.get("marketState", "UNKNOWN")
+
+            if price:
+                change     = round(price - prev_close, 2) if prev_close else "N/A"
+                change_pct = (
+                    f"{round((change / prev_close) * 100, 2)}%"
+                    if prev_close and isinstance(change, float) else "N/A"
+                )
+                # Indian number formatting helper
+                def fmt_inr(val):
+                    if val is None:
+                        return "N/A"
+                    return f"₹{val:,.2f}" if currency == "INR" else f"{val:,.4f}"
+
+                result = {
+                    "tool":           "finance",
+                    "source":         "Yahoo Finance (live)",
+                    "symbol":         ticker,
+                    "display_name":   display_name,
+                    "price":          fmt_inr(price),
+                    "change":         f"{'+'if isinstance(change,float) and change>=0 else ''}{change}",
+                    "change_pct":     change_pct,
+                    "previous_close": fmt_inr(prev_close),
+                    "currency":       currency,
+                    "exchange":       exchange,
+                    "market_state":   market_state,
+                    "data_quality":   "LIVE — fetched right now from Yahoo Finance",
+                }
+                print(f"✅ [TOOL] finance Yahoo: {display_name} = {fmt_inr(price)}")
+                return result
+
+        print(f"⚠️ [TOOL] finance Yahoo returned status {resp.status_code}")
 
     except Exception as e:
-        print(f"❌ [TOOL] finance exception: {e}")
-        return tool_web_search(f"{ticker} stock price today")
+        print(f"❌ [TOOL] finance Yahoo exception: {e}")
+
+    # ── FALLBACK: Alpha Vantage (if API key is set) ─────────────────────────
+    # Note: Alpha Vantage does NOT support Indian NSE/BSE tickers reliably.
+    # Only use it for US stocks and crypto as a fallback.
+    if ALPHAVANTAGE_KEY and not ticker.endswith((".NS", ".BO")):
+        try:
+            url = (
+                f"https://www.alphavantage.co/query"
+                f"?function=GLOBAL_QUOTE&symbol={ticker}&apikey={ALPHAVANTAGE_KEY}"
+            )
+            resp = requests.get(url, timeout=8)
+            data = resp.json()
+            quote = data.get("Global Quote", {})
+            if quote and quote.get("05. price"):
+                result = {
+                    "tool":           "finance",
+                    "source":         "Alpha Vantage (live)",
+                    "symbol":         quote.get("01. symbol", ticker),
+                    "display_name":   display_name or ticker,
+                    "price":          quote.get("05. price", "N/A"),
+                    "change":         quote.get("09. change", "N/A"),
+                    "change_pct":     quote.get("10. change percent", "N/A"),
+                    "previous_close": quote.get("08. previous close", "N/A"),
+                    "volume":         quote.get("06. volume", "N/A"),
+                    "data_quality":   "LIVE — fetched right now from Alpha Vantage",
+                }
+                print(f"✅ [TOOL] finance AlphaVantage fallback: {result['price']}")
+                return result
+        except Exception as e:
+            print(f"❌ [TOOL] finance AlphaVantage fallback exception: {e}")
+
+    # ── LAST RESORT: DuckDuckGo search ──────────────────────────────────────
+    print("⚠️ [TOOL] finance — all APIs failed, using web search")
+    search_name = display_name or ticker
+    return tool_web_search(
+        f"{search_name} share price today live NSE BSE {datetime.utcnow().strftime('%B %Y')}"
+    )
 
 
 # ============================================================
@@ -822,17 +970,30 @@ def build_tool_context(tool_result: dict) -> str:
             f"Humidity: {tool_result['humidity']}%",
             f"Wind Speed: {tool_result['wind_speed']} m/s",
             f"Min/Max Today: {tool_result['min_temp']}°C / {tool_result['max_temp']}°C",
+            f"Data Source: {tool_result.get('data_quality', 'live')}",
         ]
+        lines.append(
+            "\n⚠️ ANTI-HALLUCINATION RULE: Use ONLY the temperature and weather data above. "
+            "Do NOT use any weather values from your training memory. "
+            "If a value is missing, say so — never invent a temperature."
+        )
 
     elif tool == "finance":
         lines += [
-            f"Symbol: {tool_result['symbol']}",
-            f"Current Price: {tool_result['price']}",
-            f"Change: {tool_result['change']} ({tool_result['change_pct']})",
-            f"Previous Close: {tool_result['previous_close']}",
-            f"Volume: {tool_result['volume']}",
-            f"Latest Trading Day: {tool_result['latest_trading_day']}",
+            f"Stock: {tool_result.get('display_name', tool_result.get('symbol', 'N/A'))} ({tool_result.get('symbol', 'N/A')})",
+            f"Exchange: {tool_result.get('exchange', 'NSE/BSE')} | Market State: {tool_result.get('market_state', 'N/A')}",
+            f"Current Price: {tool_result.get('price', 'N/A')}",
+            f"Change Today: {tool_result.get('change', 'N/A')} ({tool_result.get('change_pct', 'N/A')})",
+            f"Previous Close: {tool_result.get('previous_close', 'N/A')}",
+            f"Data Source: {tool_result.get('data_quality', 'Yahoo Finance (live)')}",
         ]
+        lines.append(
+            "\n⚠️ ANTI-HALLUCINATION RULE: The price shown above is the ONLY correct price. "
+            "Do NOT quote any other number from your training data. "
+            "If price is 'N/A', tell the user the live price could not be fetched right now "
+            "and suggest they check NSE (nseindia.com) or BSE (bseindia.com). "
+            "NEVER invent or guess stock prices."
+        )
 
     elif tool == "news":
         lines.append(f"Topic: {tool_result['topic']}")
@@ -859,8 +1020,12 @@ def build_tool_context(tool_result: dict) -> str:
             lines.append(f"   Source: {r['href']}")
 
     lines.append(
-        "\n\nIMPORTANT: Use the above live data to give an accurate, up-to-date answer. "
-        "Do NOT say 'I don't have real-time data'. Format the answer cleanly."
+        "\n\n🚨 CRITICAL RULES FOR LIVE DATA:\n"
+        "1. Use ONLY the data shown above — do NOT use any numbers from your training memory.\n"
+        "2. If a value shows 'N/A', say it is currently unavailable — do NOT invent a number.\n"
+        "3. NEVER fabricate prices, temperatures, scores, or headlines.\n"
+        "4. Do NOT say 'I don't have real-time data' — you have it above. Use it.\n"
+        "5. Format the answer cleanly and cite the data source."
     )
     return "\n".join(lines)
 
@@ -1168,8 +1333,15 @@ async def chat_post(request: Request):
             "3. If live data (weather, finance, news, sports, search results) "
             "is provided above in your system context, use it directly to write "
             "your answer in natural language. Do NOT say you are 'using a tool'.\n"
-            "4. If no live data is provided, answer from your knowledge.\n"
-            "5. Always respond in clean, readable prose or markdown. Never output raw JSON."
+            "4. If no live data is provided, answer from your knowledge but be clear "
+            "it may not reflect today's values.\n"
+            "5. Always respond in clean, readable prose or markdown. Never output raw JSON.\n"
+            "6. 🚨 NEVER INVENT NUMBERS: Do NOT fabricate or guess stock prices, share prices, "
+            "temperatures, scores, or any numerical live data from your training memory. "
+            "If the live data context does not contain the exact number, say so clearly. "
+            "Hallucinating a price (e.g. saying ₹1,233 for a stock that trades at ₹28) "
+            "is a critical failure — always prefer 'I couldn't fetch the live price' "
+            "over inventing a number."
         )
 
         system_prompts = {
@@ -1609,7 +1781,12 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
             "{\"query\": ...} or Search web.{...} or any similar syntax.\n"
             "3. If live data is provided in your system context, use it directly. "
             "Do NOT say you are 'using a tool'.\n"
-            "4. Always respond in clean, readable prose or markdown. Never output raw JSON."
+            "4. Always respond in clean, readable prose or markdown. Never output raw JSON.\n"
+            "5. 🚨 NEVER INVENT NUMBERS: Do NOT fabricate or guess stock prices, share prices, "
+            "temperatures, scores, or any numerical live data from your training memory. "
+            "If the live data context does not contain the exact number, say so clearly. "
+            "Hallucinating a price is a critical failure — always prefer 'I couldn't fetch "
+            "the live price right now' over inventing a number."
         )
 
         # ══════════════════════════════════════════════════════════════════════
