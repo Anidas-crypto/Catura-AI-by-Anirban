@@ -101,7 +101,7 @@ async def serve_sw():
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.46"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.47"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -111,7 +111,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.46", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.47", "timestamp": datetime.utcnow().isoformat()}
 
 
 # ============================================================
@@ -1000,15 +1000,17 @@ def tool_finance(prompt: str) -> dict:
         except Exception as e:
             print(f"❌ [Finance] Alpha Vantage exception: {e}")
 
-    # ── Step 5: Last resort — DuckDuckGo search ───────────────────────────────
-    # Flag this so the AI knows NOT to trust numbers in snippets
-    print("⚠️ [Finance] all APIs failed — DDG last resort")
-    search_name = display_name or (company_raw if 'company_raw' in dir() else prompt[:40])
-    ddg_result  = tool_web_search(
-        f"{search_name} share price today live NSE BSE {datetime.utcnow().strftime('%B %Y')}"
-    )
-    ddg_result["finance_ddg_fallback"] = True  # signal to context builder
-    return ddg_result
+    # ── Step 5: Price unavailable — return structured "not found" ─────────────
+    # We do NOT do a DDG search here because web snippets contain stale prices
+    # that the LLM will hallucinate as live data. Instead, return a clear signal
+    # telling the model to refuse to quote any price.
+    print("⚠️ [Finance] all APIs failed — returning price_unavailable")
+    searched_name = display_name or (company_raw if 'company_raw' in locals() else prompt[:60])
+    return {
+        "tool":              "finance",
+        "price_unavailable": True,
+        "searched_name":     searched_name,
+    }
 
 
 # ============================================================
@@ -1195,19 +1197,28 @@ def build_tool_context(tool_result: dict) -> str:
         ]
 
     elif tool == "finance":
-        if tool_result.get("finance_ddg_fallback"):
-            # DDG fallback — snippets are unreliable, warn AI strongly
-            lines.append(f"Search query: {tool_result.get('query', '')}")
+        if tool_result.get("price_unavailable"):
+            # All APIs failed — give the model ZERO numbers to work with
+            searched = tool_result.get("searched_name", "this company")
             lines.append(
-                "\n🚨 WARNING: Live price APIs FAILED for this stock. "
-                "The search snippets below may be STALE or WRONG. "
-                "You MUST tell the user: 'I could not fetch the live price right now. "
-                "Please check NSE (nseindia.com) or BSE (bseindia.com) or your broker app.' "
-                "Do NOT quote any number from the snippets as the current price."
+                f"🚨 LIVE PRICE FETCH FAILED for: {searched}\n"
+                "No live price data is available from Yahoo Finance or any other source.\n"
+                "MANDATORY INSTRUCTION — you MUST respond with EXACTLY this message "
+                "(do not add any price, do not guess, do not use training memory):\n"
+                f"'I wasn't able to fetch the live share price for {searched} right now. "
+                "Please check the current price directly on NSE (nseindia.com), "
+                "BSE (bseindia.com), or your broker / trading app for accurate data.'"
             )
-            for i, r in enumerate(tool_result.get("results", []), 1):
-                lines.append(f"\n{i}. {r['title']}")
-                lines.append(f"   {r['body']}")
+        elif tool_result.get("finance_ddg_fallback"):
+            # Legacy path — treat the same as unavailable (no snippets to the model)
+            searched = tool_result.get("searched_name", "this company")
+            lines.append(
+                f"🚨 LIVE PRICE FETCH FAILED for: {searched}\n"
+                "No verified live price is available.\n"
+                "MANDATORY INSTRUCTION: Tell the user you could not fetch the live price "
+                "and direct them to nseindia.com, bseindia.com, or their broker app. "
+                "Do NOT quote any number — not from snippets, not from training memory."
+            )
         else:
             lines += [
                 f"Stock: {tool_result.get('display_name', tool_result.get('symbol', 'N/A'))} "
