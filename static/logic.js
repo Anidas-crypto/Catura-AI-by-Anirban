@@ -2101,30 +2101,32 @@ window.toggleModelSelector = function (e) {
     }
 };
 
-window.selectModel = function (modelId, modelName) {
+window.selectModel = function (modelId, modelName, e) {
+    if (e) e.stopPropagation();
     selectedModel = modelId.toLowerCase();
-    
+
     // Update button text
     const modelNameEl = document.getElementById('modelName');
-    if (modelNameEl) {
-        modelNameEl.textContent = modelName;
-    }
-    
+    if (modelNameEl) modelNameEl.textContent = modelName;
+
     // Update active state for all model options
-    document.querySelectorAll('.model-option').forEach(opt => {
-        opt.classList.remove('active');
-    });
-    
+    document.querySelectorAll('.model-option').forEach(opt => opt.classList.remove('active'));
+
     // Find and activate the clicked option
     const activeOption = document.querySelector(`[data-model="${modelId}"]`);
-    if (activeOption) {
-        activeOption.classList.add('active');
+    if (activeOption) activeOption.classList.add('active');
+
+    // On mobile: brief delay so user sees the checkmark before sheet closes
+    const isMobile = window.innerWidth <= 768;
+    if (isMobile) {
+        setTimeout(() => {
+            closeAllModelMenus();
+            showToast(`✓ Switched to ${modelName}`, 1500);
+        }, 180);
+    } else {
+        closeAllModelMenus();
+        showToast(`✓ Switched to ${modelName}`, 1500);
     }
-    
-    // Close dropdown
-    closeAllModelMenus();
-    
-    showToast(`✓ Switched to ${modelName}`, 1500);
 };
 
 function closeAllModelMenus() {
@@ -2143,7 +2145,7 @@ function closeAllModelMenus() {
 }
 
 window.toggleMoreModels = function (e) {
-    if (e) e.stopPropagation();
+    if (e) { e.stopPropagation(); e.preventDefault(); }
     const panel = document.getElementById('moreModelsPanel');
     const row   = document.getElementById('moreModelsRow');
     if (!panel || !row) return;
@@ -2182,6 +2184,11 @@ window.toggleMoreModels = function (e) {
         // Mobile: clear desktop positioning — CSS handles bottom-sheet
         panel.style.left = '';
         panel.style.top  = '';
+        // Close the main dropdown sheet, show only the sub-panel sheet
+        const dropdown = document.getElementById('modelDropdown');
+        const btn = document.getElementById('modelSelectorBtn');
+        if (dropdown) dropdown.classList.remove('open');
+        if (btn) btn.classList.remove('open');
     }
 
     panel.classList.add('open');
@@ -2190,11 +2197,15 @@ window.toggleMoreModels = function (e) {
 
 // Close dropdown when clicking outside
 document.addEventListener('click', function (e) {
-    const wrap  = document.getElementById('modelSelectorWrap');
-    const panel = document.getElementById('moreModelsPanel');
-    const insideWrap  = wrap  && wrap.contains(e.target);
-    const insidePanel = panel && panel.contains(e.target);
-    if (!insideWrap && !insidePanel) {
+    const wrap     = document.getElementById('modelSelectorWrap');
+    const dropdown = document.getElementById('modelDropdown');
+    const panel    = document.getElementById('moreModelsPanel');
+    const backdrop = document.getElementById('modelBackdrop');
+    const insideWrap     = wrap     && wrap.contains(e.target);
+    const insideDropdown = dropdown && dropdown.contains(e.target);
+    const insidePanel    = panel    && panel.contains(e.target);
+    const isBackdrop     = backdrop && backdrop === e.target;
+    if (!insideWrap && !insideDropdown && !insidePanel || isBackdrop) {
         closeAllModelMenus();
     }
 });
