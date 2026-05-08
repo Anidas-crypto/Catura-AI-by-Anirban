@@ -111,12 +111,14 @@ html { scroll-behavior: smooth; }
     min-width: 0;
     height: 100dvh;
     background: linear-gradient(180deg, #111111 0%, #0f0f0f 100%);
-    border-right: 1px solid #222;
+    border-right: 0px solid transparent;  /* no border when collapsed */
     display: flex;
     flex-direction: column;
-    overflow: visible;
+    overflow: hidden;  /* clip content when width:0 */
     transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-                min-width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                min-width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                border-color 0.3s ease,
+                border-width 0.3s ease;
     flex-shrink: 0;
     position: relative;
     z-index: 100;
@@ -125,6 +127,7 @@ html { scroll-behavior: smooth; }
 .sidebar.open {
     width: 260px;
     min-width: 260px;
+    border-right: 1px solid #222;  /* border only when open */
     box-shadow: 2px 0 10px rgba(0,0,0,0.4);
     overflow: visible;
 }
@@ -1870,7 +1873,8 @@ html { scroll-behavior: smooth; }
 
 /* Apply light theme */
 [data-theme="light"] body { background: #f5f5f5; color: #111; }
-[data-theme="light"] .sidebar { background: #ebebeb; border-color: #d8d8d8; }
+[data-theme="light"] .sidebar { background: #ebebeb; }
+[data-theme="light"] .sidebar.open { border-color: #d8d8d8; }
 [data-theme="light"] .icon-rail { background: #e0e0e0; border-color: #d0d0d0; }
 [data-theme="light"] .app { background: #f5f5f5; }
 [data-theme="light"] .input-area { background: #ffffff; border-color: #d0d0d0; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
