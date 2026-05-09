@@ -2434,6 +2434,48 @@ html { scroll-behavior: smooth; }
     margin-bottom: 2px;
 }
 
+/* Back button — shown only in more-models panel on mobile */
+.model-more-back-btn {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid #242424;
+    padding: 14px 16px;
+    color: #10a37f;
+    font-size: 14px;
+    font-family: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s;
+}
+
+.model-more-back-btn:hover {
+    background: #1e1e1e;
+}
+
+.model-more-back-btn svg {
+    flex-shrink: 0;
+}
+
+[data-theme="light"] .model-more-back-btn {
+    color: #10a37f;
+    border-bottom-color: #e5e5e5;
+}
+
+[data-theme="light"] .model-more-back-btn:hover {
+    background: #f0f0f0;
+}
+
+@media (max-width: 768px) {
+    .model-more-back-btn {
+        display: flex;
+    }
+}
+
 .model-more-panel .model-option {
     padding-left: 14px;
     border-left: 3px solid transparent;
@@ -2648,6 +2690,7 @@ html { scroll-behavior: smooth; }
         font-size: 10px;
         text-align: center;
         letter-spacing: 1.2px;
+        display: none; /* Hidden on mobile — back button replaces it */
     }
 
     /* Dim backdrop when model dropdown is open — handled via JS */
@@ -3415,11 +3458,34 @@ html { scroll-behavior: smooth; }
     display: none;
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: rgba(0, 0, 0, 0.65);
     z-index: 9998;
-    pointer-events: none; /* Never intercept clicks — JS document handler closes on outside tap */
+    pointer-events: all;
+    cursor: default;
+    transition: opacity 0.25s ease;
+    opacity: 0;
+}
+
+/* Body content recedes when model panel is open */
+body.model-panel-open .chat-wrapper,
+body.model-panel-open #chatContainer,
+body.model-panel-open .messages-area {
+    transform: scale(0.97);
+    transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+body:not(.model-panel-open) .chat-wrapper,
+body:not(.model-panel-open) #chatContainer,
+body:not(.model-panel-open) .messages-area {
+    transform: scale(1);
+    transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 @media (min-width: 769px) {
     .model-backdrop { display: none !important; }
+    body.model-panel-open .chat-wrapper,
+    body.model-panel-open #chatContainer,
+    body.model-panel-open .messages-area {
+        transform: none;
+    }
 }

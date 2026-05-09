@@ -2041,13 +2041,16 @@ window.toggleModelSelector = function (e) {
                 backdrop = document.createElement('div');
                 backdrop.id = 'modelBackdrop';
                 backdrop.className = 'model-backdrop';
-                // No click listener — pointer-events:none on backdrop means
-                // clicks pass through to real elements; document handler closes on outside tap
+                // Close on backdrop tap
+                backdrop.addEventListener('click', function() { closeAllModelMenus(); });
                 document.body.appendChild(backdrop);
             }
             backdrop.style.display = 'block';
             // Force reflow then fade in
             requestAnimationFrame(() => { backdrop.style.opacity = '1'; });
+
+            // Add body class for depth effect
+            document.body.classList.add('model-panel-open');
 
             dropdown.classList.add('open');
             btn.classList.add('open');
@@ -2140,9 +2143,17 @@ function closeAllModelMenus() {
     if (panel) panel.classList.remove('open');
     if (row)   row.classList.remove('open');
 
-    // Hide mobile backdrop
+    // Remove body depth class
+    document.body.classList.remove('model-panel-open');
+
+    // Fade out mobile backdrop then hide
     const backdrop = document.getElementById('modelBackdrop');
-    if (backdrop) backdrop.style.display = 'none';
+    if (backdrop) {
+        backdrop.style.opacity = '0';
+        setTimeout(() => {
+            if (backdrop) backdrop.style.display = 'none';
+        }, 250);
+    }
 }
 
 window.toggleMoreModels = function (e) {
@@ -2190,13 +2201,47 @@ window.toggleMoreModels = function (e) {
         const btn = document.getElementById('modelSelectorBtn');
         if (dropdown) dropdown.classList.remove('open');
         if (btn) btn.classList.remove('open');
-        // Keep backdrop visible so background stays dimmed behind sub-panel
+        // Keep backdrop visible and body class so background stays tinted
         const backdrop = document.getElementById('modelBackdrop');
-        if (backdrop) backdrop.style.display = 'block';
+        if (backdrop) {
+            backdrop.style.display = 'block';
+            backdrop.style.opacity = '1';
+        }
+        document.body.classList.add('model-panel-open');
     }
 
     panel.classList.add('open');
     row.classList.add('open');
+};
+
+// Back button: close more-models panel and reopen main dropdown
+window.goBackToMainModels = function (e) {
+    if (e) { e.stopPropagation(); e.preventDefault(); }
+    const panel = document.getElementById('moreModelsPanel');
+    const row   = document.getElementById('moreModelsRow');
+    const dropdown = document.getElementById('modelDropdown');
+    const btn = document.getElementById('modelSelectorBtn');
+
+    // Close the sub-panel
+    if (panel) panel.classList.remove('open');
+    if (row)   row.classList.remove('open');
+
+    // Reopen main dropdown bottom-sheet
+    if (dropdown) {
+        dropdown.style.top    = '';
+        dropdown.style.left   = '';
+        dropdown.style.bottom = '';
+        dropdown.classList.add('open');
+    }
+    if (btn) btn.classList.add('open');
+
+    // Keep backdrop + body class active
+    const backdrop = document.getElementById('modelBackdrop');
+    if (backdrop) {
+        backdrop.style.display = 'block';
+        backdrop.style.opacity = '1';
+    }
+    document.body.classList.add('model-panel-open');
 };
 
 // Close dropdown when clicking outside
