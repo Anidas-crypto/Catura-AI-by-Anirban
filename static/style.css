@@ -3417,6 +3417,7 @@ html { scroll-behavior: smooth; }
     inset: 0;
     background: rgba(0, 0, 0, 0.5);
     z-index: 9998;
+    pointer-events: none; /* Never intercept clicks — JS document handler closes on outside tap */
 }
 
 @media (min-width: 769px) {

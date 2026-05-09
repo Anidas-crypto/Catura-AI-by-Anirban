@@ -2041,7 +2041,8 @@ window.toggleModelSelector = function (e) {
                 backdrop = document.createElement('div');
                 backdrop.id = 'modelBackdrop';
                 backdrop.className = 'model-backdrop';
-                backdrop.addEventListener('click', () => closeAllModelMenus());
+                // No click listener — pointer-events:none on backdrop means
+                // clicks pass through to real elements; document handler closes on outside tap
                 document.body.appendChild(backdrop);
             }
             backdrop.style.display = 'block';
@@ -2189,6 +2190,9 @@ window.toggleMoreModels = function (e) {
         const btn = document.getElementById('modelSelectorBtn');
         if (dropdown) dropdown.classList.remove('open');
         if (btn) btn.classList.remove('open');
+        // Keep backdrop visible so background stays dimmed behind sub-panel
+        const backdrop = document.getElementById('modelBackdrop');
+        if (backdrop) backdrop.style.display = 'block';
     }
 
     panel.classList.add('open');
@@ -2200,12 +2204,10 @@ document.addEventListener('click', function (e) {
     const wrap     = document.getElementById('modelSelectorWrap');
     const dropdown = document.getElementById('modelDropdown');
     const panel    = document.getElementById('moreModelsPanel');
-    const backdrop = document.getElementById('modelBackdrop');
     const insideWrap     = wrap     && wrap.contains(e.target);
     const insideDropdown = dropdown && dropdown.contains(e.target);
     const insidePanel    = panel    && panel.contains(e.target);
-    const isBackdrop     = backdrop && backdrop === e.target;
-    if (!insideWrap && !insideDropdown && !insidePanel || isBackdrop) {
+    if (!insideWrap && !insideDropdown && !insidePanel) {
         closeAllModelMenus();
     }
 });
