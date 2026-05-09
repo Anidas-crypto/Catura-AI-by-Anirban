@@ -2049,10 +2049,6 @@ window.toggleModelSelector = function (e) {
             // Force reflow then fade in
             requestAnimationFrame(() => { backdrop.style.opacity = '1'; });
 
-            // Depth effect: push app background back
-            const appEl = document.getElementById('app');
-            if (appEl) appEl.classList.add('model-panel-open');
-
             dropdown.classList.add('open');
             btn.classList.add('open');
 
@@ -2147,34 +2143,7 @@ function closeAllModelMenus() {
     // Hide mobile backdrop
     const backdrop = document.getElementById('modelBackdrop');
     if (backdrop) backdrop.style.display = 'none';
-
-    // Restore app depth
-    const appEl = document.getElementById('app');
-    if (appEl) appEl.classList.remove('model-panel-open');
 }
-
-// Back button: close more-models sub-panel and reopen main dropdown
-window.goBackToMainModels = function (e) {
-    if (e) { e.stopPropagation(); e.preventDefault(); }
-    const panel    = document.getElementById('moreModelsPanel');
-    const row      = document.getElementById('moreModelsRow');
-    const dropdown = document.getElementById('modelDropdown');
-    const btn      = document.getElementById('modelSelectorBtn');
-
-    // Close sub-panel
-    if (panel) panel.classList.remove('open');
-    if (row)   row.classList.remove('open');
-
-    // Reopen main dropdown bottom-sheet
-    if (dropdown) dropdown.classList.add('open');
-    if (btn)      btn.classList.add('open');
-
-    // Keep backdrop + depth effect alive
-    const backdrop = document.getElementById('modelBackdrop');
-    if (backdrop) backdrop.style.display = 'block';
-    const appEl = document.getElementById('app');
-    if (appEl) appEl.classList.add('model-panel-open');
-};
 
 window.toggleMoreModels = function (e) {
     if (e) { e.stopPropagation(); e.preventDefault(); }

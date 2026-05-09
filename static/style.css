@@ -3415,63 +3415,11 @@ html { scroll-behavior: smooth; }
     display: none;
     position: fixed;
     inset: 0;
-    background: transparent;
+    background: rgba(0, 0, 0, 0.5);
     z-index: 9998;
-    pointer-events: none;
-}
-
-/* ── App depth effect when model panel is open (mobile only) ── */
-@media (max-width: 768px) {
-    .app.model-panel-open {
-        transform: scale(0.93) translateY(-18px);
-        filter: blur(3px) brightness(0.55);
-        border-radius: 18px;
-        transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1),
-                    filter 0.32s cubic-bezier(0.32, 0.72, 0, 1),
-                    border-radius 0.32s ease;
-        pointer-events: none;
-        overflow: hidden;
-    }
-
-    .app {
-        transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1),
-                    filter 0.32s cubic-bezier(0.32, 0.72, 0, 1),
-                    border-radius 0.32s ease,
-                    margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-                    width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    }
+    pointer-events: none; /* Never intercept clicks — JS document handler closes on outside tap */
 }
 
 @media (min-width: 769px) {
     .model-backdrop { display: none !important; }
-}
-
-/* ── Back button in more-models panel ── */
-.model-more-panel-back {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 14px 16px 10px;
-    cursor: pointer;
-    color: #00c896;
-    font-size: 13px;
-    font-weight: 500;
-    letter-spacing: 0.2px;
-    border-bottom: 1px solid #242424;
-    user-select: none;
-    -webkit-tap-highlight-color: transparent;
-}
-
-.model-more-panel-back:active {
-    opacity: 0.7;
-}
-
-.model-more-panel-back svg {
-    flex-shrink: 0;
-    opacity: 0.9;
-}
-
-[data-theme="light"] .model-more-panel-back {
-    color: #008f6a;
-    border-bottom-color: #ddd;
 }

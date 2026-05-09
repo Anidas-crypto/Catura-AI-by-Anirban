@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" href="static/logos.png">
     
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <link rel="stylesheet" href="static/style.css?v=0.0.59">
+    <link rel="stylesheet" href="static/style.css?v=0.0.60">
     
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#000000" />
@@ -272,10 +272,6 @@
                      Placed OUTSIDE model-dropdown so overflow:hidden never clips it.
                      position:fixed + JS coords = always visible anywhere on page. ── -->
                 <div class="model-more-panel" id="moreModelsPanel">
-                    <div class="model-more-panel-back" onclick="goBackToMainModels(event)">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-                        Back
-                    </div>
                     <div class="model-more-panel-title">More models</div>
                     <div class="model-option" data-model="apep" data-name="Apep" onclick="selectModel('apep', 'Apep', event)">
                         <div class="model-option-info">
@@ -387,17 +383,17 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
     
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <script src="static/firebase-config.js?v=0.0.59"></script>
-    <script src="static/logic.js?v=0.0.59"></script>
-    <script src="static/feedback.js?v=0.0.59"></script>
-    <script src="static/file-upload.js?v=0.0.59"></script>
+    <script src="static/firebase-config.js?v=0.0.60"></script>
+    <script src="static/logic.js?v=0.0.60"></script>
+    <script src="static/feedback.js?v=0.0.60"></script>
+    <script src="static/file-upload.js?v=0.0.60"></script>
 
     <script>
         console.log('🚀 Catura AI v27.0.5 loaded');
         
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js?v=0.0.59')
+                navigator.serviceWorker.register('/service-worker.js?v=0.0.60')
                     .then(() => console.log('✅ Catura AI PWA Ready - v27.0.5'))
                     .catch((err) => console.log('❌ SW Error:', err));
             });
