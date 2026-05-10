@@ -102,7 +102,7 @@ async def serve_sw():
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.72"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.73"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -112,7 +112,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.72", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.73", "timestamp": datetime.utcnow().isoformat()}
 
 
 # ============================================================
@@ -1641,7 +1641,19 @@ async def chat_post(request: Request):
             "apep":    ["openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"],
             "sambhav": [],  # Routed via Google AI Studio (Gemma 4 E4B) — see GEMMA_GOOGLE_MODELS
         }
-        model_key  = model.strip()
+        # ── Normalize model key: frontend sends lowercase (gemma/gemma4),
+        # but backend system_prompts and GEMMA_GOOGLE_MODELS use capitalized keys.
+        # Map lowercase → canonical key so all routing works correctly.
+        _MODEL_KEY_MAP = {
+            "gemma":    "Gemma",
+            "gemma4":   "Gemma4",
+            "Gemma":    "Gemma",
+            "Gemma4":   "Gemma4",
+            "dagr":     "dagr",
+            "apep":     "apep",
+            "sambhav":  "sambhav",
+        }
+        model_key  = _MODEL_KEY_MAP.get(model.strip(), model.strip())
         model_pool = model_pools.get(model_key, model_pools["dagr"])
 
         # ── BASE SYSTEM PROMPTS ────────────────────────────────────────────
@@ -2095,7 +2107,16 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
             "apep":    ["openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"],
             "sambhav": [],  # Routed via Google AI Studio (Gemma 4 E4B) — see GEMMA_GOOGLE_MODELS
         }
-        model_key  = model.strip()
+        _MODEL_KEY_MAP = {
+            "gemma":    "Gemma",
+            "gemma4":   "Gemma4",
+            "Gemma":    "Gemma",
+            "Gemma4":   "Gemma4",
+            "dagr":     "dagr",
+            "apep":     "apep",
+            "sambhav":  "sambhav",
+        }
+        model_key  = _MODEL_KEY_MAP.get(model.strip(), model.strip())
         model_pool = model_pools.get(model_key, model_pools["dagr"])
 
         NO_TOOL_CALL_RULE = (

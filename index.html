@@ -3,189 +3,91 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <!-- ═══ PRIMARY META ═══ -->
-    <title>Catura AI — Free AI Chatbot Assistant</title>
-    <meta name="description" content="Catura AI is a free AI chatbot assistant. Chat with powerful AI models including Dagr, Sambhav, and more — no sign-up required to start.">
+    <meta name="description" content="Catura AI is a free AI chatbot assistant like ChatGPT and Claude.">
     <meta name="robots" content="index, follow">
-    <meta name="google-site-verification" content="qiQ1Xx00fMsEhl6f4cmRXiJg-16rT3M_sg4kDAt5y1Q">
-
-    <!-- ═══ OPEN GRAPH ═══ -->
-    <meta property="og:type" content="website">
-    <meta property="og:title" content="Catura AI — Free AI Chatbot Assistant">
-    <meta property="og:description" content="Chat with powerful AI models for free. Catura AI is your intelligent everyday companion.">
-    <meta property="og:image" content="/static/icons/icon-512.png">
-    <meta property="og:url" content="https://catura.ai/">
-    <meta property="og:site_name" content="Catura AI">
-
-    <!-- ═══ TWITTER CARD ═══ -->
-    <meta name="twitter:card" content="summary">
-    <meta name="twitter:title" content="Catura AI — Free AI Chatbot Assistant">
-    <meta name="twitter:description" content="Chat with powerful AI models for free. Catura AI is your intelligent everyday companion.">
-    <meta name="twitter:image" content="/static/icons/icon-512.png">
-
-    <!-- ═══ CACHE BUSTING ═══ -->
+    <meta name="google-site-verification" content="qiQ1Xx00fMsEhl6f4cmRXiJg-16rT3M_sg4kDAt5y1Q" />
+    
+    <!-- ✅ CACHE BUSTING - NEVER CACHE HTML -->
     <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="pragma" content="no-cache">
     <meta http-equiv="expires" content="0">
-
-    <!-- ═══ ICONS & PWA ═══ -->
+    
+    <title>Catura AI</title>
     <link rel="icon" type="image/png" href="static/logos.png">
-    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
-    <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#000000">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="Catura AI">
-
-    <!-- ═══ STYLES ═══ -->
-    <link rel="stylesheet" href="static/style.css?v=0.0.72">
-
-    <noscript>
-        <style>.app { display: none; }</style>
-        <p style="text-align:center;padding:2rem;font-family:system-ui,sans-serif;">
-            Catura AI requires JavaScript to run. Please enable it in your browser settings.
-        </p>
-    </noscript>
+    
+    <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
+    <link rel="stylesheet" href="static/style.css?v=0.0.73">
+    
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Catura AI" />
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png" />
 </head>
 <body>
 
-    <!-- ═══════════════════════════════════════════════
-         SKIP NAVIGATION (accessibility — screen readers)
-    ═══════════════════════════════════════════════ -->
-    <a href="#chatbox" class="skip-link">Skip to chat</a>
+    <!-- Mobile overlay backdrop -->
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
 
-    <!-- ═══════════════════════════════════════════════
-         SIDEBAR OVERLAY BACKDROP (mobile)
-    ═══════════════════════════════════════════════ -->
-    <div
-        class="sidebar-overlay"
-        id="sidebarOverlay"
-        role="presentation"
-        aria-hidden="true"
-        onclick="closeSidebar()"
-    ></div>
-
-    <!-- ═══════════════════════════════════════════════
-         MOBILE TOP HEADER
-         – Visible only on mobile via CSS
-    ═══════════════════════════════════════════════ -->
-    <header class="mobile-header" id="mobileHeader" aria-label="Mobile navigation">
-        <button
-            class="mobile-hamburger"
-            id="mobileMenuBtn"
-            type="button"
-            onclick="toggleSidebar()"
-            aria-label="Open navigation menu"
-            aria-expanded="false"
-            aria-controls="sidebar"
-        >
-            <span aria-hidden="true"></span>
-            <span aria-hidden="true"></span>
-            <span aria-hidden="true"></span>
+    <!-- MOBILE TOP HEADER (only shows on mobile) -->
+    <div class="mobile-header" id="mobileHeader">
+        <button class="mobile-hamburger" onclick="toggleSidebar()" title="Open Menu" aria-label="Open menu">
+            <span></span>
+            <span></span>
+            <span></span>
         </button>
-
-        <div class="mobile-header-brand" aria-label="Catura AI">
-            <img src="static/logo.png" alt="" class="mobile-header-logo" aria-hidden="true">
+        <div class="mobile-header-brand">
+            <img src="static/logo.png" alt="Catura AI" class="mobile-header-logo">
             <span>Catura AI</span>
         </div>
-
-        <button
-            class="mobile-header-new"
-            type="button"
-            onclick="newChat()"
-            aria-label="Start new chat"
-            title="New Chat"
-        >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <button class="mobile-header-new" onclick="newChat()" title="New Chat" aria-label="New chat">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                 <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
             </svg>
         </button>
-    </header>
+    </div>
 
-    <!-- ═══════════════════════════════════════════════
-         ICON RAIL
-         – Collapsed-sidebar quick-access toolbar
-         – Desktop only (hidden on mobile via CSS)
-    ═══════════════════════════════════════════════ -->
-    <div class="icon-rail" id="iconRail" role="toolbar" aria-label="Quick actions">
-        <button
-            class="rail-btn"
-            type="button"
-            onclick="toggleSidebar()"
-            aria-label="Open sidebar"
-            aria-expanded="false"
-            aria-controls="sidebar"
-            title="Open Sidebar"
-        >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+    <!-- ICON RAIL -->
+    <div class="icon-rail" id="iconRail">
+        <button class="rail-btn" onclick="toggleSidebar()" title="Open Sidebar">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                 <rect x="2" y="3" width="20" height="18" rx="3"/>
                 <line x1="8" y1="3" x2="8" y2="21"/>
                 <polyline points="11,9 13,12 11,15"/>
             </svg>
         </button>
 
-        <div class="rail-divider" role="separator" aria-hidden="true"></div>
+        <div class="rail-divider"></div>
 
-        <button
-            class="rail-btn"
-            type="button"
-            onclick="newChat()"
-            aria-label="New chat"
-            title="New Chat"
-        >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <button class="rail-btn" onclick="newChat()" title="New Chat">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                 <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
             </svg>
         </button>
 
-        <button
-            class="rail-btn"
-            type="button"
-            onclick="openSidebarTo('history')"
-            aria-label="Chat history"
-            title="Chat History"
-        >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <button class="rail-btn" onclick="openSidebarTo('history')" title="Chat History">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="10"></circle>
                 <polyline points="12 6 12 12 16 14"></polyline>
             </svg>
         </button>
 
-        <button
-            class="rail-btn"
-            type="button"
-            onclick="showSettings()"
-            aria-label="Settings"
-            title="Settings"
-        >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <button class="rail-btn" onclick="showSettings()" title="Settings">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="3"></circle>
                 <path d="M12 1v6m0 6v6m10.39-9.39l-4.24 4.24m-8.3 0l-4.24-4.24m12.53 8.53l4.24 4.24m-8.3 0l4.24-4.24"></path>
             </svg>
         </button>
 
-        <div class="rail-spacer" aria-hidden="true"></div>
+        <div class="rail-spacer"></div>
 
-        <button
-            class="rail-btn rail-avatar"
-            id="railAvatar"
-            type="button"
-            onclick="showSettings()"
-            aria-label="Profile and settings"
-            title="Profile & Settings"
-        >?</button>
+        <button class="rail-btn rail-avatar" id="railAvatar" onclick="showSettings()" title="Profile & Settings">?</button>
 
-        <button
-            class="rail-btn rail-logout"
-            type="button"
-            onclick="logoutUser()"
-            aria-label="Log out"
-            title="Logout"
-        >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <button class="rail-btn rail-logout" onclick="logoutUser()" title="Logout">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
                 <polyline points="16 17 21 12 16 7"></polyline>
                 <line x1="21" y1="12" x2="9" y2="12"></line>
@@ -193,721 +95,314 @@
         </button>
     </div>
 
-    <!-- ═══════════════════════════════════════════════
-         SIDEBAR
-         – Primary navigation panel
-    ═══════════════════════════════════════════════ -->
-    <nav
-        class="sidebar open"
-        id="sidebar"
-        aria-label="Main navigation"
-        aria-hidden="false"
-    >
-        <!-- Sidebar header -->
+    <!-- FULL SIDEBAR -->
+    <div class="sidebar" id="sidebar">
         <div class="sidebar-header">
-            <button
-                class="sidebar-inner-toggle"
-                type="button"
-                onclick="toggleSidebar()"
-                aria-label="Collapse sidebar"
-                aria-expanded="true"
-                aria-controls="sidebar"
-                title="Collapse Sidebar"
-            >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+            <button class="sidebar-inner-toggle" onclick="toggleSidebar()" title="Collapse Sidebar">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                     <rect x="2" y="3" width="20" height="18" rx="3"/>
                     <line x1="8" y1="3" x2="8" y2="21"/>
                     <polyline points="12,9 10,12 12,15"/>
                 </svg>
             </button>
-
-            <a href="/" class="sidebar-brand" aria-label="Catura AI home">
-                <img src="static/logo.png" alt="" class="sidebar-logo" aria-hidden="true">
-                <span>Catura AI</span>
-            </a>
-
-            <!-- Mobile close — redundant with overlay, but useful for keyboard users -->
-            <button
-                class="close-btn"
-                type="button"
-                onclick="closeSidebar()"
-                aria-label="Close navigation menu"
-            >
-                <span aria-hidden="true">✕</span>
-            </button>
+            <span class="sidebar-brand">
+                <img src="static/logo.png" alt="Catura AI Logo" class="sidebar-logo"> Catura AI
+            </span>
+            <button class="close-btn" onclick="closeSidebar()">✕</button>
         </div>
 
-        <!-- Primary nav actions -->
-        <ul class="sidebar-menu" role="list">
-            <li>
-                <button
-                    class="sidebar-item"
-                    type="button"
-                    onclick="newChat()"
-                    aria-label="Start new chat"
-                >
-                    <svg class="sidebar-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                    </svg>
-                    <span>New Chat</span>
-                </button>
-            </li>
-            <li>
-                <button
-                    class="sidebar-item"
-                    type="button"
-                    onclick="showHistory()"
-                    aria-label="View chat history"
-                >
-                    <svg class="sidebar-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <polyline points="12 6 12 12 16 14"></polyline>
-                    </svg>
-                    <span>Chat History</span>
-                </button>
-            </li>
-            <li>
-                <button
-                    class="sidebar-item"
-                    type="button"
-                    onclick="showSettings()"
-                    aria-label="Open settings"
-                >
-                    <svg class="sidebar-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                        <circle cx="12" cy="12" r="3"></circle>
-                        <path d="M12 1v6m0 6v6m10.39-9.39l-4.24 4.24m-8.3 0l-4.24-4.24m12.53 8.53l4.24 4.24m-8.3 0l4.24-4.24"></path>
-                    </svg>
-                    <span>Settings</span>
-                </button>
-            </li>
-        </ul>
-
-        <!-- Sidebar footer: user profile + logout -->
-        <div class="sidebar-bottom">
-            <div class="user-profile" aria-label="Signed-in user">
-                <div class="user-avatar" id="userAvatar" aria-hidden="true">?</div>
-                <span class="user-fullname" id="userFullname">Loading…</span>
+        <div class="sidebar-menu">
+            <div class="sidebar-item" onclick="newChat()">
+                <svg class="sidebar-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+                New Chat
             </div>
-            <button
-                class="sidebar-item logout"
-                type="button"
-                onclick="logoutUser()"
-                aria-label="Log out of Catura AI"
-            >
-                <svg class="sidebar-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+            <div class="sidebar-item" onclick="showHistory()">
+                <svg class="sidebar-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+                Chat History
+            </div>
+            <div class="sidebar-item" onclick="showSettings()">
+                <svg class="sidebar-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M12 1v6m0 6v6m10.39-9.39l-4.24 4.24m-8.3 0l-4.24-4.24m12.53 8.53l4.24 4.24m-8.3 0l4.24-4.24"></path>
+                </svg>
+                Settings
+            </div>
+        </div>
+
+        <div class="sidebar-bottom">
+            <div class="user-profile">
+                <div class="user-avatar" id="userAvatar">?</div>
+                <span class="user-fullname" id="userFullname">Loading...</span>
+            </div>
+            <div class="sidebar-item logout" onclick="logoutUser()">
+                <svg class="sidebar-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
                     <polyline points="16 17 21 12 16 7"></polyline>
                     <line x1="21" y1="12" x2="9" y2="12"></line>
                 </svg>
-                <span>Logout</span>
-            </button>
+                Logout
+            </div>
         </div>
-    </nav>
+    </div>
 
-    <!-- ═══════════════════════════════════════════════
-         MAIN APPLICATION AREA
-    ═══════════════════════════════════════════════ -->
-    <main class="app" id="app">
+    <!-- MAIN APP -->
+    <div class="app" id="app">
+        <div id="settingsOverlay" class="settings-overlay"></div>
+        <div id="chatbox"></div>
 
-        <!-- Settings overlay (injected by JS, keep as presentational div) -->
-        <div id="settingsOverlay" class="settings-overlay" role="presentation" aria-hidden="true"></div>
-
-        <!-- ── CHAT LOG ── -->
-        <section
-            id="chatbox"
-            class="chatbox"
-            role="log"
-            aria-label="Conversation"
-            aria-live="polite"
-            aria-relevant="additions"
-            tabindex="0"
-        ></section>
-
-        <!-- ── CHAT INPUT AREA ── -->
-        <section class="input-area center" id="inputArea" aria-label="Message input">
-
-            <!-- Attached files preview (shown when files are queued) -->
-            <div
-                class="attached-files-preview"
-                id="attachedFilesPreview"
-                aria-label="Attached files"
-                aria-live="polite"
-                hidden
-            >
-                <ul class="attached-files-list" id="attachedFilesList" role="list" aria-label="Files to send"></ul>
+        <div class="input-area center" id="inputArea">
+            <!-- ATTACHED FILES PREVIEW -->
+            <div class="attached-files-preview" id="attachedFilesPreview" style="display: none;">
+                <div class="attached-files-list" id="attachedFilesList"></div>
             </div>
 
-            <!-- Text input row -->
             <div class="input-row-top">
-                <label for="chatInput" class="sr-only">Message Catura AI</label>
-                <textarea
-                    id="chatInput"
-                    name="chatInput"
-                    class="chat-textarea"
-                    placeholder="Message Catura AI…"
-                    rows="1"
-                    aria-label="Message Catura AI"
-                    aria-multiline="true"
-                    aria-required="true"
-                    autocomplete="off"
-                    spellcheck="true"
-                ></textarea>
+                <textarea id="input" placeholder="Message Catura AI..." rows="1"></textarea>
             </div>
-
-            <!-- Toolbar row: plus menu, web search chip, model selector, send -->
-            <div class="input-row-bottom" role="toolbar" aria-label="Message options">
-
-                <!-- ── PLUS / ATTACH MENU ── -->
+            <div class="input-row-bottom">
                 <div class="plus-menu-wrap" id="plusMenuWrap">
-                    <button
-                        class="plus-btn"
-                        id="plusBtn"
-                        type="button"
-                        onclick="togglePlusMenu(event)"
-                        aria-label="More message options"
-                        aria-haspopup="menu"
-                        aria-expanded="false"
-                        aria-controls="plusDropdown"
-                        title="More options"
-                    >
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                    <button class="plus-btn" id="plusBtn" onclick="togglePlusMenu(event)" title="More options">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                             <line x1="12" y1="5" x2="12" y2="19"></line>
                             <line x1="5" y1="12" x2="19" y2="12"></line>
                         </svg>
                     </button>
-
-                    <ul
-                        class="plus-dropdown"
-                        id="plusDropdown"
-                        role="menu"
-                        aria-label="Message options"
-                        hidden
-                    >
-                        <li role="none">
-                            <button
-                                class="plus-dropdown-item"
-                                type="button"
-                                role="menuitem"
-                                onclick="handlePlusAction('file')"
-                            >
-                                <span class="plus-item-icon" aria-hidden="true">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                                        <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
-                                    </svg>
-                                </span>
-                                <span>Add files &amp; photos</span>
-                            </button>
-                        </li>
-                        <li role="none">
-                            <button
-                                class="plus-dropdown-item"
-                                type="button"
-                                role="menuitem"
-                                onclick="handlePlusAction('connect')"
-                            >
-                                <span class="plus-item-icon" aria-hidden="true">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
-                                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
-                                    </svg>
-                                </span>
-                                <span>Connect apps</span>
-                            </button>
-                        </li>
-                        <li class="plus-dropdown-divider" role="separator" aria-hidden="true"></li>
-                        <li role="none">
-                            <button
-                                class="plus-dropdown-item"
-                                type="button"
-                                role="menuitem"
-                                onclick="handlePlusAction('think')"
-                            >
-                                <span class="plus-item-icon" aria-hidden="true">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                                        <circle cx="12" cy="12" r="10"></circle>
-                                        <path d="M12 16v-4"></path>
-                                        <path d="M12 8h.01"></path>
-                                    </svg>
-                                </span>
-                                <span>Think</span>
-                            </button>
-                        </li>
-                        <li role="none">
-                            <button
-                                class="plus-dropdown-item"
-                                type="button"
-                                role="menuitem"
-                                onclick="handlePlusAction('research')"
-                            >
-                                <span class="plus-item-icon" aria-hidden="true">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                                        <circle cx="11" cy="11" r="8"></circle>
-                                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                                    </svg>
-                                </span>
-                                <span>Deep research</span>
-                            </button>
-                        </li>
-                        <li role="none">
-                            <button
-                                class="plus-dropdown-item"
-                                type="button"
-                                role="menuitem"
-                                data-action="search"
-                                onclick="handlePlusAction('search')"
-                            >
-                                <span class="plus-item-icon" aria-hidden="true">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                                        <circle cx="12" cy="12" r="10"></circle>
-                                        <line x1="2" y1="12" x2="22" y2="12"></line>
-                                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-                                    </svg>
-                                </span>
-                                <span>Web search</span>
-                                <svg class="search-active-tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10a37f" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                                    <polyline points="20 6 9 17 4 12"/>
+                    <div class="plus-dropdown" id="plusDropdown">
+                        <div class="plus-dropdown-item" onclick="handlePlusAction('file')">
+                            <span class="plus-item-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
                                 </svg>
-                            </button>
-                        </li>
-                    </ul>
+                            </span>
+                            <span>Add files &amp; photos</span>
+                        </div>
+                        <div class="plus-dropdown-item" onclick="handlePlusAction('connect')">
+                            <span class="plus-item-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                                </svg>
+                            </span>
+                            <span>Connect apps</span>
+                        </div>
+                        <div class="plus-dropdown-divider"></div>
+                        <div class="plus-dropdown-item" onclick="handlePlusAction('think')">
+                            <span class="plus-item-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <path d="M12 16v-4"></path>
+                                    <path d="M12 8h.01"></path>
+                                </svg>
+                            </span>
+                            <span>Think</span>
+                        </div>
+                        <div class="plus-dropdown-item" onclick="handlePlusAction('research')">
+                            <span class="plus-item-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="11" cy="11" r="8"></circle>
+                                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                                </svg>
+                            </span>
+                            <span>Deep research</span>
+                        </div>
+                        <div class="plus-dropdown-item" data-action="search" onclick="handlePlusAction('search')">
+                            <span class="plus-item-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <line x1="2" y1="12" x2="22" y2="12"></line>
+                                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                                </svg>
+                            </span>
+                            <span>Web search</span>
+                            <!-- Active indicator tick — visible when search-active class is set -->
+                            <svg class="search-active-tick" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10a37f" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                        </div>
+                    </div>
                 </div>
 
-                <!-- Web search active chip (shown when web search is enabled) -->
-                <button
-                    id="webSearchChip"
-                    class="web-search-chip"
-                    type="button"
-                    onclick="toggleWebSearch()"
-                    aria-label="Web search is on — click to disable"
-                    aria-pressed="true"
-                    hidden
-                ></button>
+                <!-- 🌐 WEB SEARCH CHIP — hidden, no bubble shown -->
+                <button id="webSearchChip" class="web-search-chip" onclick="toggleWebSearch()" title="Web search ON — click to disable" style="display:none;"></button>
 
-                <div class="input-bottom-spacer" aria-hidden="true"></div>
+                <div class="input-bottom-spacer"></div>
 
-                <!-- ── MODEL SELECTOR ── -->
                 <div class="model-selector-wrap" id="modelSelectorWrap">
-                    <button
-                        class="model-selector-btn"
-                        id="modelSelectorBtn"
-                        type="button"
-                        onclick="toggleModelSelector(event)"
-                        aria-haspopup="listbox"
-                        aria-expanded="false"
-                        aria-controls="modelDropdown"
-                        aria-label="Select AI model — currently Dagr"
-                        title="Choose AI Model"
-                    >
+                    <button class="model-selector-btn" id="modelSelectorBtn" onclick="toggleModelSelector(event)" title="Choose AI Model">
                         <span class="model-name" id="modelName">Dagr</span>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                             <polyline points="6 9 12 15 18 9"></polyline>
                         </svg>
                     </button>
+                    <div class="model-dropdown" id="modelDropdown">
 
-                    <ul
-                        class="model-dropdown"
-                        id="modelDropdown"
-                        role="listbox"
-                        aria-label="Available AI models"
-                        aria-activedescendant="model-dagr"
-                        hidden
-                    >
-                        <!-- Primary models (always visible) -->
-                        <li
-                            id="model-dagr"
-                            class="model-option active"
-                            role="option"
-                            aria-selected="true"
-                            data-model="dagr"
-                            data-name="Dagr"
-                            onclick="selectModel('dagr', 'Dagr', event)"
-                        >
+                        <!-- ── PRIMARY MODELS (always visible) ── -->
+                        <div class="model-option active" data-model="dagr" data-name="Dagr" onclick="selectModel('dagr', 'Dagr', event)">
                             <div class="model-option-info">
                                 <div class="model-option-name">Dagr</div>
                                 <div class="model-option-desc">Your intelligent everyday companion</div>
                             </div>
-                            <span class="model-option-check" aria-hidden="true">✓</span>
-                        </li>
-                        <li
-                            id="model-sambhav"
-                            class="model-option"
-                            role="option"
-                            aria-selected="false"
-                            data-model="sambhav"
-                            data-name="Sambhav"
-                            onclick="selectModel('sambhav', 'Sambhav', event)"
-                        >
+                            <div class="model-option-check">✓</div>
+                        </div>
+                        <div class="model-option" data-model="sambhav" data-name="Sambhav" onclick="selectModel('sambhav', 'Sambhav', event)">
                             <div class="model-option-info">
                                 <div class="model-option-name">Sambhav</div>
-                                <div class="model-option-desc">Powered by Gemini · Deep reasoning</div>
+                                <div class="model-option-desc">Powered by Gemma · Deep reasoning</div>
                             </div>
-                            <span class="model-option-check" aria-hidden="true">✓</span>
-                        </li>
+                            <div class="model-option-check">✓</div>
+                        </div>
 
-                        <!-- More models trigger row -->
-                        <li
-                            class="model-more-row"
-                            id="moreModelsRow"
-                            role="option"
-                            aria-selected="false"
-                            aria-haspopup="true"
-                            onclick="toggleMoreModels(event)"
-                        >
+                        <!-- ── MORE MODELS ROW ── -->
+                        <div class="model-more-row" id="moreModelsRow" onclick="toggleMoreModels(event)">
                             <span class="model-more-label">More models</span>
-                            <svg class="model-more-arrow" id="moreModelsArrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                                <polyline points="9 18 15 12 9 6"/>
-                            </svg>
-                        </li>
-                    </ul>
+                            <svg class="model-more-arrow" id="moreModelsArrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                        </div>
+                    </div>
+                    <!-- end .model-dropdown -->
                 </div>
+                <!-- end .model-selector-wrap -->
 
-                <!-- More-models floating panel (position:fixed, placed outside dropdown
-                     so overflow:hidden never clips it; JS positions it) -->
-                <div
-                    class="model-more-panel"
-                    id="moreModelsPanel"
-                    role="listbox"
-                    aria-label="Additional AI models"
-                    hidden
-                >
-                    <div class="model-more-panel-title" aria-hidden="true">More models</div>
-
+                <!-- ── MORE MODELS FLOATING PANEL
+                     Placed OUTSIDE model-dropdown so overflow:hidden never clips it.
+                     position:fixed + JS coords = always visible anywhere on page. ── -->
+                <div class="model-more-panel" id="moreModelsPanel">
+                    <div class="model-more-panel-title">More models</div>
                     <!-- Back button — mobile only -->
-                    <button
-                        class="model-more-back-btn"
-                        id="moreModelsBackBtn"
-                        type="button"
-                        onclick="goBackToMainModels(event)"
-                        aria-label="Back to main model list"
-                    >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
-                            <polyline points="15 18 9 12 15 6"/>
-                        </svg>
+                    <button class="model-more-back-btn" id="moreModelsBackBtn" onclick="goBackToMainModels(event)">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
                         Back to models
                     </button>
-
-                    <ul role="list">
-                        <li
-                            id="model-apep"
-                            class="model-option"
-                            role="option"
-                            aria-selected="false"
-                            data-model="apep"
-                            data-name="Apep"
-                            onclick="selectModel('apep', 'Apep', event)"
-                        >
-                            <div class="model-option-info">
-                                <div class="model-option-name">Apep</div>
-                                <div class="model-option-desc">Expert at coding &amp; technical problems</div>
-                            </div>
-                            <span class="model-option-check" aria-hidden="true">✓</span>
-                        </li>
-                        <li
-                            id="model-gemma"
-                            class="model-option"
-                            role="option"
-                            aria-selected="false"
-                            data-model="gemma"
-                            data-name="Gemma"
-                            onclick="selectModel('gemma', 'Gemma', event)"
-                        >
-                            <div class="model-option-info">
-                                <div class="model-option-name">Gemma</div>
-                                <div class="model-option-desc">Fast &amp; efficient · Google Gemma 4 26B</div>
-                            </div>
-                            <span class="model-option-check" aria-hidden="true">✓</span>
-                        </li>
-                        <li
-                            id="model-gemma4"
-                            class="model-option"
-                            role="option"
-                            aria-selected="false"
-                            data-model="gemma4"
-                            data-name="Gemma4"
-                            onclick="selectModel('gemma4', 'Gemma4', event)"
-                        >
-                            <div class="model-option-info">
-                                <div class="model-option-name">Gemma4</div>
-                                <div class="model-option-desc">Most capable · Google Gemma 4 31B</div>
-                            </div>
-                            <span class="model-option-check" aria-hidden="true">✓</span>
-                        </li>
-                    </ul>
+                    <div class="model-option" data-model="apep" data-name="Apep" onclick="selectModel('apep', 'Apep', event)">
+                        <div class="model-option-info">
+                            <div class="model-option-name">Apep</div>
+                            <div class="model-option-desc">Expert at coding & technical problems</div>
+                        </div>
+                        <div class="model-option-check">✓</div>
+                    </div>
+                    <div class="model-option" data-model="gemma" data-name="Gemma" onclick="selectModel('gemma', 'Gemma', event)">
+                        <div class="model-option-info">
+                            <div class="model-option-name">Gemma</div>
+                            <div class="model-option-desc">Fast & efficient · Google Gemma 4 26B</div>
+                        </div>
+                        <div class="model-option-check">✓</div>
+                    </div>
+                    <div class="model-option" data-model="gemma4" data-name="Gemma4" onclick="selectModel('gemma4', 'Gemma4', event)">
+                        <div class="model-option-info">
+                            <div class="model-option-name">Gemma4</div>
+                            <div class="model-option-desc">Most capable · Google Gemma 4 31B</div>
+                        </div>
+                        <div class="model-option-check">✓</div>
+                    </div>
                 </div>
 
-                <!-- ── SEND / STOP BUTTON ── -->
-                <button
-                    class="send-btn"
-                    id="sendBtn"
-                    type="button"
-                    onclick="handleSendOrStop()"
-                    aria-label="Send message"
-                    title="Send message"
-                >
-                    <!-- Send icon (default state) -->
-                    <svg class="send-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <button class="send-btn" onclick="handleSendOrStop()" id="sendBtn" title="Send message">
+                    <!-- Send icon (default) -->
+                    <svg class="send-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                         <line x1="12" y1="19" x2="12" y2="5"></line>
                         <polyline points="5 12 12 5 19 12"></polyline>
                     </svg>
-                    <!-- Stop icon (shown while streaming) -->
-                    <svg class="stop-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+                    <!-- Stop icon (shown during streaming) -->
+                    <svg class="stop-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                         <rect x="4" y="4" width="16" height="16" rx="2"/>
                     </svg>
-                    <!-- Spinner ring (shown while streaming) -->
-                    <svg class="stop-ring" viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+                    <!-- Green ring spinner (shown during streaming) -->
+                    <svg class="stop-ring" viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">
                         <circle cx="22" cy="22" r="18" fill="none" stroke="#10a37f" stroke-width="3" stroke-dasharray="90 30" stroke-linecap="round"/>
                     </svg>
                 </button>
-            </div><!-- /input-row-bottom -->
-        </section><!-- /inputArea -->
+            </div>
+        </div>
 
-        <!-- Hidden file input (triggered programmatically) -->
-        <input
-            type="file"
-            id="fileInput"
-            multiple
-            accept="image/*,.pdf,.txt,.doc,.docx,.csv,.jpg,.jpeg,.png,.gif,.webp"
-            aria-hidden="true"
-            tabindex="-1"
-            onchange="handleFileSelect(event)"
-        >
+        <input type="file" id="fileInput" multiple accept="image/*,.pdf,.txt,.doc,.docx,.csv,.jpg,.jpeg,.png,.gif,.webp" style="display:none" onchange="handleFileSelect(event)">
 
-        <!-- Disclaimer — shown after first message -->
-        <p class="chat-disclaimer" id="chatDisclaimer" role="note" aria-live="polite">
-            Catura can make mistakes. Please double-check important responses.
-        </p>
+        <!-- Disclaimer — only shown after first message sent (greeting-mode removed) -->
+        <div class="chat-disclaimer" id="chatDisclaimer">
+            Catura is AI and can make mistakes. Please double-check responses.
+        </div>
+    </div>
 
-    </main><!-- /app -->
-
-
-    <!-- ═══════════════════════════════════════════════
-         FEEDBACK MODAL
-         Drop-in replacement for the equivalent block
-         in index.html. Remove the old block and paste this.
-    ═══════════════════════════════════════════════ -->
-    <div
-        id="feedbackModal"
-        class="feedback-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="feedbackModalTitle"
-        aria-describedby="feedbackModalDesc"
-        hidden
-    >
-        <!-- Click-outside overlay (JS listener, not inline onclick) -->
-        <div
-            id="feedbackModalOverlay"
-            class="feedback-modal-overlay"
-            role="presentation"
-            aria-hidden="true"
-        ></div>
-
+    <!-- FEEDBACK MODAL -->
+    <div id="feedbackModal" class="feedback-modal">
+        <div class="feedback-modal-overlay" onclick="closeFeedbackModal()"></div>
         <div class="feedback-modal-content">
-            <button
-                class="feedback-close-btn"
-                type="button"
-                id="feedbackCloseBtn"
-                aria-label="Close feedback dialog"
-            >
-                <span aria-hidden="true">✕</span>
-            </button>
-
-            <header class="feedback-modal-header">
+            <button class="feedback-close-btn" onclick="closeFeedbackModal()">✕</button>
+            
+            <div class="feedback-modal-header">
                 <h2 id="feedbackModalTitle">Send Feedback</h2>
-                <p id="feedbackModalDesc" class="sr-only">
-                    Use this form to send feedback about Catura AI.
-                </p>
-            </header>
+            </div>
 
-            <form id="feedbackForm" class="feedback-form" novalidate>
-
-                <!-- ── Honeypot (hidden from real users, bots fill it) ── -->
-                <div class="feedback-hp" aria-hidden="true">
-                    <label for="feedback_url">Website</label>
-                    <input
-                        type="text"
-                        id="feedback_url"
-                        name="feedback_url"
-                        tabindex="-1"
-                        autocomplete="off"
-                    >
-                </div>
-
-                <!-- ── Name ── -->
+            <form id="feedbackForm" class="feedback-form">
                 <div class="form-group">
                     <label for="feedbackName">Name</label>
-                    <input
-                        type="text"
-                        id="feedbackName"
-                        name="feedbackName"
-                        placeholder="Your name"
+                    <input 
+                        type="text" 
+                        id="feedbackName" 
+                        placeholder="Your name" 
                         required
                         autocomplete="name"
-                        aria-required="true"
-                        maxlength="80"
                     >
-                    <!-- Error injected here by JS -->
                 </div>
 
-                <!-- ── Email ── -->
                 <div class="form-group">
                     <label for="feedbackEmail">Email</label>
-                    <input
-                        type="email"
-                        id="feedbackEmail"
-                        name="feedbackEmail"
-                        placeholder="your@email.com"
+                    <input 
+                        type="email" 
+                        id="feedbackEmail" 
+                        placeholder="your@email.com" 
                         required
                         autocomplete="email"
-                        aria-required="true"
-                        maxlength="254"
                     >
-                    <!-- Error injected here by JS -->
                 </div>
 
-                <!-- ── Message ── -->
                 <div class="form-group">
-                    <div class="form-group-header">
-                        <label for="feedbackText">Message</label>
-                        <span
-                            id="feedbackCharCount"
-                            class="char-count"
-                            aria-live="polite"
-                            aria-atomic="true"
-                        >0 / 3000</span>
-                    </div>
-                    <textarea
-                        id="feedbackText"
-                        name="feedbackText"
-                        placeholder="Tell us your thoughts… (minimum 20 characters)"
+                    <label for="feedbackText">Message</label>
+                    <textarea 
+                        id="feedbackText" 
+                        placeholder="Tell us your thoughts..." 
                         rows="5"
                         required
-                        aria-required="true"
-                        maxlength="3000"
                     ></textarea>
-                    <!-- Error injected here by JS -->
                 </div>
 
                 <button type="submit" class="feedback-submit-btn" id="feedbackSubmitBtn">
                     <span>Submit</span>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" stroke-width="2"
-                         stroke-linecap="round" stroke-linejoin="round"
-                         aria-hidden="true" focusable="false">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-left: 6px;">
                         <line x1="12" y1="19" x2="12" y2="5"></line>
                         <polyline points="5 12 12 5 19 12"></polyline>
                     </svg>
                 </button>
             </form>
 
-            <!-- Status / success / error banner -->
-            <div
-                id="feedbackMessage"
-                class="feedback-message"
-                role="status"
-                aria-live="polite"
-                aria-atomic="true"
-                hidden
-            ></div>
+            <div id="feedbackMessage" class="feedback-message" style="display:none;"></div>
         </div>
     </div>
 
-
-
-    <!-- ═══════════════════════════════════════════════
-         SCRIPTS
-    ═══════════════════════════════════════════════ -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js" defer></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js" defer></script>
-    <script src="static/firebase-config.js?v=0.0.72" defer></script>
-    <script src="static/logic.js?v=0.0.72" defer></script>
-    <script src="static/feedback.js?v=0.0.72" defer></script>
-    <script src="static/file-upload.js?v=0.0.72" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+    
+    <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
+    <script src="static/firebase-config.js?v=0.0.73"></script>
+    <script src="static/logic.js?v=0.0.73"></script>
+    <script src="static/feedback.js?v=0.0.73"></script>
+    <script src="static/file-upload.js?v=0.0.73"></script>
 
     <script>
-        // ── MOBILE: Dynamic input area height tracking ──
-        // Updates --mobile-input-h so .chatbox bottom adapts when
-        // the input area grows (multi-line) or shrinks (single-line).
-        // Also updates --mobile-input-h so #toastNotif clears it.
-        (function initMobileInputHeight() {
-            const root = document.documentElement;
-            const inputArea = document.getElementById('inputArea');
-            if (!inputArea) return;
-
-            function updateInputHeight() {
-                const h = inputArea.getBoundingClientRect().height;
-                if (h > 0) {
-                    // Add 4px buffer so chatbox content never clips behind input
-                    root.style.setProperty('--mobile-input-h', (h + 4) + 'px');
-                }
-            }
-
-            // ResizeObserver fires whenever the input area changes height
-            if (typeof ResizeObserver !== 'undefined') {
-                const ro = new ResizeObserver(updateInputHeight);
-                ro.observe(inputArea);
-            }
-
-            // Fallback: update on input events too
-            const chatInput = document.getElementById('chatInput');
-            if (chatInput) {
-                chatInput.addEventListener('input', updateInputHeight, { passive: true });
-            }
-
-            // Initial measurement
-            updateInputHeight();
-        })();
-
-        // ── MOBILE: visualViewport keyboard handler (Android / older iOS) ──
-        // On Android, the visual viewport shrinks when the soft keyboard opens.
-        // We shift the input area up by writing a CSS variable.
-        (function initKeyboardHandler() {
-            if (!window.visualViewport) return;
-            const root = document.documentElement;
-            const MOBILE_MQ = window.matchMedia('(max-width: 768px)');
-
-            function onViewportResize() {
-                if (!MOBILE_MQ.matches) return;
-                const vv = window.visualViewport;
-                const windowHeight = window.innerHeight;
-                const viewportHeight = vv.height;
-                // Gap between bottom of visual viewport and bottom of layout viewport
-                const keyboardHeight = Math.max(0, windowHeight - viewportHeight - vv.offsetTop);
-
-                const inputArea = document.getElementById('inputArea');
-                // Only adjust if keyboard is meaningfully open (>100px)
-                if (keyboardHeight > 100) {
-                    root.style.setProperty('--vv-keyboard-offset', keyboardHeight + 'px');
-                    if (inputArea) {
-                        inputArea.style.bottom = keyboardHeight + 'px';
-                        // Use getBoundingClientRect (no style recalc) to measure current input height
-                        const inputH = inputArea.getBoundingClientRect().height || 80;
-                        root.style.setProperty('--mobile-input-h', (keyboardHeight + inputH) + 'px');
-                    }
-                } else {
-                    root.style.setProperty('--vv-keyboard-offset', '0px');
-                    if (inputArea) {
-                        inputArea.style.bottom = '';
-                    }
-                }
-            }
-
-            window.visualViewport.addEventListener('resize', onViewportResize, { passive: true });
-            window.visualViewport.addEventListener('scroll', onViewportResize, { passive: true });
-        })();
-
-        console.log('Catura AI v27.0.5 loaded');
-
+        console.log('🚀 Catura AI v27.0.5 loaded');
+        
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js?v=0.0.72')
-                    .then(() => console.log('Catura AI PWA ready'))
-                    .catch((err) => console.warn('Service worker registration failed:', err));
+                navigator.serviceWorker.register('/service-worker.js?v=0.0.73')
+                    .then(() => console.log('✅ Catura AI PWA Ready - v27.0.5'))
+                    .catch((err) => console.log('❌ SW Error:', err));
             });
         }
     </script>
-
 </body>
 </html>
