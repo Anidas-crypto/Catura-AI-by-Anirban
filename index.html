@@ -39,7 +39,7 @@
     <meta name="apple-mobile-web-app-title" content="Catura AI">
 
     <!-- ═══ STYLES ═══ -->
-    <link rel="stylesheet" href="static/style.css?v=0.0.68">
+    <link rel="stylesheet" href="static/style.css?v=0.0.69">
 
     <noscript>
         <style>.app { display: none; }</style>
@@ -782,10 +782,10 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js" defer></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js" defer></script>
-    <script src="static/firebase-config.js?v=0.0.68" defer></script>
-    <script src="static/logic.js?v=0.0.68" defer></script>
-    <script src="static/feedback.js?v=0.0.68" defer></script>
-    <script src="static/file-upload.js?v=0.0.68" defer></script>
+    <script src="static/firebase-config.js?v=0.0.69" defer></script>
+    <script src="static/logic.js?v=0.0.69" defer></script>
+    <script src="static/feedback.js?v=0.0.69" defer></script>
+    <script src="static/file-upload.js?v=0.0.69" defer></script>
 
     <script>
         // ── JS ID ALIAS: keep old id="input" working in logic.js ──
@@ -874,7 +874,7 @@
 
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js?v=0.0.68')
+                navigator.serviceWorker.register('/service-worker.js?v=0.0.69')
                     .then(() => console.log('Catura AI PWA ready'))
                     .catch((err) => console.warn('Service worker registration failed:', err));
             });
