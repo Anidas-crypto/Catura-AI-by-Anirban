@@ -102,7 +102,7 @@ async def serve_sw():
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.75"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.76"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -112,7 +112,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.75", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.76", "timestamp": datetime.utcnow().isoformat()}
 
 
 # ============================================================
@@ -1458,7 +1458,7 @@ def call_openrouter_stream(model_id, messages, api_key, file_urls=None):
                 "max_tokens": 16000,
             },
             stream=True,
-            timeout=(10, 120),
+            timeout=(5, 90),
         )
         if resp.status_code != 200:
             try:
@@ -1804,45 +1804,43 @@ async def chat_post(request: Request):
         system_prompt = system_prompts.get(model_key, system_prompts["dagr"])
 
         # ── TOOL ROUTING PIPELINE ──────────────────────────────────────────
-        # Step 1: detect intent
+        # Step 1: detect intent ONLY — tool execution moved INSIDE generators
+        # so the StreamingResponse starts immediately without blocking.
         intent = detect_intent(prompt)
         print(f"🎯 [PIPELINE] intent={intent} | model={model_key} | prompt={prompt[:60]}")
 
-        # Step 2: run tool (skip if general or file-only message)
-        tool_result = None
-        if intent != "general" and not file_urls:
-            tool_result = run_tool(intent, prompt)
-
-        # Step 3: build tool context string
-        tool_context = build_tool_context(tool_result)
-
-        # Step 4: also handle legacy web_results from frontend (backward compat)
-        if not tool_context and web_results:
-            search_context = "\n\n🌐 LIVE WEB SEARCH RESULTS (use these to answer accurately):\n"
-            for i, r in enumerate(web_results, 1):
-                title     = r.get("title", "")
-                body_text = r.get("body", "")
-                href      = r.get("href", "")
-                search_context += f"{i}. {title}\n{body_text}\nSource: {href}\n\n"
-            search_context += "Use the above search results to give an accurate, up-to-date answer."
-            system_prompt += search_context
-        elif tool_context:
-            system_prompt += "\n\n" + tool_context
-
-        # Step 5: build final messages list
-        messages = [{"role": "system", "content": system_prompt}] + user_memory[session_id][-20:]
+        # Step 2: build final messages list (tool context added inside generator)
+        base_system_prompt = system_prompt  # save before tool injection
+        messages_base = [{"role": "system", "content": system_prompt}] + user_memory[session_id][-20:]
         api_key  = os.getenv("OPENROUTER_API_KEY")
 
         # ── SAMBHAV: Gemma 4 E4B via Google AI Studio (replaces Gemini 2.5 Flash, no geo-restrictions) ──
         if model_key == "sambhav":
             def generate_gemini():
                 full_reply = ""
+
+                # ── Run tool INSIDE generator (non-blocking from client POV) ──
+                tool_result = None
+                if intent != "general" and not file_urls:
+                    yield f"data: {json.dumps({'status': 'tool_running', 'intent': intent})}\n\n"
+                    tool_result = run_tool(intent, prompt)
+
+                # Inject tool context into system prompt
+                final_system = base_system_prompt
+                tool_context = build_tool_context(tool_result)
+                if tool_context:
+                    final_system += "\n\n" + tool_context
+                elif web_results:
+                    search_context = "\n\n🌐 LIVE WEB SEARCH RESULTS:\n"
+                    for i, r in enumerate(web_results, 1):
+                        search_context += f"{i}. {r.get('title','')}\n{r.get('body','')}\nSource: {r.get('href','')}\n\n"
+                    final_system += search_context
+
                 if tool_result:
                     badge_payload = json.dumps({"tool_used": tool_result.get("tool", ""), "intent": intent})
                     yield f"data: {badge_payload}\n\n"
 
-                yield ": heartbeat\n\n"
-                resp, err = call_gemma_google_stream(user_memory[session_id][-20:], system_prompt, "gemma-4-e4b-it")
+                resp, err = call_gemma_google_stream(user_memory[session_id][-20:], final_system, "gemma-4-e4b-it")
 
                 if resp is None:
                     yield f"data: {json.dumps({'error': f'Sambhav unavailable: {err}'})}\n\n"
@@ -1897,11 +1895,28 @@ async def chat_post(request: Request):
 
             def generate_gemma():
                 full_reply = ""
-                if tool_result:
-                    badge_payload = json.dumps({"tool_used": tool_result.get("tool", ""), "intent": intent})
+
+                # ── Run tool INSIDE generator ──
+                tool_result_g = None
+                if intent != "general" and not file_urls:
+                    yield f"data: {json.dumps({'status': 'tool_running', 'intent': intent})}\n\n"
+                    tool_result_g = run_tool(intent, prompt)
+
+                final_system_g = base_system_prompt
+                tool_context_g = build_tool_context(tool_result_g)
+                if tool_context_g:
+                    final_system_g += "\n\n" + tool_context_g
+                elif web_results:
+                    search_context = "\n\n🌐 LIVE WEB SEARCH RESULTS:\n"
+                    for i, r in enumerate(web_results, 1):
+                        search_context += f"{i}. {r.get('title','')}\n{r.get('body','')}\nSource: {r.get('href','')}\n\n"
+                    final_system_g += search_context
+
+                if tool_result_g:
+                    badge_payload = json.dumps({"tool_used": tool_result_g.get("tool", ""), "intent": intent})
                     yield f"data: {badge_payload}\n\n"
-                yield ": heartbeat\n\n"
-                resp, err = call_gemma_google_stream(user_memory[session_id][-20:], system_prompt, google_model_id)
+
+                resp, err = call_gemma_google_stream(user_memory[session_id][-20:], final_system_g, google_model_id)
                 if resp is None:
                     yield f"data: {json.dumps({'error': f'{model_key} unavailable: {err}'})}\n\n"
                     yield "data: [DONE]\n\n"
@@ -1952,7 +1967,26 @@ async def chat_post(request: Request):
             pool_index   = 0
             handoffs     = 0
 
-            # Emit tool badge to frontend so it can show "🌤️ Weather tool used"
+            # ── Run tool INSIDE generator so streaming starts immediately ──
+            tool_result = None
+            if intent != "general" and not file_urls:
+                yield f"data: {json.dumps({'status': 'tool_running', 'intent': intent})}\n\n"
+                tool_result = run_tool(intent, prompt)
+
+            # Inject tool context into system prompt
+            final_system = base_system_prompt
+            tool_context = build_tool_context(tool_result)
+            if tool_context:
+                final_system += "\n\n" + tool_context
+            elif web_results:
+                search_context = "\n\n🌐 LIVE WEB SEARCH RESULTS (use these to answer accurately):\n"
+                for i, r in enumerate(web_results, 1):
+                    search_context += f"{i}. {r.get('title','')}\n{r.get('body','')}\nSource: {r.get('href','')}\n\n"
+                final_system += search_context + "Use the above search results to give an accurate, up-to-date answer."
+
+            messages = [{"role": "system", "content": final_system}] + user_memory[session_id][-20:]
+
+            # Emit tool badge to frontend
             if tool_result:
                 badge_payload = json.dumps({"tool_used": tool_result.get("tool", ""), "intent": intent})
                 yield f"data: {badge_payload}\n\n"
@@ -1960,8 +1994,6 @@ async def chat_post(request: Request):
             while handoffs < MAX_HANDOFFS:
                 current_model = model_pool[pool_index % len(model_pool)]
                 print(f"🔄 Handoff {handoffs} — [{current_model}] | intent={intent} | accumulated: {len(full_reply)} chars")
-
-                yield ": heartbeat\n\n"
 
                 relay_messages = (
                     messages + [{"role": "assistant", "content": full_reply}]

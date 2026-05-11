@@ -1580,24 +1580,9 @@ document.addEventListener("DOMContentLoaded", async function () {
         let webResults = [];
         const detectedIntent = message ? detectClientIntent(message) : "general";
 
-        if (message) {
-            const thinkLabel = thinking.querySelector(".thinking-label");
-            if (thinkLabel) {
-                const intentLabels = {
-                    clock:      "🕐 Checking live time…",
-                    weather:    "🌤️ Checking live weather…",
-                    finance:    "💹 Fetching market data…",
-                    sports:     "🏏 Fetching live scores…",
-                    news:       "📰 Getting latest news…",
-                    web_search: "🔍 Searching the web…",
-                };
-                const label = intentLabels[detectedIntent];
-                if (label) thinkLabel.innerHTML = `<span class="think-icon"></span>${label}`;
-            }
+        if (message && webSearchEnabled && detectedIntent === "general") {
             // Legacy manual web search toggle (still supported for general intent)
-            if (webSearchEnabled && detectedIntent === "general") {
-                webResults = await performWebSearch(message);
-            }
+            webResults = await performWebSearch(message);
         }
 
         try {
@@ -1615,19 +1600,36 @@ document.addEventListener("DOMContentLoaded", async function () {
             });
             if (!res.ok) throw new Error("Server error " + res.status);
 
-            thinking.remove();
-
-            const { wrapper, botMsg } = createBotWrapper();
-            chatbox.appendChild(wrapper);
-
             const reader    = res.body.getReader();
             const decoder   = new TextDecoder();
 
             // ── Stream with tool-badge support ──────────────────────────────
+            // thinking indicator stays visible until first real token arrives
             let toolUsed = null;
+            let wrapper = null;
+            let botMsg = null;
+
             const fullReply = await streamWordsWithTools(
-                botMsg, wrapper, reader, decoder, chatbox,
-                (tu) => { toolUsed = tu; }
+                null, null, reader, decoder, chatbox,
+                (tu) => { toolUsed = tu; },
+                // onFirstToken: create bot wrapper lazily on first real content
+                () => {
+                    if (!wrapper) {
+                        thinking.remove();
+                        const created = createBotWrapper();
+                        wrapper = created.wrapper;
+                        botMsg  = created.botMsg;
+                        chatbox.appendChild(wrapper);
+                    }
+                    return { wrapper, botMsg };
+                },
+                // onToolRunning: update thinking label
+                (intentLabel) => {
+                    const thinkLabelEl = thinking.querySelector(".thinking-label");
+                    if (thinkLabelEl) {
+                        thinkLabelEl.innerHTML = `<span class="think-icon"></span>${intentLabel}`;
+                    }
+                }
             );
 
             // ── Reset streaming state ────────────────────────────────────────
@@ -1635,7 +1637,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             setStreamingState(false);
 
             // ── Show tool badge above message ────────────────────────────────
-            if (toolUsed) {
+            if (toolUsed && wrapper) {
                 const toolBadges = {
                     clock:      { icon: "🕐", label: "Live Clock" },
                     weather:    { icon: "🌤️", label: "Live Weather" },
@@ -1654,7 +1656,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             }
 
             // ── Show source chips if web search was used ──────────────────────
-            if (fullReply && webResults.length > 0) {
+            if (fullReply && webResults.length > 0 && wrapper) {
                 const sourcesDiv = document.createElement("div");
                 sourcesDiv.className = "search-sources";
                 sourcesDiv.innerHTML = `<span class="sources-label">🌐 Sources:</span>` +
@@ -1688,8 +1690,7 @@ document.addEventListener("DOMContentLoaded", async function () {
                 errMsg.innerHTML = `<p style="color:#e06c6c">⚠️ Failed to get a response. Please try again.</p>`;
                 chatbox.appendChild(errMsg);
             }
-        }
-    };
+        }    };
 
     input.addEventListener("keydown", function (e) {
         if (e.key === "Enter" && !e.shiftKey) {
@@ -1867,21 +1868,46 @@ async function performWebSearch(query) {
 }
 
 // ── streamWordsWithTools — intercepts tool_used SSE event, then renders ──────
-async function streamWordsWithTools(botMsg, wrapper, reader, decoder, chatbox, onToolUsed) {
+async function streamWordsWithTools(botMsgInitial, wrapperInitial, reader, decoder, chatbox, onToolUsed, onFirstToken, onToolRunning) {
     let buffer    = "";
     let fullReply = "";
     let renderTimer = null;
+    let gotWrapper = false;
+
+    // Support both old (direct elements) and new (lazy callback) API
+    let botMsg  = botMsgInitial;
+    let wrapper = wrapperInitial;
+
+    const getOrCreateWrapper = () => {
+        if (!gotWrapper && typeof onFirstToken === "function") {
+            const result = onFirstToken();
+            if (result) { wrapper = result.wrapper; botMsg = result.botMsg; }
+            gotWrapper = true;
+        }
+        return { wrapper, botMsg };
+    };
 
     const scheduleRender = () => {
         if (renderTimer) return;
         renderTimer = setTimeout(() => {
             renderTimer = null;
-            if (fullReply) {
-                botMsg.innerHTML = formatMessage(repairTruncated(fullReply)) +
+            const { botMsg: bm } = getOrCreateWrapper();
+            if (fullReply && bm) {
+                bm.innerHTML = formatMessage(repairTruncated(fullReply)) +
                     '<span class="stream-cursor"></span>';
                 chatbox.scrollTop = chatbox.scrollHeight;
             }
-        }, 80);
+        }, 16); // reduced from 80ms → 16ms (1 frame) for instant feel
+    };
+
+    const intentLabels = {
+        clock:      "🕐 Checking live time…",
+        weather:    "🌤️ Checking live weather…",
+        finance:    "💹 Fetching market data…",
+        sports:     "🏏 Fetching live scores…",
+        news:       "📰 Getting latest news…",
+        web_search: "🔍 Searching the web…",
+        wikipedia:  "📖 Looking up Wikipedia…",
     };
 
     try {
@@ -1904,12 +1930,22 @@ async function streamWordsWithTools(botMsg, wrapper, reader, decoder, chatbox, o
                         if (typeof onToolUsed === "function") onToolUsed(data.tool_used);
                         continue;
                     }
+                    // Status event from backend (tool running)
+                    if (data.status === "tool_running") {
+                        const label = intentLabels[data.intent] || "🔍 Fetching data…";
+                        if (typeof onToolRunning === "function") onToolRunning(label);
+                        continue;
+                    }
                     if (data.error) {
-                        if (!fullReply.trim()) botMsg.innerHTML = `<p style="color:#e06c6c">⚠️ ${data.error}</p>`;
+                        const { botMsg: bm } = getOrCreateWrapper();
+                        if (!fullReply.trim() && bm) bm.innerHTML = `<p style="color:#e06c6c">⚠️ ${data.error}</p>`;
                         if (renderTimer) { clearTimeout(renderTimer); renderTimer = null; }
                         return fullReply || "";
                     }
-                    if (data.token) { fullReply += data.token; scheduleRender(); }
+                    if (data.token) {
+                        fullReply += data.token;
+                        scheduleRender();
+                    }
                 } catch { continue; }
             }
         }
@@ -1917,14 +1953,18 @@ async function streamWordsWithTools(botMsg, wrapper, reader, decoder, chatbox, o
 
     if (renderTimer) { clearTimeout(renderTimer); renderTimer = null; }
 
+    const { wrapper: w, botMsg: bm } = getOrCreateWrapper();
+
     if (fullReply.trim()) {
-        botMsg.innerHTML = formatMessage(repairTruncated(fullReply));
-        wrapper.dataset.raw = fullReply;
+        if (bm) {
+            bm.innerHTML = formatMessage(repairTruncated(fullReply));
+            if (w) w.dataset.raw = fullReply;
+        }
         chatbox.scrollTop = chatbox.scrollHeight;
         return fullReply;
     }
 
-    botMsg.innerHTML = `<p style="color:#e06c6c">⚠️ No response received. Please try again.</p>`;
+    if (bm) bm.innerHTML = `<p style="color:#e06c6c">⚠️ No response received. Please try again.</p>`;
     return "";
 }
 
