@@ -409,6 +409,11 @@ function formatMessage(rawText) {
     // ── STEP 6: Restore code blocks ───────────────────────────────────────
     html = html.replace(/\x00CODE(\d+)\x00/g, (_, idx) => codeBlocks[+idx]);
 
+    // ── STEP 7: Merge adjacent <ol> blocks (prevents "1 1 1 1" numbering) ──
+    // When streaming partial text, the ordered list regex may fire multiple times
+    // producing sibling <ol> elements that each restart at 1. Collapse them.
+    html = html.replace(/<\/ol>\s*<ol>/g, "");
+
     return html;
 }
 
@@ -1919,6 +1924,7 @@ async function streamWordsWithTools(botMsgInitial, wrapperInitial, reader, decod
                 // stream finished AND queue empty — do final render
                 animRunning = false;
                 bm.innerHTML = formatMessage(repairTruncated(fullReply));
+                bm.classList.remove("streaming");
                 if (wrapper) wrapper.dataset.raw = fullReply;
                 chatbox.scrollTop = chatbox.scrollHeight;
             }
@@ -1932,17 +1938,20 @@ async function streamWordsWithTools(botMsgInitial, wrapperInitial, reader, decod
 
         if (tickCount % RENDER_EVERY === 0 || (streamDone && wordQueue.length === 0)) {
             // Full markdown re-parse (kept infrequent to stay fast)
-            bm.innerHTML = formatMessage(repairTruncated(displayed)) +
-                (streamDone && wordQueue.length === 0 ? "" : '<span class="stream-cursor"></span>');
+            bm.innerHTML = formatMessage(repairTruncated(displayed));
+            if (!(streamDone && wordQueue.length === 0)) {
+                bm.classList.add("streaming");
+            } else {
+                bm.classList.remove("streaming");
+            }
         } else {
             // Lightweight: just append a text node for speed between re-parses
-            // (cursor injected at end of last parsed node)
             const cursor = bm.querySelector(".stream-cursor");
             if (cursor) {
                 cursor.insertAdjacentText("beforebegin", batch.join(""));
             } else {
-                bm.innerHTML = formatMessage(repairTruncated(displayed)) +
-                    '<span class="stream-cursor"></span>';
+                bm.innerHTML = formatMessage(repairTruncated(displayed));
+                bm.classList.add("streaming");
             }
         }
 

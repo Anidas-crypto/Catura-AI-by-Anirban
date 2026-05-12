@@ -539,16 +539,23 @@ html { scroll-behavior: smooth; }
 .message.bot tbody tr:hover td { background: #181818; transition: background 0.15s; }
 .message.bot tbody tr:last-child td { border-bottom: none; }
 
-@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
-.stream-cursor {
+@keyframes cursorPulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.75); }
+}
+
+/* While streaming, show a glowing ball after the last character */
+.message.bot.streaming::after {
+    content: '';
     display: inline-block;
-    width: 2px;
-    height: 1.1em;
+    width: 7px;
+    height: 7px;
     background: #10a37f;
-    border-radius: 1px;
-    vertical-align: text-bottom;
-    margin-left: 2px;
-    animation: blink 0.9s step-end infinite;
+    border-radius: 50%;
+    margin-left: 3px;
+    vertical-align: middle;
+    animation: cursorPulse 0.9s ease-in-out infinite;
+    box-shadow: 0 0 6px #10a37f88;
 }
 
 /* ============================
