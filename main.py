@@ -49,6 +49,7 @@ NEWSDATA_API_KEY    = os.getenv("NEWSDATA_API_KEY", "")           # https://news
 ALPHAVANTAGE_KEY    = os.getenv("ALPHAVANTAGE_API_KEY", "")       # https://www.alphavantage.co (free)
 CRICAPI_KEY         = os.getenv("CRICAPI_KEY", "")                # https://www.cricapi.com (free)
 GEMINI_API_KEY      = os.getenv("GEMINI_API_KEY", "")               # https://aistudio.google.com (free)
+TAVILY_API_KEY      = os.getenv("TAVILY_API_KEY", "")               # https://tavily.com (free — 1000 searches/month)
 
 
 
@@ -102,7 +103,7 @@ async def serve_sw():
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.80"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.81"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -112,7 +113,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.80", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.81", "timestamp": datetime.utcnow().isoformat()}
 
 
 # ============================================================
@@ -1186,11 +1187,71 @@ def tool_sports(prompt: str) -> dict:
 # and returns rich context so the AI can reason like ChatGPT.
 # ============================================================
 def _ddg_search(query: str, max_results: int = 5) -> list:
-    """Single DuckDuckGo search, returns list of result dicts."""
+    """
+    Search using Tavily (preferred — reliable, AI-optimized, current events)
+    with DuckDuckGo as fallback.
+
+    Tavily advantages over DDG:
+    - Returns a direct answer field (perfect for political/government queries)
+    - Crawls live pages — not cached results
+    - Never rate-blocks Indian news queries
+    - Free tier: 1000 searches/month at tavily.com
+    """
+
+    # ── Tavily (primary) ────────────────────────────────────────────────────
+    if TAVILY_API_KEY:
+        try:
+            resp = requests.post(
+                "https://api.tavily.com/search",
+                json={
+                    "api_key": TAVILY_API_KEY,
+                    "query": query,
+                    "max_results": max_results,
+                    "include_answer": True,        # asks Tavily to synthesize a direct answer
+                    "include_raw_content": False,
+                    "search_depth": "basic",       # "advanced" uses 2x credits — basic is enough
+                    "include_domains": [],
+                    "exclude_domains": [],
+                },
+                timeout=10,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                results = []
+
+                # Prepend Tavily's direct answer as a synthetic top result
+                if data.get("answer"):
+                    results.append({
+                        "title": "Direct Answer",
+                        "body": data["answer"],
+                        "href": "",
+                        "query_used": query,
+                        "is_direct_answer": True,
+                    })
+
+                for r in data.get("results", []):
+                    results.append({
+                        "title": r.get("title", ""),
+                        "body": (r.get("content", "") or "")[:400],
+                        "href": r.get("url", ""),
+                        "query_used": query,
+                    })
+
+                print(f"✅ [Tavily] '{query}' → {len(results)} results"
+                      + (f" | direct answer: {data['answer'][:80]}" if data.get("answer") else ""))
+                return results[:max_results + 1]  # +1 to account for the direct answer prepend
+
+            else:
+                print(f"⚠️ [Tavily] HTTP {resp.status_code} for '{query}' — falling back to DDG")
+
+        except Exception as e:
+            print(f"❌ [Tavily] exception for '{query}': {e} — falling back to DDG")
+
+    # ── DuckDuckGo (fallback) ───────────────────────────────────────────────
     try:
         with DDGS() as ddgs:
             raw = list(ddgs.text(query, max_results=max_results))
-        return [
+        results = [
             {
                 "title": r.get("title", ""),
                 "body": r.get("body", "")[:400],
@@ -1199,6 +1260,8 @@ def _ddg_search(query: str, max_results: int = 5) -> list:
             }
             for r in raw if r.get("title")
         ]
+        print(f"✅ [DDG fallback] '{query}' → {len(results)} results")
+        return results
     except Exception as e:
         print(f"❌ [DDG] query='{query}' exception: {e}")
         return []
@@ -1438,10 +1501,16 @@ def build_tool_context(tool_result: dict) -> str:
         # Wikipedia fell back to web search — label it correctly
         lines.append(f"Search query: {tool_result['query']}")
         lines.append("(Wikipedia had no result — showing web search results instead)")
-        for i, r in enumerate(tool_result.get("results", []), 1):
-            lines.append(f"\n{i}. {r['title']}")
-            lines.append(f"   {r['body']}")
-            lines.append(f"   Source: {r['href']}")
+        idx = 1
+        for r in tool_result.get("results", []):
+            if r.get("is_direct_answer"):
+                lines.append(f"\n⭐ DIRECT ANSWER (Tavily AI synthesis — treat as highest-confidence source):")
+                lines.append(f"   {r['body']}")
+            else:
+                lines.append(f"\n{idx}. {r['title']}")
+                lines.append(f"   {r['body']}")
+                lines.append(f"   Source: {r['href']}")
+                idx += 1
 
     elif tool == "web_search":
         queries_run = tool_result.get("queries_run", [tool_result.get("query", "")])
@@ -1450,14 +1519,23 @@ def build_tool_context(tool_result: dict) -> str:
             lines.append(f"Also searched: {' | '.join(queries_run[1:])}")
         lines.append(f"Total unique results: {tool_result.get('result_count', len(tool_result.get('results', [])))}\n")
 
-        for i, r in enumerate(tool_result.get("results", []), 1):
+        result_index = 1
+        for r in tool_result.get("results", []):
             q_tag = f" [via: {r['query_used']}]" if r.get("query_used") and r["query_used"] != tool_result["query"] else ""
-            lines.append(f"{i}. {r['title']}{q_tag}")
-            lines.append(f"   {r['body']}")
-            lines.append(f"   Source: {r['href']}\n")
+            if r.get("is_direct_answer"):
+                # Tavily synthesized a direct answer — put it front and centre
+                lines.append("⭐ DIRECT ANSWER (Tavily AI synthesis — treat as highest-confidence source):")
+                lines.append(f"   {r['body']}")
+                lines.append("")
+            else:
+                lines.append(f"{result_index}. {r['title']}{q_tag}")
+                lines.append(f"   {r['body']}")
+                lines.append(f"   Source: {r['href']}\n")
+                result_index += 1
 
         lines.append(
             "\n🧠 CROSS-REFERENCE INSTRUCTIONS:\n"
+            "- If a ⭐ DIRECT ANSWER is present above, use it as your primary source — it is a high-confidence synthesis.\n"
             "- Read ALL results above carefully.\n"
             "- Look for CONSENSUS: if multiple independent sources agree on a fact, it is likely correct.\n"
             "- Flag CONFLICTS: if sources disagree (e.g. different names, dates), note both and say which seems more reliable.\n"
