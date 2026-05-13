@@ -1586,15 +1586,11 @@ document.addEventListener("DOMContentLoaded", async function () {
         }
 
         // ── TOOL ROUTER: detect intent, update thinking label ──────────────
-        // Backend handles ALL tool execution. We detect intent client-side
-        // only to show the right "thinking" label before response arrives.
-        let webResults = [];
+        // Backend handles ALL tool execution (search, weather, finance, etc.)
+        // Frontend only detects intent to show the right "thinking" label.
+        // We NEVER run frontend search — it causes spurious Sources chips on greetings.
+        const webResults = [];
         const detectedIntent = message ? detectClientIntent(message) : "general";
-
-        if (message && webSearchEnabled && detectedIntent === "general") {
-            // Legacy manual web search toggle (still supported for general intent)
-            webResults = await performWebSearch(message);
-        }
 
         try {
             const model = getSelectedModel();
@@ -1664,17 +1660,6 @@ document.addEventListener("DOMContentLoaded", async function () {
                 badgeDiv.setAttribute("data-tool", toolUsed);
                 badgeDiv.innerHTML = `<span class="tool-badge-icon">${badge.icon}</span><span class="tool-badge-label">${badge.label} used</span>`;
                 wrapper.insertBefore(badgeDiv, botMsg);
-            }
-
-            // ── Show source chips if web search was used ──────────────────────
-            if (fullReply && webResults.length > 0 && wrapper) {
-                const sourcesDiv = document.createElement("div");
-                sourcesDiv.className = "search-sources";
-                sourcesDiv.innerHTML = `<span class="sources-label">🌐 Sources:</span>` +
-                    webResults.slice(0, 4).map(r =>
-                        `<a href="${r.href}" target="_blank" rel="noopener" class="source-chip">${r.title}</a>`
-                    ).join('');
-                wrapper.appendChild(sourcesDiv);
             }
 
             if (fullReply) {
@@ -1849,7 +1834,7 @@ function initFontSize() {
 // ============================
 // 🌐 WEB SEARCH & INTENT SYSTEM
 // ============================
-let webSearchEnabled = true;  // ✅ ON by default — like Claude
+let webSearchEnabled = false;  // ✅ Legacy toggle — disabled, backend handles all search
 
 // ── Client-side intent detector ─────────────────────────────────────────────
 // Mirrors backend detect_intent() — used ONLY for UI labels (thinking text).
@@ -2105,15 +2090,9 @@ window.handleSendOrStop = function () {
 };
 
 window.toggleWebSearch = function() {
-    webSearchEnabled = !webSearchEnabled;
-
-    // Update the plus-dropdown item to show active state (green background + tick)
-    const searchItem = document.querySelector('.plus-dropdown-item[data-action="search"]');
-    if (searchItem) {
-        searchItem.classList.toggle('search-active', webSearchEnabled);
-    }
-
-    showToast(webSearchEnabled ? '🌐 Web search enabled' : 'Web search disabled', 1500);
+    // Web search is now handled automatically by the backend — no manual toggle needed.
+    // The backend intelligently decides when to search based on the query.
+    showToast('🔍 Search is always on — Catura decides when to use it', 2000);
 };
 function togglePlusMenu(e) {
     e.stopPropagation();
@@ -2150,10 +2129,7 @@ function handlePlusAction(action) {
 
 // ── Init web-search active state in the plus dropdown on page load ─────────
 function initWebSearchUI() {
-    const searchItem = document.querySelector('.plus-dropdown-item[data-action="search"]');
-    if (searchItem) {
-        searchItem.classList.toggle('search-active', webSearchEnabled);
-    }
+    // Search is always handled by the backend — no UI toggle state needed.
 }
 
 // NOTE: handleFileSelect is defined in file-upload.js (the real implementation).

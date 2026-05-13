@@ -326,7 +326,7 @@ async def serve_sw():
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.86"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.87"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -336,7 +336,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.86", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.87", "timestamp": datetime.utcnow().isoformat()}
 
 
 # ============================================================
@@ -2099,8 +2099,8 @@ async def chat_post(request: Request):
         prompt     = body.get("prompt", "")
         model      = body.get("model", "dagr")
         file_urls  = body.get("file_urls", [])
-        # Legacy: frontend may still send pre-fetched web_results
-        web_results = body.get("web_results", [])
+        # Legacy web_results from frontend removed — backend handles all search internally
+        web_results = []
 
         session_id = request.cookies.get("session_id")
         if not session_id:
@@ -2348,11 +2348,7 @@ async def chat_post(request: Request):
                 tool_context = build_tool_context(tool_result)
                 if tool_context:
                     final_system += "\n\n" + tool_context
-                elif web_results:
-                    search_context = "\n\n🌐 LIVE WEB SEARCH RESULTS:\n"
-                    for i, r in enumerate(web_results, 1):
-                        search_context += f"{i}. {r.get('title','')}\n{r.get('body','')}\nSource: {r.get('href','')}\n\n"
-                    final_system += search_context
+
 
                 if tool_result:
                     badge_payload = json.dumps({"tool_used": tool_result.get("tool", ""), "intent": intent})
@@ -2424,11 +2420,7 @@ async def chat_post(request: Request):
                 tool_context_g = build_tool_context(tool_result_g)
                 if tool_context_g:
                     final_system_g += "\n\n" + tool_context_g
-                elif web_results:
-                    search_context = "\n\n🌐 LIVE WEB SEARCH RESULTS:\n"
-                    for i, r in enumerate(web_results, 1):
-                        search_context += f"{i}. {r.get('title','')}\n{r.get('body','')}\nSource: {r.get('href','')}\n\n"
-                    final_system_g += search_context
+
 
                 if tool_result_g:
                     badge_payload = json.dumps({"tool_used": tool_result_g.get("tool", ""), "intent": intent})
@@ -2496,11 +2488,7 @@ async def chat_post(request: Request):
             tool_context = build_tool_context(tool_result)
             if tool_context:
                 final_system += "\n\n" + tool_context
-            elif web_results:
-                search_context = "\n\n🌐 LIVE WEB SEARCH RESULTS (use these to answer accurately):\n"
-                for i, r in enumerate(web_results, 1):
-                    search_context += f"{i}. {r.get('title','')}\n{r.get('body','')}\nSource: {r.get('href','')}\n\n"
-                final_system += search_context + "Use the above search results to give an accurate, up-to-date answer."
+
 
             messages = [{"role": "system", "content": final_system}] + user_memory[session_id][-20:]
 
