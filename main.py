@@ -326,7 +326,7 @@ async def serve_sw():
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.85"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.86"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -336,7 +336,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.85", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.86", "timestamp": datetime.utcnow().isoformat()}
 
 
 # ============================================================
@@ -346,9 +346,54 @@ def health_check():
 def detect_intent(text: str) -> str:
     """
     Keyword-based intent classifier.
-    Priority order: weather > finance > sports > news > web_search > general
+    Priority order: greeting > identity > weather > finance > sports > news > web_search > general
     """
-    lower = text.lower()
+    lower = text.lower().strip()
+
+    # ── GREETINGS (always general — never search for these) ────────────────
+    # Short messages (≤4 words) that are purely social/conversational
+    # covers: hi, hello, hey, hii, hiii, bonjour, namaste, salut,
+    # kamon acho, ki obostha, kemon acho, kem cho, vanakkam, sat sri akal,
+    # kya haal, theek ho, wassup, good morning/afternoon/evening/night, etc.
+    _GREETING_EXACT = {
+        "hi", "hii", "hiii", "hiiii", "hey", "heya", "hello", "helo", "hellow",
+        "yo", "sup", "wassup", "whatsup", "howdy",
+        # French / Spanish / Portuguese / common global
+        "bonjour", "bonsoir", "salut", "hola", "ola", "ciao", "hallo", "hei",
+        # Bengali (Roman)
+        "kamon acho", "kemon acho", "ki obostha", "ki holo", "ভালো আছি",
+        "kamon achho", "kemon achho", "ki korcho", "ki korchen", "asha kori bhalo acho",
+        # Hindi (Roman)
+        "kya haal", "kya haal hai", "kaise ho", "kaise hain", "kaisa hai",
+        "theek ho", "theek hain", "sab theek", "kya chal raha hai",
+        # Tamil / Telugu / Kannada / Malayalam (Roman)
+        "vanakkam", "namaskaram", "hege iddira", "sukhamano", "ela unnaru",
+        # Punjabi / Gujarati
+        "sat sri akal", "kem cho", "maja ma",
+        # Urdu
+        "aadab", "adaab", "assalamualaikum", "salam",
+        # Universal
+        "namaste", "namaskar", "pranam", "nomoskar",
+    }
+
+    # Check exact match first
+    if lower in _GREETING_EXACT:
+        return "general"
+
+    # Check greeting-style short messages (≤ 5 words, no question about facts)
+    words = lower.split()
+    if len(words) <= 5:
+        _GREETING_STARTERS = (
+            "hi ", "hii", "hey ", "hello", "good morning", "good afternoon",
+            "good evening", "good night", "good day", "greetings",
+            "how are you", "how r u", "how are u", "how ru",
+            "what's up", "whats up", "sup ", "yo ", "hola ", "bonjour",
+            "namaste", "namaskar", "nomoskar", "pranam",
+            "kamon", "kemon", "kaise ho", "kya haal", "kem cho",
+            "sat sri", "vanakkam", "sukha", "ela un",
+        )
+        if any(lower.startswith(g) for g in _GREETING_STARTERS):
+            return "general"
 
     # ── IDENTITY (always general — never run a tool for these) ─────────────
     identity_patterns = [

@@ -1855,7 +1855,39 @@ let webSearchEnabled = true;  // ✅ ON by default — like Claude
 // Mirrors backend detect_intent() — used ONLY for UI labels (thinking text).
 // Actual tool execution always happens on the backend.
 function detectClientIntent(message) {
-    const lower = message.toLowerCase();
+    const lower = message.toLowerCase().trim();
+
+    // ── GREETINGS → always "general", never search ───────────────────────
+    // Covers: hi, hii, hello, hey, bonjour, namaste, kamon acho, kaise ho, etc.
+    const GREETING_EXACT = new Set([
+        "hi","hii","hiii","hiiii","hey","heya","hello","helo","hellow",
+        "yo","sup","wassup","whatsup","howdy",
+        "bonjour","bonsoir","salut","hola","ola","ciao","hallo","hei",
+        "kamon acho","kemon acho","ki obostha","ki holo",
+        "kamon achho","kemon achho","ki korcho","ki korchen",
+        "kya haal","kya haal hai","kaise ho","kaise hain","kaisa hai",
+        "theek ho","theek hain","sab theek","kya chal raha hai",
+        "vanakkam","namaskaram","hege iddira","sukhamano","ela unnaru",
+        "sat sri akal","kem cho","maja ma",
+        "aadab","adaab","assalamualaikum","salam",
+        "namaste","namaskar","pranam","nomoskar",
+    ]);
+    if (GREETING_EXACT.has(lower)) return "general";
+
+    const words = lower.split(/\s+/);
+    if (words.length <= 5) {
+        const GREETING_STARTS = [
+            "hi ","hii","hey ","hello","good morning","good afternoon",
+            "good evening","good night","good day","greetings",
+            "how are you","how r u","how are u","how ru",
+            "what's up","whats up","sup ","yo ","hola ","bonjour",
+            "namaste","namaskar","nomoskar","pranam",
+            "kamon","kemon","kaise ho","kya haal","kem cho",
+            "sat sri","vanakkam",
+        ];
+        if (GREETING_STARTS.some(g => lower.startsWith(g))) return "general";
+    }
+
     if (/\btime\b|\bclock\b|\bwhat time\b|\bcurrent time\b|\btimezone\b|\btime zone\b|\bist\b|\butc\b|\bgmt\b/.test(lower)) return "clock";
     if (/weather|temperature|humidity|forecast|sunny|cloudy|will it rain|feels like/.test(lower)) return "weather";
     if (/share price|stock price|stock market|nse|bse|nifty|sensex|crypto|bitcoin|ethereum|exchange rate|rupee/.test(lower)) return "finance";
