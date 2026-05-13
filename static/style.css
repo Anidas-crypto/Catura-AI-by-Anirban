@@ -2933,7 +2933,7 @@ html { scroll-behavior: smooth; }
 
 .attached-files-preview {
     display: none;
-    padding: 8px 14px 6px;
+    padding: 10px 14px 8px;
     border-bottom: 1px solid #252525;
 }
 .attached-files-list {
@@ -2941,38 +2941,264 @@ html { scroll-behavior: smooth; }
     flex-wrap: wrap;
     gap: 8px;
 }
-.attached-file-item {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 8px;
-    padding: 5px 8px 5px 5px;
-    max-width: 210px;
-}
-.af-thumb {
-    width: 34px;
-    height: 34px;
-    object-fit: cover;
-    border-radius: 5px;
-    cursor: pointer;
+
+/* ── New Claude-style file cards ── */
+.af-card {
+    position: relative;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.06);
+    transition: border-color 0.15s, box-shadow 0.15s;
     flex-shrink: 0;
 }
-.file-icon { color: #777; flex-shrink: 0; }
-.attached-file-details { display: flex; flex-direction: column; min-width: 0; flex: 1; }
-.attached-file-name {
-    font-size: 11px; color: #ccc;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.attached-file-size { font-size: 10px; color: #555; margin-top: 1px; }
-.remove-file-btn {
-    background: none; border: none; color: #555; cursor: pointer;
-    font-size: 11px; padding: 2px 3px; border-radius: 4px; line-height: 1;
-    flex-shrink: 0; transition: color 0.15s;
-}
-.remove-file-btn:hover { color: #ff5555; }
+.af-card:hover { border-color: rgba(255,255,255,0.25); }
 
+/* Image cards */
+.af-card--image {
+    width: 80px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-bottom: 6px;
+}
+.af-card-img-wrap {
+    position: relative;
+    width: 80px;
+    height: 64px;
+    background: rgba(255,255,255,0.04);
+    flex-shrink: 0;
+}
+.af-card-img {
+    width: 80px;
+    height: 64px;
+    object-fit: cover;
+    display: block;
+}
+.af-card-img-placeholder {
+    width: 80px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #555;
+}
+.af-card-spinner-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.af-card-fail-overlay { background: rgba(220,30,30,0.35); }
+.af-card-label {
+    font-size: 10px;
+    color: #aaa;
+    padding: 4px 5px 0;
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 74px;
+}
+
+/* File/code cards */
+.af-card--file {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 34px 8px 10px;
+    min-width: 160px;
+    max-width: 220px;
+}
+.af-card-file-icon {
+    position: relative;
+    width: 36px;
+    height: 40px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.af-ext-badge {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 7px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    background: #10a37f;
+    color: #fff;
+    padding: 1px 3px;
+    border-radius: 3px;
+    white-space: nowrap;
+    line-height: 1.4;
+}
+.af-card-file-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+}
+.af-card-name {
+    font-size: 12px;
+    color: #ddd;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+}
+.af-card-size {
+    font-size: 10px;
+    color: #666;
+    margin-top: 2px;
+}
+.af-card-size--fail { color: #ff5555; }
+
+/* Remove button */
+.af-card-remove {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.55);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: #aaa;
+    font-size: 9px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s, color 0.15s;
+    padding: 0;
+}
+.af-card-remove:hover { background: rgba(220,50,50,0.7); color: #fff; border-color: transparent; }
+
+/* Spinner */
+.af-spinner {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    border: 2px solid rgba(255,255,255,0.15);
+    border-top-color: #10a37f;
+    border-radius: 50%;
+    animation: af-spin 0.75s linear infinite;
+    flex-shrink: 0;
+}
+.af-spinner--sm { width: 12px; height: 12px; position: absolute; bottom: 0; right: -4px; }
+@keyframes af-spin { to { transform: rotate(360deg); } }
+
+/* Fail icon */
+.af-fail-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #ff4444;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+}
+.af-fail-icon--sm { width: 13px; height: 13px; font-size: 9px; position: absolute; bottom: 0; right: -4px; }
+
+/* Failed card tint */
+.af-card--failed { border-color: rgba(255,80,80,0.35); background: rgba(255,50,50,0.06); }
+
+/* File icon colours */
+.file-icon { color: #888; flex-shrink: 0; }
+.file-icon--pdf { color: #e5533c; }
+.file-icon--doc { color: #4a8cf7; }
+.file-icon--code { color: #10a37f; }
+
+/* ── Drag & Drop Overlay ────────────────────────────────────────────────────── */
+#catura-drop-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.18s ease;
+    background: rgba(0, 0, 0, 0.72);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+#catura-drop-overlay.drop-overlay--visible {
+    opacity: 1;
+    pointer-events: all;
+}
+.drop-overlay-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    border: 2.5px dashed rgba(16,163,127,0.7);
+    border-radius: 20px;
+    padding: 48px 72px;
+    background: rgba(16,163,127,0.05);
+    box-shadow: 0 0 0 8px rgba(16,163,127,0.04);
+    animation: drop-pulse 1.8s ease-in-out infinite;
+}
+@keyframes drop-pulse {
+    0%, 100% { box-shadow: 0 0 0 8px rgba(16,163,127,0.04); }
+    50% { box-shadow: 0 0 0 16px rgba(16,163,127,0.10); }
+}
+.drop-overlay-icon {
+    color: #10a37f;
+    opacity: 0.85;
+    animation: drop-bounce 1.2s ease-in-out infinite;
+}
+@keyframes drop-bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+}
+.drop-overlay-title {
+    font-size: 22px;
+    font-weight: 600;
+    color: #fff;
+    letter-spacing: -0.01em;
+}
+.drop-overlay-sub {
+    font-size: 13px;
+    color: rgba(255,255,255,0.45);
+}
+
+/* Light theme adjustments */
+[data-theme="light"] .af-card {
+    background: rgba(0,0,0,0.04);
+    border-color: rgba(0,0,0,0.12);
+}
+[data-theme="light"] .af-card-name { color: #222; }
+[data-theme="light"] .af-card-label { color: #555; }
+[data-theme="light"] .af-card-size { color: #888; }
+[data-theme="light"] .af-card-remove { background: rgba(255,255,255,0.8); color: #666; border-color: rgba(0,0,0,0.15); }
+[data-theme="light"] .af-card-remove:hover { background: rgba(220,50,50,0.85); color: #fff; }
+[data-theme="light"] #catura-drop-overlay { background: rgba(255,255,255,0.82); }
+[data-theme="light"] .drop-overlay-title { color: #111; }
+[data-theme="light"] .drop-overlay-sub { color: rgba(0,0,0,0.4); }
+[data-theme="light"] .attached-files-preview { border-color: #ddd; }
+[data-theme="light"] .file-icon { color: #999; }
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+    .af-card--image { width: 68px; }
+    .af-card-img-wrap, .af-card-img { width: 68px; height: 54px; }
+    .af-card-label { max-width: 62px; }
+    .af-card--file { min-width: 140px; max-width: 180px; }
+    .drop-overlay-inner { padding: 36px 40px; }
+    .drop-overlay-title { font-size: 18px; }
+}
+
+/* ── Message file chips (shown inside chat bubbles after send) ─────────────── */
 .msg-files-row {
     display: flex;
     flex-wrap: wrap;
@@ -2981,7 +3207,6 @@ html { scroll-behavior: smooth; }
     justify-content: flex-end;
 }
 .msg-file { border-radius: 10px; overflow: hidden; }
-
 .msg-file--img {
     display: flex; flex-direction: column; align-items: flex-end;
     background: rgba(255,255,255,0.06);
@@ -2998,35 +3223,24 @@ html { scroll-behavior: smooth; }
 .msg-file-name {
     font-size: 11px; color: rgba(255,255,255,0.7);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    max-width: 210px; margin-top: 4px; text-align: right;
-    padding: 0 2px;
+    max-width: 210px; margin-top: 4px; text-align: right; padding: 0 2px;
 }
 .msg-file--doc {
     display: flex; align-items: center; gap: 8px;
     background: rgba(255,255,255,0.08);
     border: 1px solid rgba(255,255,255,0.12);
-    border-radius: 8px; padding: 7px 10px;
-    max-width: 250px;
+    border-radius: 8px; padding: 7px 10px; max-width: 250px;
 }
 .msg-file-meta { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .msg-file-size { font-size: 10px; color: rgba(255,255,255,0.4); margin-top: 2px; }
 .msg-file-dl {
     color: #10a37f; text-decoration: none; font-size: 15px;
-    flex-shrink: 0; padding: 2px 4px; border-radius: 4px;
-    transition: background 0.15s;
+    flex-shrink: 0; padding: 2px 4px; border-radius: 4px; transition: background 0.15s;
 }
 .msg-file-dl:hover { background: rgba(16,163,127,0.15); }
-
-[data-theme="light"] .attached-file-item,
 [data-theme="light"] .msg-file--img,
-[data-theme="light"] .msg-file--doc {
-    background: rgba(0,0,0,0.04);
-    border-color: rgba(0,0,0,0.1);
-}
-[data-theme="light"] .attached-file-name,
+[data-theme="light"] .msg-file--doc { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.1); }
 [data-theme="light"] .msg-file-name { color: #333; }
-[data-theme="light"] .attached-files-preview { border-color: #ddd; }
-
 @media (max-width: 768px) {
     .msg-file--img { max-width: 180px; }
     .msg-file-img  { width: 170px; }

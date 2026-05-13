@@ -21,16 +21,42 @@ const ALLOWED_MIME = new Set([
     'application/pdf',
     'text/plain', 'text/csv',
     'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    // Code / text files — browsers often report these as text/plain too,
+    // but we also accept the explicit subtypes some OS/browsers emit.
+    'text/javascript', 'application/javascript', 'application/x-javascript',
+    'text/x-python', 'application/x-python', 'application/x-python-code',
+    'text/html', 'application/xhtml+xml',
+    'text/css',
+    'application/json', 'text/json',
+    'text/x-java-source', 'text/x-java',
+    'text/x-c', 'text/x-c++', 'text/x-csrc', 'text/x-cppsrc',
+    'text/x-csharp',
+    'text/x-typescript',
+    'text/markdown', 'text/x-markdown',
+    'text/x-sh', 'application/x-sh', 'text/x-shellscript',
+    'application/xml', 'text/xml',
+    'text/x-go', 'text/x-rust', 'text/x-kotlin', 'text/x-swift',
+    'text/x-php', 'application/x-httpd-php',
+    'text/x-ruby', 'application/x-ruby',
+    'text/x-sql',
+    'application/x-yaml', 'text/yaml', 'text/x-yaml',
+    'application/toml',
 ]);
 
-// Extension allowlist cross-checked against MIME — prevents rename attacks
-// where a user renames exploit.exe to exploit.pdf and gets past MIME check.
+// Extension allowlist cross-checked against MIME
 const ALLOWED_EXT = new Set([
     'jpg', 'jpeg', 'png', 'gif', 'webp',
     'pdf',
     'txt', 'csv',
-    'doc', 'docx'
+    'doc', 'docx',
+    // code files
+    'py', 'js', 'ts', 'jsx', 'tsx',
+    'html', 'htm', 'css', 'json',
+    'java', 'c', 'cpp', 'cs', 'go', 'rs', 'rb', 'php', 'swift', 'kt',
+    'sh', 'bash', 'zsh',
+    'xml', 'yaml', 'yml', 'toml', 'md', 'markdown',
+    'sql', 'r', 'lua', 'dart', 'scala', 'hs',
 ]);
 
 // Magic-byte signatures for server-enforceable types we can partially check
@@ -115,6 +141,13 @@ async function handleFileSelect(event) {
 }
 
 // ── Validation ────────────────────────────────────────────────────────────────
+// Code/text extensions — browser often reports these as text/plain
+var TEXT_CODE_EXTS = new Set([
+    'py','js','ts','jsx','tsx','html','htm','css','json','java','c','cpp',
+    'cs','go','rs','rb','php','swift','kt','sh','bash','zsh','xml','yaml',
+    'yml','toml','md','markdown','sql','r','lua','dart','scala','hs','txt','csv'
+]);
+
 async function validateFile(file) {
     // Size check
     if (file.size > MAX_FILE_SIZE) {
@@ -124,21 +157,23 @@ async function validateFile(file) {
         return { ok: false, reason: 'Empty file' };
     }
 
-    // MIME check
-    if (!ALLOWED_MIME.has(file.type)) {
-        return { ok: false, reason: 'Type not supported' };
-    }
-
-    // Extension check (cross-validates against MIME spoofing via rename)
-    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    // Extension check first — code files often come in as text/plain from browser
+    var ext = (file.name.split('.').pop() || '').toLowerCase();
     if (!ALLOWED_EXT.has(ext)) {
         return { ok: false, reason: 'Extension not allowed' };
     }
 
-    // Magic-byte check for types we have signatures for
-    const sigs = MAGIC_SIGNATURES[file.type];
+    // MIME check — allow text/plain for all text-based extensions (code files)
+    var mimeOk = ALLOWED_MIME.has(file.type) ||
+                 (TEXT_CODE_EXTS.has(ext) && (file.type === 'text/plain' || file.type === ''));
+    if (!mimeOk) {
+        return { ok: false, reason: 'Type not supported' };
+    }
+
+    // Magic-byte check for types we have signatures for (images + PDF only)
+    var sigs = MAGIC_SIGNATURES[file.type];
     if (sigs) {
-        const valid = await checkMagicBytes(file, sigs);
+        var valid = await checkMagicBytes(file, sigs);
         if (!valid) {
             return { ok: false, reason: 'File content does not match its type' };
         }
@@ -279,44 +314,62 @@ function renderAttachedPreview() {
     if (!preview || !list) return;
 
     if (!attachedFiles.length) {
-        preview.hidden = true;
+        preview.style.display = 'none';
         list.innerHTML = '';
         return;
     }
 
-    preview.hidden = false;
+    preview.style.display = '';
 
     list.innerHTML = attachedFiles.map(function(f, idx) {
         var displayUrl = f.localUrl || f.url;
-        var thumb;
+        var isImage = f.type && f.type.startsWith('image/');
+        var ext = (f.name.split('.').pop() || '').toUpperCase().slice(0, 5);
+        var failed  = f.failed;
+        var loading = f.uploading;
 
-        if (f.uploading) {
-            // Spinner + local preview if image
-            var previewPart = (f.localUrl)
-                ? '<img src="' + escAttr(f.localUrl) + '" class="af-thumb af-thumb--uploading" alt="' + escAttr(f.name) + '">'
-                : fileIconSVG(f.type);
-            thumb = '<div class="af-thumb-wrap">' + previewPart + '<span class="af-spinner" aria-hidden="true"></span></div>';
-        } else if (f.failed) {
-            thumb = '<div class="af-thumb-wrap af-thumb-wrap--failed">' + fileIconSVG(f.type) + '<span class="af-failed-icon" title="Upload failed" aria-label="Upload failed">!</span></div>';
-        } else if (f.type && f.type.startsWith('image/') && displayUrl) {
-            thumb = '<img src="' + escAttr(displayUrl) + '" class="af-thumb" alt="' + escAttr(f.name) + '" loading="lazy" onerror="this.style.display=\'none\'">';
+        var cardClass = 'af-card' +
+            (isImage ? ' af-card--image' : ' af-card--file') +
+            (failed  ? ' af-card--failed' : '') +
+            (loading ? ' af-card--loading' : '');
+
+        var inner = '';
+
+        if (isImage) {
+            // ── Image card: big thumbnail ──
+            var imgSrc = displayUrl || '';
+            inner =
+                '<div class="af-card-img-wrap">' +
+                    (imgSrc
+                        ? '<img src="' + escAttr(imgSrc) + '" class="af-card-img" alt="' + escAttr(f.name) + '" loading="lazy" onerror="this.style.display=\'none\'">'
+                        : '<div class="af-card-img-placeholder">' + fileIconSVG(f.type) + '</div>') +
+                    (loading ? '<div class="af-card-spinner-overlay"><span class="af-spinner"></span></div>' : '') +
+                    (failed  ? '<div class="af-card-spinner-overlay af-card-fail-overlay"><span class="af-fail-icon">!</span></div>' : '') +
+                '</div>' +
+                '<div class="af-card-label" title="' + escAttr(f.name) + '">' + escHtml(_truncName(f.name, 20)) + '</div>';
         } else {
-            thumb = fileIconSVG(f.type);
+            // ── File card: icon + ext badge + name/size ──
+            var badge = '<span class="af-ext-badge">' + escHtml(ext) + '</span>';
+            var statusLabel = loading ? 'Uploading…' : failed ? 'Failed' : fmtSize(f.size);
+            inner =
+                '<div class="af-card-file-icon">' +
+                    fileIconSVG(f.type) +
+                    badge +
+                    (loading ? '<span class="af-spinner af-spinner--sm"></span>' : '') +
+                    (failed  ? '<span class="af-fail-icon af-fail-icon--sm">!</span>' : '') +
+                '</div>' +
+                '<div class="af-card-file-info">' +
+                    '<span class="af-card-name" title="' + escAttr(f.name) + '">' + escHtml(_truncName(f.name, 22)) + '</span>' +
+                    '<span class="af-card-size' + (failed ? ' af-card-size--fail' : '') + '">' + escHtml(statusLabel) + '</span>' +
+                '</div>';
         }
 
-        var statusLabel = f.uploading ? ' (uploading…)' : f.failed ? ' (failed)' : '';
-
-        return '<li class="attached-file-item' + (f.failed ? ' attached-file-item--failed' : '') + '">' +
-               thumb +
-               '<div class="attached-file-details">' +
-                   '<span class="attached-file-name">' + escHtml(f.name) + '</span>' +
-                   '<span class="attached-file-size">' + fmtSize(f.size) + statusLabel + '</span>' +
-               '</div>' +
-               '<button type="button" class="remove-file-btn" ' +
+        return '<div class="' + cardClass + '" role="listitem">' +
+               inner +
+               '<button type="button" class="af-card-remove" ' +
                    'onclick="removeAttachedFile(' + idx + ')" ' +
-                   'aria-label="Remove ' + escAttr(f.name) + '" ' +
-                   'title="Remove">✕</button>' +
-               '</li>';
+                   'aria-label="Remove ' + escAttr(f.name) + '" title="Remove">✕</button>' +
+               '</div>';
     }).join('');
 }
 
@@ -437,30 +490,116 @@ function _patchPlaceholder(tempId, patch) {
 
 function fileIconSVG(type) {
     var a = 'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
+    var ext_color = '#10a37f';
+
+    // Image
+    if (type && type.startsWith('image/')) {
+        return '<svg class="file-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" ' + a + ' aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';
+    }
+    // PDF
     if (type === 'application/pdf') {
-        return '<svg class="file-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" ' + a + ' aria-hidden="true" focusable="false">' +
-               '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>' +
-               '<polyline points="14 2 14 8 20 8"/>' +
-               '<line x1="9" y1="13" x2="15" y2="13"/>' +
-               '<line x1="9" y1="17" x2="15" y2="17"/></svg>';
+        return '<svg class="file-icon file-icon--pdf" width="22" height="22" viewBox="0 0 24 24" fill="none" ' + a + ' aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>';
     }
+    // Word doc
     if (type && (type.includes('word') || type.includes('document'))) {
-        return '<svg class="file-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" ' + a + ' aria-hidden="true" focusable="false">' +
-               '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>' +
-               '<polyline points="14 2 14 8 20 8"/>' +
-               '<line x1="8" y1="13" x2="16" y2="13"/>' +
-               '<line x1="8" y1="17" x2="16" y2="17"/>' +
-               '<line x1="8" y1="9" x2="10" y2="9"/></svg>';
+        return '<svg class="file-icon file-icon--doc" width="22" height="22" viewBox="0 0 24 24" fill="none" ' + a + ' aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/><line x1="8" y1="9" x2="10" y2="9"/></svg>';
     }
-    if (type === 'text/csv' || type === 'text/plain') {
-        return '<svg class="file-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" ' + a + ' aria-hidden="true" focusable="false">' +
-               '<path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>' +
-               '<polyline points="13 2 13 9 20 9"/>' +
-               '<line x1="8" y1="13" x2="16" y2="13"/>' +
-               '<line x1="8" y1="17" x2="16" y2="17"/></svg>';
-    }
-    // Generic fallback
-    return '<svg class="file-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" ' + a + ' aria-hidden="true" focusable="false">' +
-           '<path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>' +
-           '<polyline points="13 2 13 9 20 9"/></svg>';
+    // Generic text/code — use a code-bracket icon
+    return '<svg class="file-icon file-icon--code" width="22" height="22" viewBox="0 0 24 24" fill="none" ' + a + ' aria-hidden="true"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/><polyline points="9 14 7 16 9 18"/><polyline points="15 14 17 16 15 18"/></svg>';
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// 🖱️  DRAG & DROP — Full-page drop zone with Claude-style overlay
+// ════════════════════════════════════════════════════════════════════════════
+
+(function initDragDrop() {
+    // Inject the drop overlay once DOM is ready
+    function _createOverlay() {
+        if (document.getElementById('catura-drop-overlay')) return;
+        var el = document.createElement('div');
+        el.id = 'catura-drop-overlay';
+        el.setAttribute('aria-hidden', 'true');
+        el.innerHTML =
+            '<div class="drop-overlay-inner">' +
+                '<div class="drop-overlay-icon">' +
+                    '<svg width="52" height="52" viewBox="0 0 24 24" fill="none" ' +
+                        'stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' +
+                        '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>' +
+                        '<polyline points="17 8 12 3 7 8"/>' +
+                        '<line x1="12" y1="3" x2="12" y2="15"/>' +
+                    '</svg>' +
+                '</div>' +
+                '<div class="drop-overlay-title">Drop files to add them</div>' +
+                '<div class="drop-overlay-sub">Images, PDFs, code files &amp; documents</div>' +
+            '</div>';
+        document.body.appendChild(el);
+    }
+
+    var _dragCounter = 0; // track nested dragenter/dragleave pairs
+
+    function _show() {
+        var el = document.getElementById('catura-drop-overlay');
+        if (el) el.classList.add('drop-overlay--visible');
+        document.body.classList.add('drag-active');
+    }
+
+    function _hide() {
+        var el = document.getElementById('catura-drop-overlay');
+        if (el) el.classList.remove('drop-overlay--visible');
+        document.body.classList.remove('drag-active');
+    }
+
+    function _hasFiles(dt) {
+        if (!dt) return false;
+        if (dt.types) {
+            for (var i = 0; i < dt.types.length; i++) {
+                if (dt.types[i] === 'Files') return true;
+            }
+        }
+        return false;
+    }
+
+    document.addEventListener('dragenter', function(e) {
+        if (!_hasFiles(e.dataTransfer)) return;
+        e.preventDefault();
+        _dragCounter++;
+        if (_dragCounter === 1) _show();
+    }, false);
+
+    document.addEventListener('dragleave', function(e) {
+        if (!_hasFiles(e.dataTransfer)) return;
+        _dragCounter--;
+        if (_dragCounter <= 0) {
+            _dragCounter = 0;
+            _hide();
+        }
+    }, false);
+
+    document.addEventListener('dragover', function(e) {
+        if (!_hasFiles(e.dataTransfer)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+    }, false);
+
+    document.addEventListener('drop', function(e) {
+        e.preventDefault();
+        _dragCounter = 0;
+        _hide();
+
+        var files = e.dataTransfer && e.dataTransfer.files
+            ? Array.from(e.dataTransfer.files)
+            : [];
+        if (!files.length) return;
+
+        // Re-use the existing file-select pipeline
+        var fakeEvent = { target: { files: files, value: '' } };
+        handleFileSelect(fakeEvent);
+    }, false);
+
+    // Create overlay when DOM ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', _createOverlay);
+    } else {
+        _createOverlay();
+    }
+})();
