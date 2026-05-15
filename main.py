@@ -326,7 +326,7 @@ async def serve_sw():
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.93"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.94"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -336,7 +336,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.93", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.94", "timestamp": datetime.utcnow().isoformat()}
 
 
 # ============================================================
@@ -2121,6 +2121,61 @@ def call_gemma_google_stream(messages, system_prompt, model_id):
         return None, "Request timed out"
     except Exception as e:
         return None, str(e)
+
+# ============================================================
+# 🏷️ TITLE GENERATION ENDPOINT
+# Generates a short, descriptive chat title from the first message
+# ============================================================
+@app.post("/generate-title")
+async def generate_title(request: Request):
+    try:
+        body    = await request.json()
+        message = body.get("message", "").strip()
+        if not message:
+            return JSONResponse({"title": "New Chat"})
+
+        system_prompt = (
+            "You are a chat title generator. "
+            "Given the user's first message, produce a SHORT (2–5 words) descriptive title "
+            "that captures the TOPIC — like a Google search query or a chapter heading. "
+            "Examples: 'Browser Caching Issue', 'What is DNS', 'Python List Sorting', "
+            "'Resume Writing Tips', 'Photosynthesis Explained'. "
+            "Rules: No quotes, no punctuation at the end, Title Case, no filler words like "
+            "'Question about' or 'Help with'. Return ONLY the title, nothing else."
+        )
+
+        messages = [{"role": "user", "parts": [{"text": message}]}]
+
+        import requests as req_lib
+        url = (
+            "https://generativelanguage.googleapis.com/v1beta/models/"
+            f"gemma-4-e4b-it:generateContent?key={GEMINI_API_KEY}"
+        )
+        payload = {
+            "system_instruction": {"parts": [{"text": system_prompt}]},
+            "contents": messages,
+            "generationConfig": {"maxOutputTokens": 20, "temperature": 0.4}
+        }
+        resp = req_lib.post(url, json=payload, timeout=8)
+        if resp.status_code == 200:
+            data  = resp.json()
+            title = (
+                data.get("candidates", [{}])[0]
+                    .get("content", {})
+                    .get("parts", [{}])[0]
+                    .get("text", "")
+                    .strip()
+                    .strip('"\'')
+            )
+            if title:
+                return JSONResponse({"title": title[:60]})
+
+        return JSONResponse({"title": message[:40]})
+
+    except Exception as e:
+        print(f"❌ Title generation error: {e}")
+        return JSONResponse({"title": "New Chat"})
+
 
 # ============================================================
 # ✅ MAIN CHAT ENDPOINT (POST)

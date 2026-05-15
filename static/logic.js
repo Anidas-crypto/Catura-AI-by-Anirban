@@ -1421,6 +1421,7 @@ function buildHistoryItem(session, openSessionFn) {
 
     const item = document.createElement("div");
     item.classList.add("sidebar-item", "history-item");
+    item.dataset.sessionId = session.session_id;
 
     const info = document.createElement("div");
     info.classList.add("history-info");
@@ -1565,6 +1566,8 @@ document.addEventListener("DOMContentLoaded", async function () {
         // ── Session: create on very first message ────────────────────────────
         if (firstMessage) {
             firstMessage = false;
+
+            // Immediately insert with a placeholder title, then update with AI-generated one
             chatTitle = (message || (filesToSend.length ? filesToSend[0].name : 'File Chat')).substring(0, 40);
             const { error } = await supabaseClient.from("chat_sessions").insert([{
                 session_id: currentSessionId,
@@ -1572,6 +1575,43 @@ document.addEventListener("DOMContentLoaded", async function () {
                 user_id   : currentUser.id
             }]);
             if (error) console.error("❌ Session insert failed:", error.message);
+
+            // 🏷️ Generate a smart AI title in the background
+            const msgForTitle = message || (filesToSend.length ? filesToSend[0].name : '');
+            if (msgForTitle) {
+                fetch("/generate-title", {
+                    method : "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body   : JSON.stringify({ message: msgForTitle })
+                })
+                .then(r => r.json())
+                .then(data => {
+                    const aiTitle = data.title?.trim();
+                    if (aiTitle && aiTitle !== chatTitle) {
+                        chatTitle = aiTitle;
+                        // Update in Supabase
+                        supabaseClient.from("chat_sessions")
+                            .update({ title: aiTitle })
+                            .eq("session_id", currentSessionId)
+                            .then(({ error: updErr }) => {
+                                if (updErr) console.error("❌ Title update failed:", updErr.message);
+                            });
+                        // Update in history accordion if it's open
+                        const histList = document.getElementById("historyAccordionList");
+                        if (histList) {
+                            const titleEls = histList.querySelectorAll(".history-title");
+                            titleEls.forEach(el => {
+                                // Find the item whose session matches (it'll be the first/top one)
+                                const item = el.closest("[data-session-id]");
+                                if (item && item.dataset.sessionId === currentSessionId) {
+                                    el.textContent = aiTitle;
+                                }
+                            });
+                        }
+                    }
+                })
+                .catch(err => console.warn("Title gen failed:", err));
+            }
         }
 
         // ── Save user message to DB ──────────────────────────────────────────
