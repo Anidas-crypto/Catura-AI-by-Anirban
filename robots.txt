@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://catura.duckdns.org/sitemap.xml

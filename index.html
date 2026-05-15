@@ -3,20 +3,73 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Catura AI is a free AI chatbot assistant like ChatGPT and Claude.">
+    <meta name="description" content="Catura AI is a powerful free AI chatbot assistant for chatting, coding, writing, studying, research, and answering questions instantly. Powered by advanced AI models like Gemma and GPT.">
     <meta name="robots" content="index, follow">
     <meta name="google-site-verification" content="qiQ1Xx00fMsEhl6f4cmRXiJg-16rT3M_sg4kDAt5y1Q" />
-    
     <!-- ✅ CACHE BUSTING - NEVER CACHE HTML -->
     <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="pragma" content="no-cache">
     <meta http-equiv="expires" content="0">
-    
     <title>Catura AI</title>
-    <link rel="icon" type="image/png" href="static/logos.png">
-    
+    <link rel="icon" type="image/png" href="static/logos.png"> 
+    <meta name="title" content="Catura AI - Free AI Chatbot Assistant Like ChatGPT & Claude">
+    <meta name="keywords" content="Catura AI, AI chatbot, free AI assistant, ChatGPT alternative, Claude alternative, Gemini AI, coding AI, AI chat app, AI for students, AI search engine, free chatbot, AI writing assistant, AI coding assistant">
+    <meta name="author" content="Catura AI">
+    <meta name="robots" content="index, follow, max-image-preview:large">
+    <meta name="language" content="English">
+    <meta name="revisit-after" content="1 days">
+    <!-- Canonical URL -->
+    <link rel="canonical" href="https://catura.duckdns.org">
+    <!-- Open Graph / Facebook / Discord -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://my-ai-assistant-9bbd.onrender.com/">
+    <meta property="og:title" content="Catura AI - Free AI Chatbot Assistant">
+    <meta property="og:description" content="Use Catura AI for chatting, coding, research, studying, writing, and instant answers powered by advanced AI models.">
+    <meta property="og:image" content="https://catura.duckdns.org/static/logos.png">
+    <meta property="og:site_name" content="Catura AI">
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:url" content="https://my-ai-assistant-9bbd.onrender.com/">
+    <meta name="twitter:title" content="Catura AI - Free AI Chatbot Assistant">
+    <meta name="twitter:description" content="Free AI chatbot assistant for coding, studying, research, writing, and more.">
+    <meta name="twitter:image" content="https://catura.duckdns.org/static/logos.png">
+    <!-- Theme -->
+    <meta name="theme-color" content="#000000">
+    <!-- App / Mobile -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Catura AI">
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "Catura AI",
+        "url": "https://https://my-ai-assistant-9bbd.onrender.com/",
+        "url": "https://https://catura.duckdns.org/",
+        "description": "Free AI chatbot assistant for coding, studying, writing, research, and smart conversations."
+    }
+    </script>
+    <!-- Extra SEO -->
+    <meta name="application-name" content="Catura AI">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <!-- Bing -->
+    <meta name="msapplication-TileColor" content="#000000">
+    <!-- Geo -->
+    <meta name="geo.region" content="IN">
+    <meta name="geo.country" content="India">
+    <!-- AI / Semantic SEO -->
+    <meta name="subject" content="Artificial Intelligence">
+    <meta name="topic" content="AI Chatbot Assistant">
+    <meta name="summary" content="Free AI chatbot assistant for coding, writing, research and studying">
+    <meta name="classification" content="Artificial Intelligence">
+    <meta name="category" content="Technology">
+    <!-- Referrer -->
+    <meta name="referrer" content="origin-when-cross-origin">
+    <!-- Security -->
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <link rel="stylesheet" href="static/style.css?v=0.0.98">
+    <link rel="stylesheet" href="static/style.css?v=0.0.99">   <!-- this is CSS linking section -->
     
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#000000" />
@@ -418,17 +471,17 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
     
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <script src="static/firebase-config.js?v=0.0.98"></script>
-    <script src="static/logic.js?v=0.0.98"></script>
-    <script src="static/feedback.js?v=0.0.98"></script>
-    <script src="static/file-upload.js?v=0.0.98"></script>
+    <script src="static/firebase-config.js?v=0.0.99"></script>
+    <script src="static/logic.js?v=0.0.99"></script>
+    <script src="static/feedback.js?v=0.0.99"></script>
+    <script src="static/file-upload.js?v=0.0.99"></script>
 
     <script>
         console.log('🚀 Catura AI v27.0.5 loaded');
         
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js?v=0.0.98')
+                navigator.serviceWorker.register('/service-worker.js?v=0.0.99')
                     .then(() => console.log('✅ Catura AI PWA Ready - v27.0.5'))
                     .catch((err) => console.log('❌ SW Error:', err));
             });
