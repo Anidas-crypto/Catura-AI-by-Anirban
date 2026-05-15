@@ -639,6 +639,46 @@ window.logoutUser = async function () {
 };
 
 // ============================
+// 👤 USER PROFILE DROPDOWN
+// ============================
+window.toggleUserDropdown = function (e) {
+    e.stopPropagation();
+    const dropdown = document.getElementById("userDropdown");
+    const btn      = document.getElementById("userProfileBtn");
+    const isOpen   = dropdown.classList.contains("open");
+    if (isOpen) {
+        dropdown.classList.remove("open");
+        btn.classList.remove("active");
+    } else {
+        dropdown.classList.add("open");
+        btn.classList.add("active");
+    }
+};
+
+window.closeUserDropdown = function () {
+    document.getElementById("userDropdown")?.classList.remove("open");
+    document.getElementById("userProfileBtn")?.classList.remove("active");
+};
+
+// Close dropdown when clicking anywhere outside
+document.addEventListener("click", function (e) {
+    const wrap = document.getElementById("userProfileWrap");
+    if (wrap && !wrap.contains(e.target)) {
+        closeUserDropdown();
+    }
+});
+
+window.goToProfile = function () {
+    closeUserDropdown();
+    showSettings();
+    // After settings opens, switch to profile tab
+    setTimeout(() => {
+        const profileTab = document.querySelector('.settings-nav-item[onclick*="profile"]');
+        if (profileTab) profileTab.click();
+    }, 50);
+};
+
+// ============================
 // 🧭 MAIN MENU
 // ============================
 window.showMainMenu = function () {

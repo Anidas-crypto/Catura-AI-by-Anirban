@@ -16,7 +16,7 @@
     <link rel="icon" type="image/png" href="static/logos.png">
     
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <link rel="stylesheet" href="static/style.css?v=0.0.92">
+    <link rel="stylesheet" href="static/style.css?v=0.0.93">
     
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#000000" />
@@ -137,25 +137,46 @@
         </div>
 
         <div class="sidebar-bottom" id="sidebarBottom">
-            <!-- Settings always lives here, sticky above user profile -->
-            <div class="sidebar-item settings-in-bottom" id="settingsBottomItem" onclick="showSettings()">
-                <svg class="sidebar-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="3"></circle>
-                    <path d="M12 1v6m0 6v6m10.39-9.39l-4.24 4.24m-8.3 0l-4.24-4.24m12.53 8.53l4.24 4.24m-8.3 0l4.24-4.24"></path>
-                </svg>
-                Settings
-            </div>
-            <div class="user-profile">
-                <div class="user-avatar" id="userAvatar">?</div>
-                <span class="user-fullname" id="userFullname">Loading...</span>
-            </div>
-            <div class="sidebar-item logout" onclick="logoutUser()">
-                <svg class="sidebar-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                    <polyline points="16 17 21 12 16 7"></polyline>
-                    <line x1="21" y1="12" x2="9" y2="12"></line>
-                </svg>
-                Logout
+
+            <!-- User profile dropdown -->
+            <div class="user-profile-wrap" id="userProfileWrap">
+
+                <!-- Upward dropdown menu -->
+                <div class="user-dropdown" id="userDropdown">
+                    <div class="user-dropdown-item" onclick="goToProfile()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="12" cy="7" r="4"></circle>
+                        </svg>
+                        Profile
+                    </div>
+                    <div class="user-dropdown-item" onclick="showSettings(); closeUserDropdown()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path d="M12 1v6m0 6v6m10.39-9.39l-4.24 4.24m-8.3 0l-4.24-4.24m12.53 8.53l4.24 4.24m-8.3 0l4.24-4.24"></path>
+                        </svg>
+                        Settings
+                    </div>
+                    <div class="user-dropdown-divider"></div>
+                    <div class="user-dropdown-item danger" onclick="logoutUser()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                            <polyline points="16 17 21 12 16 7"></polyline>
+                            <line x1="21" y1="12" x2="9" y2="12"></line>
+                        </svg>
+                        Log out
+                    </div>
+                </div>
+
+                <!-- Clickable user row -->
+                <div class="user-profile" id="userProfileBtn" onclick="toggleUserDropdown(event)">
+                    <div class="user-avatar" id="userAvatar">?</div>
+                    <span class="user-fullname" id="userFullname">Loading...</span>
+                    <svg class="user-profile-chevron" id="userProfileChevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="18 15 12 9 6 15"/>
+                    </svg>
+                </div>
+
             </div>
         </div>
     </div>
@@ -397,17 +418,17 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
     
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <script src="static/firebase-config.js?v=0.0.92"></script>
-    <script src="static/logic.js?v=0.0.92"></script>
-    <script src="static/feedback.js?v=0.0.92"></script>
-    <script src="static/file-upload.js?v=0.0.92"></script>
+    <script src="static/firebase-config.js?v=0.0.93"></script>
+    <script src="static/logic.js?v=0.0.93"></script>
+    <script src="static/feedback.js?v=0.0.93"></script>
+    <script src="static/file-upload.js?v=0.0.93"></script>
 
     <script>
         console.log('🚀 Catura AI v27.0.5 loaded');
         
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js?v=0.0.92')
+                navigator.serviceWorker.register('/service-worker.js?v=0.0.93')
                     .then(() => console.log('✅ Catura AI PWA Ready - v27.0.5'))
                     .catch((err) => console.log('❌ SW Error:', err));
             });

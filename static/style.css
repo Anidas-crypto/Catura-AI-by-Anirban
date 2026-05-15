@@ -278,9 +278,9 @@ html { scroll-behavior: smooth; }
 .sidebar-item:hover .sidebar-icon { transform: scale(1.1); }
 
 .sidebar-bottom {
-    padding: 12px 8px;
+    padding: 10px 8px;
     border-top: 1px solid #222;
-    overflow: hidden;
+    overflow: visible;
     display: flex;
     flex-direction: column;
     gap: 6px;
@@ -1171,6 +1171,63 @@ html { scroll-behavior: smooth; }
 /* ============================
    USER PROFILE
 ============================ */
+/* ── User profile wrap + upward dropdown ──────────────────── */
+.user-profile-wrap {
+    position: relative;
+}
+
+/* Upward dropdown */
+.user-dropdown {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 0;
+    right: 0;
+    background: #1a1a1a;
+    border: 1px solid #2e2e2e;
+    border-radius: 12px;
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    box-shadow: 0 -8px 32px rgba(0,0,0,0.5);
+    opacity: 0;
+    transform: translateY(6px);
+    pointer-events: none;
+    transition: opacity 0.18s ease, transform 0.18s ease;
+    z-index: 200;
+}
+.user-dropdown.open {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: all;
+}
+
+.user-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #ccc;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    user-select: none;
+}
+.user-dropdown-item:hover {
+    background: #252525;
+    color: #fff;
+}
+.user-dropdown-item.danger { color: #e06c6c; }
+.user-dropdown-item.danger:hover { background: #e06c6c18; color: #ff8080; }
+
+.user-dropdown-divider {
+    height: 1px;
+    background: #2a2a2a;
+    margin: 4px 0;
+}
+
+/* Clickable user row */
 .user-profile {
     display: flex; 
     align-items: center; 
@@ -1180,11 +1237,23 @@ html { scroll-behavior: smooth; }
     background: linear-gradient(135deg, #161616 0%, #1a1a1a 100%);
     border: 1px solid #2a2a2a; 
     overflow: hidden; 
-    cursor: default;
+    cursor: pointer;
     user-select: none; 
-    transition: border-color 0.2s;
+    transition: border-color 0.2s, background 0.2s;
 }
-.user-profile:hover { border-color: #10a37f44; }
+.user-profile:hover { border-color: #10a37f55; background: linear-gradient(135deg, #181818 0%, #1e1e1e 100%); }
+.user-profile.active { border-color: #10a37f88; }
+
+.user-profile-chevron {
+    flex-shrink: 0;
+    color: #555;
+    margin-left: auto;
+    transition: transform 0.2s ease, color 0.2s;
+}
+.user-profile.active .user-profile-chevron {
+    transform: rotate(180deg);
+    color: #10a37f;
+}
 
 .user-avatar {
     width: 32px; 
