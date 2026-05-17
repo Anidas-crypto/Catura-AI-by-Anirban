@@ -273,7 +273,7 @@ ALPHAVANTAGE_KEY    = os.getenv("ALPHAVANTAGE_API_KEY", "")       # https://www.
 CRICAPI_KEY         = os.getenv("CRICAPI_KEY", "")                # https://www.cricapi.com (free)
 GEMINI_API_KEY      = os.getenv("GEMINI_API_KEY", "")               # https://aistudio.google.com (free)
 TAVILY_API_KEY      = os.getenv("TAVILY_API_KEY", "")               # https://tavily.com (free — 1000 searches/month)
-OPENCODE_API_KEY    = os.getenv("OPENCODE_API_KEY", "")             # https://opencode.ai (Zen workspace key)
+GROQ_API_KEY        = os.getenv("GROQ_API_KEY", "")                 # https://console.groq.com (free tier)
 
 
 
@@ -327,7 +327,7 @@ async def serve_sw():
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.106"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.107"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -337,7 +337,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.106", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.107", "timestamp": datetime.utcnow().isoformat()}
 
 @app.get("/robots.txt")
 async def serve_robots():
@@ -2139,42 +2139,30 @@ def call_gemma_google_stream(messages, system_prompt, model_id):
         return None, str(e)
 
 # ============================================================
-# ✅ HELPER: Call OpenCode (Zen) with streaming — OpenAI-compatible
+# ✅ HELPER: Call Groq with streaming — OpenAI-compatible
 # ============================================================
-def call_opencode_stream(messages, api_key):
+def call_groq_stream(messages, api_key):
     """
-    Calls OpenCode Zen via their OpenAI-compatible API with streaming.
-    Uses OPENCODE_API_KEY set on Render. Completely isolated from all
+    Calls Groq API with streaming using llama-3.3-70b-versatile model.
+    Uses GROQ_API_KEY set on Render. Completely isolated from all
     other models — does NOT touch OPENROUTER_API_KEY or GEMINI_API_KEY.
+    Groq has a generous free tier with very fast inference.
     """
     if not api_key:
-        return None, "OPENCODE_API_KEY not set in environment variables"
+        return None, "GROQ_API_KEY not set in environment variables"
     try:
-        # Build payload — strip system role into a leading user turn if needed,
-        # since some OpenCode endpoints may not support system role.
-        payload_messages = []
-        system_content = ""
-        for msg in messages:
-            if msg["role"] == "system":
-                system_content = msg["content"]
-            else:
-                payload_messages.append({"role": msg["role"], "content": msg["content"]})
-
-        # Prepend system content as a hidden system message (standard OpenAI format)
-        if system_content:
-            payload_messages.insert(0, {"role": "system", "content": system_content})
-
         resp = requests.post(
-            "https://api.opencode.ai/v1/chat/completions",
+            "https://api.groq.com/openai/v1/chat/completions",
             headers={
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
             },
             json={
-                "messages": payload_messages,
+                "model": "llama-3.3-70b-versatile",
+                "messages": messages,
                 "stream": True,
                 "temperature": 0.3,
-                "max_tokens": 16000,
+                "max_tokens": 8000,
             },
             stream=True,
             timeout=(10, 120),
@@ -2318,7 +2306,7 @@ async def chat_post(request: Request):
             "dagr":    ["openai/gpt-oss-20b:free", "openai/gpt-oss-120b:free"],
             "apep":    ["openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"],
             "sambhav": [],  # Routed via Google AI Studio (Gemma 4 E4B) — see GEMMA_GOOGLE_MODELS
-            "nivo":    [],  # Routed via OpenCode Zen API (OPENCODE_API_KEY) — see generate_nivo()
+            "nivo":    [],  # Routed via Groq API (GROQ_API_KEY) — see generate_nivo()
         }
         model_key  = model.strip()
         model_pool = model_pools.get(model_key, model_pools["dagr"])
@@ -2607,10 +2595,10 @@ async def chat_post(request: Request):
                 }
             )
 
-        # ── NIVO: OpenCode Zen API (OPENCODE_API_KEY) — isolated from all other models ──
+        # ── NIVO: Groq API (GROQ_API_KEY) — isolated from all other models ──
         if model_key == "nivo":
-            opencode_key = os.getenv("OPENCODE_API_KEY", "")
-            nivo_system  = system_prompts.get("nivo", system_prompts["dagr"])
+            groq_key    = os.getenv("GROQ_API_KEY", "")
+            nivo_system = system_prompts.get("nivo", system_prompts["dagr"])
 
             def generate_nivo():
                 full_reply = ""
@@ -2633,13 +2621,13 @@ async def chat_post(request: Request):
                     if sp:
                         yield f"data: {sp}\n\n"
 
-                # Build full messages list for OpenCode
+                # Build full messages list for Groq
                 nivo_messages = (
                     [{"role": "system", "content": final_system_n}]
                     + user_memory[session_id][-20:]
                 )
 
-                resp, err = call_opencode_stream(nivo_messages, opencode_key)
+                resp, err = call_groq_stream(nivo_messages, groq_key)
                 if resp is None:
                     yield f"data: {json.dumps({'error': f'Nivo unavailable: {err}'})}\n\n"
                     yield "data: [DONE]\n\n"
@@ -2923,7 +2911,7 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
             "dagr":    ["openai/gpt-oss-20b:free", "openai/gpt-oss-120b:free"],
             "apep":    ["openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"],
             "sambhav": [],  # Routed via Google AI Studio (Gemma 4 E4B) — see GEMMA_GOOGLE_MODELS
-            "nivo":    [],  # Routed via OpenCode Zen API (OPENCODE_API_KEY)
+            "nivo":    [],  # Routed via Groq API (GROQ_API_KEY)
         }
         model_key  = model.strip()
         model_pool = model_pools.get(model_key, model_pools["dagr"])
@@ -3375,9 +3363,9 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
         }
         system_prompt = system_prompts.get(model_key, system_prompts["dagr"])
 
-        # ── NIVO: OpenCode Zen API — isolated from all other models ──
+        # ── NIVO: Groq API — isolated from all other models ──
         if model_key == "nivo":
-            opencode_key = os.getenv("OPENCODE_API_KEY", "")
+            groq_key      = os.getenv("GROQ_API_KEY", "")
             nivo_messages = [{"role": "system", "content": system_prompt}] + user_memory[session_id][-20:]
 
             def generate_nivo_get():
@@ -3388,7 +3376,7 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                     if sp:
                         yield f"data: {sp}\n\n"
 
-                resp, err = call_opencode_stream(nivo_messages, opencode_key)
+                resp, err = call_groq_stream(nivo_messages, groq_key)
                 if resp is None:
                     yield f"data: {json.dumps({'error': f'Nivo unavailable: {err}'})}\n\n"
                     yield "data: [DONE]\n\n"
