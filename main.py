@@ -15,6 +15,19 @@ from PIL import Image
 from duckduckgo_search import DDGS
 from wiki import search_wikipedia
 
+# ── Production Search Engine (Tavily + Serper + Firecrawl + Cohere) ──────────
+try:
+    from web_search_engine import (
+        run_production_search,
+        build_production_search_context,
+        build_production_sources_payload,
+    )
+    PRODUCTION_SEARCH_ENABLED = True
+    print("✅ [Search] Production search engine loaded (Tavily + Serper + Firecrawl + Cohere)")
+except ImportError as _e:
+    PRODUCTION_SEARCH_ENABLED = False
+    print(f"⚠️ [Search] Production engine not available ({_e}) — falling back to legacy Tavily/DDG")
+
 # ── File content fetcher ──────────────────────────────────────────────────────
 # Extension → broad category map used when Content-Type is missing/wrong
 _CODE_EXTENSIONS = {
@@ -274,6 +287,9 @@ CRICAPI_KEY         = os.getenv("CRICAPI_KEY", "")                # https://www.
 GEMINI_API_KEY      = os.getenv("GEMINI_API_KEY", "")               # https://aistudio.google.com (free)
 TAVILY_API_KEY      = os.getenv("TAVILY_API_KEY", "")               # https://tavily.com (free — 1000 searches/month)
 GROQ_API_KEY        = os.getenv("GROQ_API_KEY", "")                 # https://console.groq.com (free tier)
+SERPER_API_KEY      = os.getenv("SERPER_API_KEY", "")               # https://serper.dev (2500 free searches)
+FIRECRAWL_API_KEY   = os.getenv("FIRECRAWL_API_KEY", "")            # https://firecrawl.dev (free tier)
+COHERE_API_KEY      = os.getenv("COHERE_API_KEY", "")               # https://cohere.com (1000 free reranks/month)
 
 
 
@@ -327,7 +343,7 @@ async def serve_sw():
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.109"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.110"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -337,7 +353,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.109", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.110", "timestamp": datetime.utcnow().isoformat()}
 
 @app.get("/robots.txt")
 async def serve_robots():
@@ -1600,15 +1616,29 @@ def _build_smart_queries(original_query: str) -> list[str]:
 
 def tool_web_search(query: str, max_results: int = 5) -> dict:
     """
-    Multi-query DuckDuckGo search with cross-referencing.
-    Runs up to 3 targeted queries, deduplicates by URL, and returns
-    a rich result set with source diversity for the AI to reason over.
+    Production web search pipeline:
+      Primary  → Tavily + Serper (parallel) + Firecrawl + Cohere reranking
+      Fallback → Legacy Tavily-then-DDG (if production engine unavailable)
+
+    Returns a rich result dict with citations, trust scores, and cross-reference data.
     """
     print(f"🔍 [TOOL] web_search | query: {query[:80]}")
 
-    smart_queries = _build_smart_queries(query)
-    print(f"🧠 [TOOL] web_search | smart queries: {smart_queries}")
+    # ── Production engine (Tavily + Serper + Firecrawl + Cohere) ─────────────
+    if PRODUCTION_SEARCH_ENABLED:
+        try:
+            result = run_production_search(query)
+            if result.get("results"):
+                result["tool"] = "web_search"
+                print(f"✅ [TOOL] Production search: {result['result_count']} results")
+                return result
+            print("⚠️ [TOOL] Production search returned no results — falling back")
+        except Exception as _pe:
+            print(f"❌ [TOOL] Production search failed: {_pe} — falling back")
 
+    # ── Legacy fallback (Tavily-then-DDG — original logic) ───────────────────
+    print("🔁 [TOOL] Using legacy search fallback")
+    smart_queries = _build_smart_queries(query)
     all_results = []
     seen_urls   = set()
 
@@ -1620,20 +1650,21 @@ def tool_web_search(query: str, max_results: int = 5) -> dict:
                 seen_urls.add(url)
                 all_results.append(r)
         if len(all_results) >= 10:
-            break  # enough context
+            break
 
-    # Sort: prefer results from the primary query first, then supplemental
-    primary_results     = [r for r in all_results if r.get("query_used", "") == query]
-    supplemental        = [r for r in all_results if r.get("query_used", "") != query]
-    final_results       = (primary_results + supplemental)[:10]
+    primary_results = [r for r in all_results if r.get("query_used", "") == query]
+    supplemental    = [r for r in all_results if r.get("query_used", "") != query]
+    final_results   = (primary_results + supplemental)[:10]
 
-    print(f"✅ [TOOL] web_search success: {len(final_results)} unique results from {len(smart_queries)} queries")
+    print(f"✅ [TOOL] Legacy search: {len(final_results)} results")
     return {
         "tool":           "web_search",
         "query":          query,
         "queries_run":    smart_queries,
         "result_count":   len(final_results),
         "results":        final_results,
+        "citations":      {},
+        "search_engine":  "legacy",
     }
 
 
@@ -1663,15 +1694,27 @@ def tool_wikipedia(prompt: str) -> dict:
 def build_sources_payload(tool_result: dict) -> str | None:
     """
     Build a JSON-serialised 'sources' SSE payload from a tool result.
+    Uses production citation data when available (includes trust scores + citation numbers).
     Returns None if there are no usable sources.
     """
     if not tool_result:
         return None
+
+    # ── Production engine: use rich citation map ──────────────────────────────
+    if PRODUCTION_SEARCH_ENABLED and tool_result.get("search_engine") == "production":
+        try:
+            payload = build_production_sources_payload(tool_result)
+            if payload:
+                return payload
+        except Exception:
+            pass  # fall through to legacy
+
+    # ── Legacy: build from results list ──────────────────────────────────────
     results = tool_result.get("results", [])
     if not results:
         return None
     sources = []
-    for r in results[:5]:  # max 5 sources shown
+    for r in results[:8]:  # up to 8 sources
         url   = r.get("href", "") or r.get("url", "")
         title = r.get("title", "") or r.get("name", "")
         if url:
@@ -1680,7 +1723,13 @@ def build_sources_payload(tool_result: dict) -> str | None:
                 domain = urlparse(url).netloc.replace("www.", "")
             except Exception:
                 domain = url
-            sources.append({"url": url, "title": title or domain, "domain": domain})
+            sources.append({
+                "url":    url,
+                "title":  title or domain,
+                "domain": domain,
+                "num":    r.get("citation_num"),
+                "trust":  r.get("trust_score", 50),
+            })
     if not sources:
         return None
     return json.dumps({"sources": sources})
@@ -1828,6 +1877,13 @@ def build_tool_context(tool_result: dict) -> str:
                 idx += 1
 
     elif tool == "web_search":
+        # ── Production engine: use dedicated rich context builder ─────────────
+        if PRODUCTION_SEARCH_ENABLED and tool_result.get("search_engine") == "production":
+            prod_context = build_production_search_context(tool_result)
+            if prod_context:
+                return prod_context   # production builder handles everything
+
+        # ── Legacy fallback context (Tavily/DDG) ──────────────────────────────
         queries_run = tool_result.get("queries_run", [tool_result.get("query", "")])
         lines.append(f"Primary search: {tool_result['query']}")
         if len(queries_run) > 1:
@@ -1836,31 +1892,26 @@ def build_tool_context(tool_result: dict) -> str:
 
         result_index = 1
         for r in tool_result.get("results", []):
-            q_tag = f" [via: {r['query_used']}]" if r.get("query_used") and r["query_used"] != tool_result["query"] else ""
+            q_tag = f" [via: {r.get('query_used','')}]" if r.get("query_used") and r["query_used"] != tool_result["query"] else ""
             if r.get("is_direct_answer"):
-                # Tavily synthesized a direct answer — put it front and centre
                 lines.append("⭐ DIRECT ANSWER (Tavily AI synthesis — treat as highest-confidence source):")
                 lines.append(f"   {r['body']}")
                 lines.append("")
             else:
+                url = r.get("href") or r.get("url", "")
                 lines.append(f"{result_index}. {r['title']}{q_tag}")
                 lines.append(f"   {r['body']}")
-                lines.append(f"   Source: {r['href']}\n")
+                lines.append(f"   Source: {url}\n")
                 result_index += 1
 
         lines.append(
             "\n🧠 CROSS-REFERENCE INSTRUCTIONS:\n"
-            "- If a ⭐ DIRECT ANSWER is present above, use it as your primary source — it is a high-confidence synthesis.\n"
-            "- Read ALL results above carefully.\n"
-            "- Look for CONSENSUS: if multiple independent sources agree on a fact, it is likely correct.\n"
-            "- Flag CONFLICTS: if sources disagree (e.g. different names, dates), note both and say which seems more reliable.\n"
-            "- Prefer RECENT sources (newer date in URL or snippet wins over older).\n"
-            "- Prefer AUTHORITATIVE sources: official government sites, major newspapers (Times of India, Hindustan Times, NDTV, BBC, Reuters) over blogs or forums.\n"
-            "- Synthesize a clear, confident, detailed answer from the evidence — do NOT say 'I don't know' if the data is in the results above.\n"
-            "- If a result is clearly outdated or contradicted by newer results, discard it.\n"
-            "- Give a COMPLETE answer: include relevant context such as when something happened, which election/assembly/event/term, full names, exact dates, and key background — just like a knowledgeable person would explain it naturally.\n"
-            "- DO NOT mention source names, URLs, or website names in your reply. DO NOT write phrases like 'Source:', 'according to [site]', 'as reported by', or 'e.g., [news outlet]'. The sources are shown separately in the UI.\n"
-            "- DO NOT add any source attribution at the end of your answer.\n"
+            "- If a ⭐ DIRECT ANSWER is present above, use it as your primary source.\n"
+            "- Read ALL results carefully and look for CONSENSUS across sources.\n"
+            "- Flag CONFLICTS if sources disagree.\n"
+            "- Prefer RECENT and AUTHORITATIVE sources (government, major news, official sites).\n"
+            "- Synthesize a clear, confident, detailed answer from the evidence.\n"
+            "- DO NOT mention source names, URLs, or outlet names inline. Sources are shown in the UI.\n"
         )
 
     lines.append(

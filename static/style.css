@@ -4106,3 +4106,61 @@ html { scroll-behavior: smooth; }
    MODEL DROPDOWN BACKDROP (mobile)
    ============================ */
 /* model-backdrop removed */
+
+/* ══════════════════════════════════════════════════════════════════
+   PRODUCTION SEARCH ENGINE — Citation & Trust Score Styles
+   ══════════════════════════════════════════════════════════════════ */
+
+/* Citation number badge on source chips */
+.source-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 3px;
+    background: rgba(16, 163, 127, 0.18);
+    color: #10a37f;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    flex-shrink: 0;
+    margin-right: 2px;
+}
+
+/* Trust tier colouring on source chips */
+.source-chip.trust-high {
+    border-color: rgba(16, 163, 127, 0.25) !important;
+}
+.source-chip.trust-high .source-domain {
+    color: #10a37f;
+}
+.source-chip.trust-med {
+    border-color: rgba(250, 189, 47, 0.20) !important;
+}
+.source-chip.trust-low {
+    border-color: rgba(255, 80, 80, 0.18) !important;
+    opacity: 0.75;
+}
+
+/* Sources count in label */
+.sources-label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #6b7280;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+[data-theme="light"] .source-num {
+    background: rgba(16, 163, 127, 0.12);
+    color: #0d7a64;
+}
+[data-theme="light"] .source-chip.trust-high .source-domain {
+    color: #0d7a64;
+}

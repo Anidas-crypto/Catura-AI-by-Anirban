@@ -9,3 +9,11 @@ duckduckgo-search==6.3.7
 tavily-python
 pypdf
 python-docx
+# ── Production Search Engine ────────────────────────────────────────────────
+# (API calls via requests — no extra SDK needed for Serper, Firecrawl, Cohere)
+# All three are called via REST API using the existing `requests` library.
+# Ensure these env vars are set on Render:
+#   SERPER_API_KEY      → https://serper.dev (2500 free searches)
+#   FIRECRAWL_API_KEY   → https://firecrawl.dev (free tier)
+#   COHERE_API_KEY      → https://cohere.com (1000 free reranks/month)
+#   TAVILY_API_KEY      → https://tavily.com (already set)

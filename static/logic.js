@@ -1727,21 +1727,26 @@ document.addEventListener("DOMContentLoaded", async function () {
                 wrapper.insertBefore(badgeDiv, botMsg);
             }
 
-            // ── Show sources section below answer ────────────────────────────
+            // ── Show sources section below answer (with citation numbers) ─────
             if (pendingSources && pendingSources.length > 0 && wrapper) {
                 const sourcesDiv = document.createElement("div");
                 sourcesDiv.className = "sources-section";
                 const chips = pendingSources.map(s => {
+                    if (!s.url) return '';
                     const favicon = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(s.domain)}&sz=16`;
-                    return `<a class="source-chip" href="${s.url}" target="_blank" rel="noopener noreferrer" title="${s.title}">
+                    const numBadge = s.num ? `<span class="source-num">[${s.num}]</span>` : '';
+                    const trustClass = s.trust >= 80 ? 'trust-high' : s.trust >= 60 ? 'trust-med' : 'trust-low';
+                    return `<a class="source-chip ${trustClass}" href="${s.url}" target="_blank" rel="noopener noreferrer" title="${s.title || s.domain}">
+                        ${numBadge}
                         <img class="source-favicon" src="${favicon}" onerror="this.style.display='none'" alt="">
                         <span class="source-domain">${s.domain}</span>
                     </a>`;
-                }).join("");
+                }).filter(Boolean).join("");
+                const count = pendingSources.filter(s => s.url).length;
                 sourcesDiv.innerHTML = `
                     <div class="sources-label">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                        Sources
+                        ${count} Source${count !== 1 ? 's' : ''}
                     </div>
                     <div class="sources-chips">${chips}</div>`;
                 wrapper.appendChild(sourcesDiv);
