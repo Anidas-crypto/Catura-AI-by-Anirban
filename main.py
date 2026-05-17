@@ -327,7 +327,7 @@ async def serve_sw():
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.108"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.109"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -337,7 +337,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.108", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.109", "timestamp": datetime.utcnow().isoformat()}
 
 @app.get("/robots.txt")
 async def serve_robots():
@@ -2247,6 +2247,7 @@ async def chat_post(request: Request):
         prompt     = body.get("prompt", "")
         model      = body.get("model", "dagr")
         file_urls  = body.get("file_urls", [])
+        web_search_forced = body.get("web_search_enabled", False)
         # Legacy web_results from frontend removed — backend handles all search internally
         web_results = []
 
@@ -2515,6 +2516,9 @@ async def chat_post(request: Request):
         # Step 1: detect intent ONLY — tool execution moved INSIDE generators
         # so the StreamingResponse starts immediately without blocking.
         intent = detect_intent(prompt)
+        # If user explicitly enabled web search from the UI, force it
+        if web_search_forced and not file_urls:
+            intent = "web_search"
         print(f"🎯 [PIPELINE] intent={intent} | model={model_key} | prompt={prompt[:60]}")
 
         # Step 2: build final messages list (tool context added inside generator)

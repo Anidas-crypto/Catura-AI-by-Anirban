@@ -1663,7 +1663,8 @@ document.addEventListener("DOMContentLoaded", async function () {
                     prompt    : promptText,
                     model     : model,
                     file_urls : fileUrls,
-                    web_results: webResults
+                    web_results: webResults,
+                    web_search_enabled: webSearchEnabled
                 })
             });
             if (!res.ok) throw new Error("Server error " + res.status);
@@ -1948,7 +1949,7 @@ function initFontSize() {
 // ============================
 // 🌐 WEB SEARCH & INTENT SYSTEM
 // ============================
-let webSearchEnabled = false;  // ✅ Legacy toggle — disabled, backend handles all search
+let webSearchEnabled = false;  // true = force web search on every message
 
 // ── Client-side intent detector ─────────────────────────────────────────────
 // Mirrors backend detect_intent() — used ONLY for UI labels (thinking text).
@@ -2208,9 +2209,23 @@ window.handleSendOrStop = function () {
 };
 
 window.toggleWebSearch = function() {
-    // Web search is now handled automatically by the backend — no manual toggle needed.
-    // The backend intelligently decides when to search based on the query.
-    showToast('🔍 Search is always on — Catura decides when to use it', 2000);
+    webSearchEnabled = !webSearchEnabled;
+
+    // Update the dropdown item's visual state
+    const searchItem = document.querySelector('.plus-dropdown-item[data-action="search"]');
+    if (searchItem) {
+        if (webSearchEnabled) {
+            searchItem.classList.add('search-active');
+        } else {
+            searchItem.classList.remove('search-active');
+        }
+    }
+
+    if (webSearchEnabled) {
+        showToast('🔍 Web search ON — Catura will search the web', 2000);
+    } else {
+        showToast('🔍 Web search OFF — Catura decides automatically', 2000);
+    }
 };
 function togglePlusMenu(e) {
     e.stopPropagation();
@@ -2247,7 +2262,13 @@ function handlePlusAction(action) {
 
 // ── Init web-search active state in the plus dropdown on page load ─────────
 function initWebSearchUI() {
-    // Search is always handled by the backend — no UI toggle state needed.
+    const searchItem = document.querySelector('.plus-dropdown-item[data-action="search"]');
+    if (!searchItem) return;
+    if (webSearchEnabled) {
+        searchItem.classList.add('search-active');
+    } else {
+        searchItem.classList.remove('search-active');
+    }
 }
 
 // NOTE: handleFileSelect is defined in file-upload.js (the real implementation).
