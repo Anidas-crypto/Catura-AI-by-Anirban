@@ -937,55 +937,164 @@ def enrich_with_firecrawl(
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# TRUST TIERS — 6 levels instead of 3, so scoring is more fine-grained and it's
+# easy to slot new sources into the RIGHT bucket instead of guessing between
+# only 3 buckets.
+#
+# HOW TO ADD A NEW SOURCE:
+#   1. Pick the tier below that matches how much you trust it.
+#   2. Add the bare domain (no "www.", no "https://") under the matching
+#      category comment — or a new category comment if none fits.
+#   3. That's it. compute_trust_score() picks it up automatically; no other
+#      code needs to change.
+#
+# Subdomains and country variants (e.g. "news.google.com", "bbc.co.uk") are
+# matched automatically via endswith(), so you generally only need to add
+# the root domain once.
+# ══════════════════════════════════════════════════════════════════════════════
+
+TRUST_TIERS = {
+    # ── Tier 1 (score 95) — Primary/official sources: government, IGOs,
+    # regulators, central banks, national statistics offices ─────────────────
+    1: {
+        # India — Government / Regulators
+        "gov", "gov.in", "nic.in", "india.gov.in", "pib.gov.in", "mea.gov.in",
+        "rbi.org.in", "sebi.gov.in", "irdai.gov.in", "npci.org.in", "uidai.gov.in",
+        "incometax.gov.in", "gst.gov.in", "isro.gov.in", "drdo.gov.in",
+        "mospi.gov.in", "rbi.gov.in", "eci.gov.in","services.india.gov.in","registry.gov.in",
+        "sci.gov.in","ecourts.gov.in","mha.gov.in","mod.gov.in","mohfw.gov.in","education.gov.in",
+        "meity.gov.in","dpiit.gov.in","commerce.gov.in","msme.gov.in","finance.gov.in","dea.gov.in","doe.gov.in",
+        "mca.gov.in","labour.gov.in","rural.nic.in","jalshakti.gov.in","mnre.gov.in","powermin.gov.in",
+        "petroleum.nic.in","coal.nic.in","steel.gov.in","fert.nic.in","textiles.gov.in",
+        "foodprocessingindia.gov.in","civilaviation.gov.in","shipping.gov.in","roadtransport.gov.in",
+        "railways.gov.in","tourism.gov.in","culture.gov.in","tribal.nic.in","socialjustice.gov.in","wcd.gov.in",
+        "yas.nic.in","consumeraffairs.nic.in","moef.gov.in","moes.gov.in","dst.gov.in","dbtindia.gov.in","ayush.gov.in",
+        "dopt.gov.in",
+        # Finance / Regulators
+        "pfrda.org.in","ibbi.gov.in","ifsca.gov.in","cci.gov.in","trai.gov.in","pngrb.gov.in","aera.gov.in",
+        "cercind.gov.in","aptel.gov.in","fssai.gov.in","cdsco.gov.in", "cbic.gov.in","cbec.gov.in",
+        "data.gov.in","openbudgetsindia.org",
+        # Science
+        "barc.gov.in","iisc.ac.in","csir.res.in","imd.gov.in","incois.gov.in","cpcb.nic.in",
+        "nhm.gov.in","nhp.gov.in","icmr.gov.in","niti.gov.in","icar.org.in","agricoop.gov.in","krishi.gov.in",
+        # Stock Exchange
+        "mcxindia.com","nseindia.com","bseindia.com",
+        # Public Information
+        "mygov.in",
+        "digitalindia.gov.in","bis.gov.in","qcin.org","ipindia.gov.in",
+        # Telecom
+        "dot.gov.in",
+        "bsnl.co.in",
+        # International organizations
+        "who.int", "un.org", "worldbank.org", "imf.org", "unicef.org",
+        "unesco.org", "wto.org", "oecd.org", "interpol.int",
+        "undp.org","unhcr.org","unep.org","unfpa.org","unwomen.org",
+        "unhabitat.org","wfp.org","fao.org","ilo.org","icao.int",
+        "imo.org","itu.int","wipo.int","wmo.int","ifad.org","unido.org","unctad.org",
+        "iom.int","unaids.org",
+        # US Government
+        "cdc.gov", "nih.gov", "fda.gov", "sec.gov", "federalreserve.gov",
+        "treasury.gov", "whitehouse.gov", "nasa.gov", "noaa.gov",
+        "usa.gov","congress.gov","supremecourt.gov","state.gov",
+        "justice.gov","commerce.gov","energy.gov","defense.gov","dhs.gov",
+        "transportation.gov","education.gov","labor.gov","interior.gov",
+        "usda.gov","va.gov","cisa.gov","finra.org","cftc.gov",
+        "fdic.gov","occ.treas.gov","cfpb.gov","nsf.gov","nist.gov","usgs.gov",
+        # Other national governments / central banks
+        "gov.uk", "europa.eu", "ecb.europa.eu", "bankofengland.co.uk","canada.ca",
+        "bankofcanada.ca","gov.au","rba.gov.au","govt.nz","rbnz.govt.nz","go.jp",
+        "boj.or.jp","go.kr","bok.or.kr","gov.sg","mas.gov.sg","admin.ch","snb.ch",
+        "bund.de","bundesbank.de","gouvernement.fr","banque-france.fr","governo.it",
+        "bancaditalia.it","lamoncloa.gob.es","bde.es","government.nl", "dnb.nl","belgium.be",
+        "nbb.be","gov.ie","centralbank.ie","nationalbanken.dk","government.se","riksbank.se",
+        "regjeringen.no","norges-bank.no","valtioneuvosto.fi","suomenpankki.fi","oesterreich.gv.at",
+        "oenb.at","portugal.gov.pt","bportugal.pt","gov.br","bcb.gov.br","gob.mx","banxico.org.mx",
+    },
+
+    # ── Tier 2 (score 88) — Premier wire services, flagship global news
+    # (heavy editorial/fact-check standards), and top peer-reviewed journals ──
+    2: {
+        # Wire services
+        "reuters.com", "apnews.com", "afp.com","pti.in",
+        # Flagship global news
+        "bbc.com", "bbc.co.uk", "nytimes.com", "theguardian.com",
+        "washingtonpost.com", "ft.com", "economist.com", "wsj.com",
+        # Peer-reviewed / academic journals
+        "nature.com", "science.org", "thelancet.com", "nejm.org",
+        "cell.com", "pnas.org", "jamanetwork.com", "bmj.com",
+        # Reference
+        "wikipedia.org", "britannica.com", "scholar.google.com",
+        "pubmed.ncbi.nlm.nih.gov", "arxiv.org",
+    },
+
+    # ── Tier 3 (score 78) — Major national/regional news, established tech &
+    # finance official sites, big-brand company sources ──────────────────────
+    3: {
+        # Indian national news
+        "timesofindia.com", "hindustantimes.com", "ndtv.com", "thehindu.com",
+        "indianexpress.com", "livemint.com", "economictimes.indiatimes.com",
+        "businessstandard.com", "financialexpress.com", "thewire.in",
+        "theprint.in", "scroll.in", "thequint.com",
+        # International business/finance news
+        "bloomberg.com", "cnbc.com", "forbes.com", "moneycontrol.com",
+        "finance.yahoo.com",
+        # Tech — official company sources & major docs
+        "techcrunch.com", "theverge.com", "arstechnica.com", "wired.com",
+        "stackoverflow.com", "github.com", "docs.python.org",
+        "developer.mozilla.org", "microsoft.com", "google.com", "apple.com",
+        "amazon.com", "openai.com", "anthropic.com", "meta.com", "nvidia.com",
+        # Health — established institutions
+        "mayoclinic.org", "webmd.com", "healthline.com", "clevelandclinic.org",
+    },
+
+    # ── Tier 4 (score 65) — Solid secondary sources: trade press, niche news,
+    # established reference/education sites, sports data ────────────────────
+    4: {
+        "sciencedaily.com", "livescience.com", "space.com",
+        "geeksforgeeks.org", "w3schools.com", "tutorialspoint.com",
+        "javatpoint.com", "codecademy.com", "freecodecamp.org",
+        "cricbuzz.com", "espncricinfo.com", "sportskeeda.com", "espn.com",
+        "news18.com", "indiatoday.in", "business-standard.com",
+        "investopedia.com", "statista.com",
+    },
+
+    # ── Tier 5 (score 52) — Community platforms & blogging sites: useful but
+    # unmoderated/self-published, verify against a higher tier when possible ─
+    5: {
+        "medium.com", "substack.com", "dev.to", "hackernoon.com",
+        "towardsdatascience.com",
+    },
+
+    # ── Tier 6 (score 40) — Open discussion/UGC platforms: lowest default
+    # weight, treat as a lead to verify rather than a citation on its own ────
+    6: {
+        "reddit.com", "quora.com",
+    },
+}
+
+# Score assigned to each tier (1 = most trusted). Ordered highest-to-lowest
+# so compute_trust_score() stops at the FIRST (best) tier a domain matches.
+# Add a new tier here + a matching key in TRUST_TIERS above if you ever need
+# a 7th bucket — nothing else has to change.
+TRUST_TIER_SCORES = [
+    {"tier": 1, "score": 95},
+    {"tier": 2, "score": 88},
+    {"tier": 3, "score": 78},
+    {"tier": 4, "score": 65},
+    {"tier": 5, "score": 52},
+    {"tier": 6, "score": 40},
+]
+
+# Domains that carry a trust penalty regardless of tier — known for
+# misinformation, heavy sensationalism, or unreliable reporting
+_PENALISED = {
+    # add domains here if a source repeatedly turns out unreliable
+}
+
+# ══════════════════════════════════════════════════════════════════════════════
 # STEP 5 — TRUST SCORING
 # Assigns a 0–100 trust score to each result based on domain reputation
 # ══════════════════════════════════════════════════════════════════════════════
-
-# Tier 1 — Highest trust (90–100): Government, major international news, academic
-_TIER1 = {
-    # Government / Official
-    "gov", "gov.in", "nic.in", "india.gov.in", "pib.gov.in", "mea.gov.in",
-    "rbi.org.in", "sebi.gov.in", "irdai.gov.in", "npci.org.in", "uidai.gov.in",
-    "incometax.gov.in", "gst.gov.in", "isro.gov.in", "drdo.gov.in",
-    "who.int", "un.org", "worldbank.org", "imf.org", "unicef.org",
-    "cdc.gov", "nih.gov", "fda.gov",
-    # Top-tier news
-    "reuters.com", "apnews.com", "bbc.com", "bbc.co.uk",
-    # Academic / Reference
-    "wikipedia.org", "britannica.com", "scholar.google.com", "pubmed.ncbi.nlm.nih.gov",
-    "nature.com", "science.org", "thelancet.com",
-    # Finance official
-    "nseindia.com", "bseindia.com", "moneycontrol.com", "finance.yahoo.com",
-}
-
-# Tier 2 — High trust (75–89): Major Indian/international news, established tech
-_TIER2 = {
-    "timesofindia.com", "hindustantimes.com", "ndtv.com", "thehindu.com",
-    "indianexpress.com", "livemint.com", "economictimes.indiatimes.com",
-    "businessstandard.com", "financialexpress.com", "thewire.in",
-    "theprint.in", "scroll.in", "thequint.com",
-    "nytimes.com", "theguardian.com", "washingtonpost.com", "ft.com",
-    "bloomberg.com", "cnbc.com", "forbes.com", "techcrunch.com",
-    "stackoverflow.com", "github.com", "docs.python.org", "developer.mozilla.org",
-    "microsoft.com", "google.com", "apple.com", "amazon.com",
-    "openai.com", "anthropic.com",
-    "healthline.com", "webmd.com", "mayoclinic.org",
-}
-
-# Tier 3 — Medium trust (55–74): Blogs, niche publications, wiki-style
-_TIER3 = {
-    "medium.com", "substack.com", "quora.com", "reddit.com",
-    "towardsdatascience.com", "hackernoon.com", "dev.to",
-    "geeksforgeeks.org", "w3schools.com", "tutorialspoint.com",
-    "javatpoint.com", "codecademy.com",
-    "cricbuzz.com", "espncricinfo.com", "sportskeeda.com",
-    "livescience.com", "sciencedaily.com",
-}
-
-# Domains that carry a trust penalty — known for misinformation/low quality
-_PENALISED = {
-    "news18.com",  # sometimes sensationalist — not penalised hard, just lower
-}
 
 
 def _days_to_boost(days_old: float) -> int:
@@ -1043,7 +1152,7 @@ def compute_trust_score(url: str, result: dict) -> int:
     """
     Returns trust score 0–100 for a search result.
     Factors:
-      - Domain tier (base score)
+      - Domain tier (base score) — now 6 tiers, see TRUST_TIERS above
       - Multi-source confirmation (boost)
       - Direct answer from engine (boost)
       - Real recency, based on actual publish date (boost)
@@ -1063,15 +1172,17 @@ def compute_trust_score(url: str, result: dict) -> int:
     except (ValueError, AttributeError):
         domain = ""
 
-    # Base score by tier
-    score = 50  # default for unknown domains
+    # Base score by tier — walk TRUST_TIERS from most to least trusted and
+    # take the first (i.e. highest) tier the domain matches. A domain never
+    # scores lower than its worst matching tier would suggest, since we stop
+    # at the first hit.
+    score = 50  # default for unknown/unlisted domains
 
-    if any(domain == t or domain.endswith("." + t) for t in _TIER1):
-        score = 92
-    elif any(domain == t or domain.endswith("." + t) for t in _TIER2):
-        score = 80
-    elif any(domain == t or domain.endswith("." + t) for t in _TIER3):
-        score = 62
+    for tier_score in TRUST_TIER_SCORES:
+        tier_domains = TRUST_TIERS.get(tier_score["tier"], ())
+        if any(domain == t or domain.endswith("." + t) for t in tier_domains):
+            score = tier_score["score"]
+            break
 
     # Penalty for known low-quality domains
     if any(domain == p or domain.endswith("." + p) for p in _PENALISED):
