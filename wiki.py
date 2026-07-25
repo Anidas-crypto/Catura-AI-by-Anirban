@@ -38,6 +38,14 @@ FIXED in this version (see wiki_py_audit_report.md, section 1):
          _search_wikipedia() now returns multiple candidates so
          search_wikipedia() can move on to the next-best title instead
          of just giving up.
+  - Relevance scoring: limit=1 meant the #1 API result was trusted blindly
+         with no sanity check against the query — a wrong namesake article
+         or an overly-broad redirect target would just get returned as
+         ground truth. _search_wikipedia() now fetches SEARCH_CANDIDATES
+         (5) results with their descriptions, _score_candidate() ranks
+         them by lexical word-overlap against the query, and
+         search_wikipedia() tries them best-match-first rather than
+         trusting raw API order.
 """
 
 import requests
@@ -59,10 +67,11 @@ MIN_EXTRACT_LEN  = 80
 # (keeps token usage light while giving full context for simple questions)
 MAX_EXTRACT_CHARS = 1800
 
-# How many search candidates to fetch — was 1 (no fallback at all). If the
-# top hit turns out to be a disambiguation page, we now try the next one
-# instead of giving up.
-SEARCH_CANDIDATES = 3
+# How many search candidates to fetch — was 1 (no fallback, no relevance
+# check at all). If the top hit turns out to be a disambiguation page, a
+# wrong namesake, or a too-short stub, we now try the next-best one
+# instead of giving up or trusting a bad match.
+SEARCH_CANDIDATES = 5
 
 
 # ── Quality gate: topics Wikipedia is NOT good for ────────────────────────────
@@ -84,14 +93,16 @@ def should_skip_wikipedia(query: str) -> bool:
 
 
 # ── Step 1: Search ─────────────────────────────────────────────────────────────
-def _search_wikipedia(query: str) -> list[str]:
+def _search_wikipedia(query: str) -> list[dict]:
     """
-    Call the Wikimedia search API and return a list of candidate titles,
-    best-match first, per the API's own ranking.
+    Call the Wikimedia search API and return a list of candidate pages
+    (each a dict with "title" and "description"), in the API's own
+    ranked order.
 
-    Returns multiple candidates (not just 1) so that if the top hit turns
-    out to be a disambiguation page or a too-short stub, the caller can
-    fall through to the next-best title instead of giving up entirely.
+    Returns multiple candidates (not just 1) so the caller can score them
+    for relevance and fall through to the next-best title if the top hit
+    turns out to be a disambiguation page, a too-short stub, or simply
+    the wrong article for the query.
 
     Returns [] if nothing found or on error.
     """
@@ -111,13 +122,44 @@ def _search_wikipedia(query: str) -> list[str]:
             print(f"ℹ️ [Wiki] no search results for: {query[:60]}")
             return []
 
-        titles = [p.get("title") for p in pages if p.get("title")]
-        print(f"🔎 [Wiki] search hits: '{query[:50]}' → {titles}")
-        return titles
+        candidates = [
+            {"title": p.get("title"), "description": p.get("description") or ""}
+            for p in pages
+            if p.get("title")
+        ]
+        print(f"🔎 [Wiki] search hits: '{query[:50]}' → "
+              f"{[c['title'] for c in candidates]}")
+        return candidates
 
     except Exception as e:
         print(f"❌ [Wiki] search exception: {e}")
         return []
+
+
+def _score_candidate(query: str, title: str, description: str) -> int:
+    """
+    Lightweight relevance check: count how many distinct words the query
+    shares with the candidate's title + description. Used to catch cases
+    where the API's #1 result is a wrong namesake or an overly-broad
+    redirect target that doesn't actually match what was asked.
+    """
+    query_words = set(re.findall(r"\w+", query.lower()))
+    candidate_words = set(re.findall(r"\w+", f"{title} {description}".lower()))
+    return len(query_words & candidate_words)
+
+
+def _rank_candidates(query: str, candidates: list[dict]) -> list[dict]:
+    """
+    Sort candidates best-match-first by lexical overlap with the query.
+    Python's sort is stable, so candidates that tie on score keep the
+    API's original relative order (its own ranking is still a useful
+    tiebreaker signal).
+    """
+    return sorted(
+        candidates,
+        key=lambda c: _score_candidate(query, c["title"], c["description"]),
+        reverse=True,
+    )
 
 
 # ── Step 2: Fetch summary ──────────────────────────────────────────────────────
@@ -235,18 +277,24 @@ def search_wikipedia(query: str) -> dict:
         return {"found": False, "reason": "skip", "tool": "wikipedia"}
 
     # Step 1: Search — now returns multiple candidates instead of just 1
-    titles = _search_wikipedia(query)
-    if not titles:
+    candidates = _search_wikipedia(query)
+    if not candidates:
         return {"found": False, "reason": "no_result", "tool": "wikipedia"}
 
-    # Step 2: Fetch summary — try each candidate in order until one isn't
-    # a disambiguation page and clears MIN_EXTRACT_LEN. Previously this
-    # only ever tried the single #1 result and gave up immediately.
+    # FIX: rank candidates by lexical overlap with the query instead of
+    # blindly trusting the API's #1 result. Catches cases where the raw
+    # top hit is a wrong namesake or an overly-broad redirect target.
+    ranked = _rank_candidates(query, candidates)
+
+    # Step 2: Fetch summary — try each candidate best-match-first until
+    # one isn't a disambiguation page and clears MIN_EXTRACT_LEN.
+    # Previously this only ever tried the single #1 result and gave up
+    # immediately if it wasn't good enough.
     data, title = None, None
-    for candidate in titles:
-        data = _fetch_summary(candidate)
+    for candidate in ranked:
+        data = _fetch_summary(candidate["title"])
         if data is not None:
-            title = candidate
+            title = candidate["title"]
             break
 
     if data is None:
