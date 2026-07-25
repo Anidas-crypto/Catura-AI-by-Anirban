@@ -29,6 +29,15 @@ FIXED in this version (see wiki_py_audit_report.md, section 1):
          shape of API response still slips through, it degrades to
          {"found": False, "reason": "error"} instead of crashing the
          whole call.
+  - Disambiguation detection: the summary API returns "type":
+         "disambiguation" for pages that just list multiple unrelated
+         topics (e.g. searching "Mercury" can land on the disambiguation
+         page instead of the planet or the element). That blurb easily
+         clears MIN_EXTRACT_LEN, so it was previously accepted as if it
+         were a real answer. _fetch_summary() now rejects it, and
+         _search_wikipedia() now returns multiple candidates so
+         search_wikipedia() can move on to the next-best title instead
+         of just giving up.
 """
 
 import requests
@@ -50,6 +59,11 @@ MIN_EXTRACT_LEN  = 80
 # (keeps token usage light while giving full context for simple questions)
 MAX_EXTRACT_CHARS = 1800
 
+# How many search candidates to fetch — was 1 (no fallback at all). If the
+# top hit turns out to be a disambiguation page, we now try the next one
+# instead of giving up.
+SEARCH_CANDIDATES = 3
+
 
 # ── Quality gate: topics Wikipedia is NOT good for ────────────────────────────
 # If the question is clearly real-time or opinion-based, skip Wikipedia entirely.
@@ -70,34 +84,40 @@ def should_skip_wikipedia(query: str) -> bool:
 
 
 # ── Step 1: Search ─────────────────────────────────────────────────────────────
-def _search_wikipedia(query: str) -> str | None:
+def _search_wikipedia(query: str) -> list[str]:
     """
-    Call the Wikimedia search API and return the title of the best match.
-    Returns None if nothing found or on error.
+    Call the Wikimedia search API and return a list of candidate titles,
+    best-match first, per the API's own ranking.
+
+    Returns multiple candidates (not just 1) so that if the top hit turns
+    out to be a disambiguation page or a too-short stub, the caller can
+    fall through to the next-best title instead of giving up entirely.
+
+    Returns [] if nothing found or on error.
     """
     try:
         resp = requests.get(
             WIKI_SEARCH_URL,
-            params={"q": query, "limit": 1},
+            params={"q": query, "limit": SEARCH_CANDIDATES},
             headers=WIKI_HEADERS,
             timeout=REQUEST_TIMEOUT,
         )
         if resp.status_code != 200:
             print(f"⚠️ [Wiki] search HTTP {resp.status_code} for: {query[:60]}")
-            return None
+            return []
 
         pages = resp.json().get("pages", [])
         if not pages:
             print(f"ℹ️ [Wiki] no search results for: {query[:60]}")
-            return None
+            return []
 
-        title = pages[0].get("title")
-        print(f"🔎 [Wiki] search hit: '{query[:50]}' → '{title}'")
-        return title
+        titles = [p.get("title") for p in pages if p.get("title")]
+        print(f"🔎 [Wiki] search hits: '{query[:50]}' → {titles}")
+        return titles
 
     except Exception as e:
         print(f"❌ [Wiki] search exception: {e}")
-        return None
+        return []
 
 
 # ── Step 2: Fetch summary ──────────────────────────────────────────────────────
@@ -116,6 +136,16 @@ def _fetch_summary(title: str) -> dict | None:
             return None
 
         data = resp.json()
+
+        # FIX: reject disambiguation pages. The summary API returns
+        # "type": "disambiguation" for pages that are just a list of
+        # links to unrelated topics sharing a name (e.g. "Mercury" could
+        # resolve to the disambiguation page instead of the planet or the
+        # element). That blurb routinely clears MIN_EXTRACT_LEN, so
+        # without this check it was silently accepted as a real answer.
+        if data.get("type") == "disambiguation":
+            print(f"ℹ️ [Wiki] '{title}' is a disambiguation page — rejecting")
+            return None
 
         # FIX 1.1: `.get("extract", "")` only defaults when the key is
         # ABSENT. If the API returns "extract": null, .get() returns None
@@ -204,14 +234,22 @@ def search_wikipedia(query: str) -> dict:
         print(f"⏩ [Wiki] skipping (real-time/not suitable): {query[:60]}")
         return {"found": False, "reason": "skip", "tool": "wikipedia"}
 
-    # Step 1: Search
-    title = _search_wikipedia(query)
-    if not title:
+    # Step 1: Search — now returns multiple candidates instead of just 1
+    titles = _search_wikipedia(query)
+    if not titles:
         return {"found": False, "reason": "no_result", "tool": "wikipedia"}
 
-    # Step 2: Fetch summary
-    data = _fetch_summary(title)
-    if not data:
+    # Step 2: Fetch summary — try each candidate in order until one isn't
+    # a disambiguation page and clears MIN_EXTRACT_LEN. Previously this
+    # only ever tried the single #1 result and gave up immediately.
+    data, title = None, None
+    for candidate in titles:
+        data = _fetch_summary(candidate)
+        if data is not None:
+            title = candidate
+            break
+
+    if data is None:
         return {"found": False, "reason": "short_extract", "tool": "wikipedia"}
 
     # Step 3: Build context
