@@ -141,12 +141,40 @@ FIXED in this version (see wiki_py_audit_report.md, section 1):
              sent a malformed request" in the logs. JSON decode errors
              are also now caught and logged separately from network
              errors.
+  - Minor issues (§5):
+         5.1 Emoji-prefixed logs — all print() log lines now use plain
+             ASCII tags ([WIKI], [WIKI][WARN], [WIKI][ERROR],
+             [WIKI][INFO], [WIKI][SKIP], [WIKI][CACHE], [WIKI][OK])
+             instead of emoji, including replacing stray em-dashes (—)
+             and arrows (→) inside log strings with plain "-"/"->". This
+             avoids UnicodeEncodeError on Windows consoles / restricted-
+             locale log pipelines. (The AI-facing context text itself —
+             "📖 WIKIPEDIA CONTEXT" / "⏳ Note:" — is untouched; those
+             aren't console log lines and the risk doesn't apply there.)
+         5.2 3.10+-only type hints — `X | None` (PEP 604) and bare
+             `list[dict]` (PEP 585) both require newer Python than some
+             deployments may run. Replaced with `typing.Optional[X]` /
+             `typing.List[X]` / `typing.Dict` throughout for broader
+             compatibility (3.7+).
+         5.3 Query normalization — search_wikipedia() now runs a
+             whitespace-collapse + strip pass once at the top and
+             uses that normalized value everywhere downstream (skip
+             check, search, cache key, logs), instead of sending
+             raw/padded/multi-spaced text to the API and using it as-is
+             for cache keys.
+         5.4 Smarter truncation — extracted into a new _smart_truncate()
+             helper that now tries sentence boundary, then clause
+             boundary (comma/semicolon), then word boundary, in that
+             order, before ever falling back to a hard character cut —
+             instead of only trying a sentence boundary and otherwise
+             risking a mid-word cut.
 """
 
 import requests
 import requests.exceptions
 import re
 import time
+from typing import Optional, List, Dict, Any
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 # FIX (§4.4): these were hardcoded to en.wikipedia.org with no way to
@@ -334,7 +362,7 @@ def _is_volatile_topic(query: str, title: str, description: str) -> bool:
 
 
 # ── Shared request helper (§4.1, §4.2, §4.5) ───────────────────────────────────
-def _request_get(url: str, params: dict | None = None) -> requests.Response | None:
+def _request_get(url: str, params: Optional[dict] = None) -> Optional[requests.Response]:
     """
     GET a URL through the shared session, retrying transient failures
     with short exponential backoff. Returns the Response on success (any
@@ -353,7 +381,7 @@ def _request_get(url: str, params: dict | None = None) -> requests.Response | No
             resp = _SESSION.get(url, params=params, timeout=REQUEST_TIMEOUT)
             if resp.status_code >= 500 and attempt < MAX_RETRIES:
                 wait = RETRY_BACKOFF_BASE * (2 ** attempt)
-                print(f"⚠️ [Wiki] HTTP {resp.status_code} from {url} — "
+                print(f"[WIKI][WARN] HTTP {resp.status_code} from {url} - "
                       f"retrying in {wait:.1f}s (attempt {attempt + 1}/{MAX_RETRIES})")
                 time.sleep(wait)
                 continue
@@ -363,30 +391,30 @@ def _request_get(url: str, params: dict | None = None) -> requests.Response | No
             last_error = e
             if attempt < MAX_RETRIES:
                 wait = RETRY_BACKOFF_BASE * (2 ** attempt)
-                print(f"⏱️ [Wiki] timeout on {url} — retrying in {wait:.1f}s "
+                print(f"[WIKI][WARN] timeout on {url} - retrying in {wait:.1f}s "
                       f"(attempt {attempt + 1}/{MAX_RETRIES})")
                 time.sleep(wait)
             else:
-                print(f"❌ [Wiki] timeout on {url} after {MAX_RETRIES} retries: {e}")
+                print(f"[WIKI][ERROR] timeout on {url} after {MAX_RETRIES} retries: {e}")
 
         except requests.exceptions.ConnectionError as e:
             last_error = e
             if attempt < MAX_RETRIES:
                 wait = RETRY_BACKOFF_BASE * (2 ** attempt)
-                print(f"⚠️ [Wiki] connection error on {url} — retrying in "
+                print(f"[WIKI][WARN] connection error on {url} - retrying in "
                       f"{wait:.1f}s (attempt {attempt + 1}/{MAX_RETRIES})")
                 time.sleep(wait)
             else:
-                print(f"❌ [Wiki] connection error on {url} after "
+                print(f"[WIKI][ERROR] connection error on {url} after "
                       f"{MAX_RETRIES} retries: {e}")
 
         except requests.exceptions.RequestException as e:
             # Anything else requests-specific (bad URL, too many redirects,
             # etc.) — not worth retrying, fail fast with a clear log tag.
-            print(f"❌ [Wiki] request exception on {url}: {e}")
+            print(f"[WIKI][ERROR] request exception on {url}: {e}")
             return None
 
-    print(f"❌ [Wiki] giving up on {url} after {MAX_RETRIES} retries: {last_error}")
+    print(f"[WIKI][ERROR] giving up on {url} after {MAX_RETRIES} retries: {last_error}")
     return None
 
 
@@ -395,7 +423,7 @@ def _cache_key(query: str, lang: str) -> str:
     return f"{lang}:{query.strip().lower()}"
 
 
-def _cache_get(key: str) -> dict | None:
+def _cache_get(key: str) -> Optional[dict]:
     entry = _CACHE.get(key)
     if entry is None:
         return None
@@ -411,7 +439,7 @@ def _cache_set(key: str, value: dict) -> None:
 
 
 # ── Step 1: Search ─────────────────────────────────────────────────────────────
-def _search_wikipedia(query: str, lang: str = DEFAULT_LANG) -> list[dict]:
+def _search_wikipedia(query: str, lang: str = DEFAULT_LANG) -> List[dict]:
     """
     Call the Wikimedia search API and return a list of candidate pages
     (each a dict with "title" and "description"), in the API's own
@@ -433,7 +461,7 @@ def _search_wikipedia(query: str, lang: str = DEFAULT_LANG) -> list[dict]:
         return []
 
     if resp.status_code != 200:
-        print(f"⚠️ [Wiki] search HTTP {resp.status_code} for: {query[:60]}")
+        print(f"[WIKI][WARN] search HTTP {resp.status_code} for: {query[:60]}")
         return []
 
     try:
@@ -442,11 +470,11 @@ def _search_wikipedia(query: str, lang: str = DEFAULT_LANG) -> list[dict]:
         # FIX (§4.5): JSON decode errors are now caught and logged
         # distinctly from network errors instead of falling into the
         # same generic "exception" bucket.
-        print(f"❌ [Wiki] search response was not valid JSON: {e}")
+        print(f"[WIKI][ERROR] search response was not valid JSON: {e}")
         return []
 
     if not pages:
-        print(f"ℹ️ [Wiki] no search results for: {query[:60]}")
+        print(f"[WIKI][INFO] no search results for: {query[:60]}")
         return []
 
     candidates = [
@@ -454,7 +482,7 @@ def _search_wikipedia(query: str, lang: str = DEFAULT_LANG) -> list[dict]:
         for p in pages
         if p.get("title")
     ]
-    print(f"🔎 [Wiki] search hits: '{query[:50]}' → "
+    print(f"[WIKI] search hits: '{query[:50]}' -> "
           f"{[c['title'] for c in candidates]}")
     return candidates
 
@@ -471,7 +499,7 @@ def _score_candidate(query: str, title: str, description: str) -> int:
     return len(query_words & candidate_words)
 
 
-def _rank_candidates(query: str, candidates: list[dict]) -> list[dict]:
+def _rank_candidates(query: str, candidates: List[dict]) -> List[dict]:
     """
     Sort candidates best-match-first by lexical overlap with the query,
     and attach each candidate's "score" so callers can also use it as a
@@ -488,7 +516,7 @@ def _rank_candidates(query: str, candidates: list[dict]) -> list[dict]:
 
 
 # ── Step 2: Fetch summary ──────────────────────────────────────────────────────
-def _fetch_summary(title: str, lang: str = DEFAULT_LANG) -> dict | None:
+def _fetch_summary(title: str, lang: str = DEFAULT_LANG) -> Optional[dict]:
     """
     Fetch the Wikimedia page summary for a given article title.
     Returns a dict with extract, description, coordinates, etc.
@@ -504,7 +532,7 @@ def _fetch_summary(title: str, lang: str = DEFAULT_LANG) -> dict | None:
         return None
 
     if resp.status_code != 200:
-        print(f"⚠️ [Wiki] summary HTTP {resp.status_code} for: {title}")
+        print(f"[WIKI][WARN] summary HTTP {resp.status_code} for: {title}")
         return None
 
     try:
@@ -512,7 +540,7 @@ def _fetch_summary(title: str, lang: str = DEFAULT_LANG) -> dict | None:
     except ValueError as e:
         # FIX (§4.5): JSON decode errors logged distinctly from network
         # errors instead of one generic "exception" bucket.
-        print(f"❌ [Wiki] summary response was not valid JSON for '{title}': {e}")
+        print(f"[WIKI][ERROR] summary response was not valid JSON for '{title}': {e}")
         return None
 
     # FIX: reject disambiguation pages. The summary API returns
@@ -522,7 +550,7 @@ def _fetch_summary(title: str, lang: str = DEFAULT_LANG) -> dict | None:
     # element). That blurb routinely clears MIN_EXTRACT_LEN, so
     # without this check it was silently accepted as a real answer.
     if data.get("type") == "disambiguation":
-        print(f"ℹ️ [Wiki] '{title}' is a disambiguation page — rejecting")
+        print(f"[WIKI][INFO] '{title}' is a disambiguation page - rejecting")
         return None
 
     # FIX 1.1: `.get("extract", "")` only defaults when the key is
@@ -532,10 +560,49 @@ def _fetch_summary(title: str, lang: str = DEFAULT_LANG) -> dict | None:
     extract = (data.get("extract") or "").strip()
 
     if len(extract) < MIN_EXTRACT_LEN:
-        print(f"ℹ️ [Wiki] extract too short ({len(extract)} chars) for: {title}")
+        print(f"[WIKI][INFO] extract too short ({len(extract)} chars) for: {title}")
         return None
 
     return data
+
+
+def _smart_truncate(text: str, limit: int) -> str:
+    """
+    Truncate `text` to at most `limit` characters, preferring to cut at a
+    natural boundary rather than mid-word/mid-clause.
+
+    FIX (§5.4): the old logic only ever tried a sentence boundary
+    (". ") and, failing that, did a hard character-count cut that could
+    land mid-word or mid-clause. This now tries three levels, each a
+    fallback for the last: sentence boundary -> clause boundary (comma/
+    semicolon) -> nearest word boundary. Only if the text has no
+    whitespace at all within the limit does it fall back to a hard cut.
+    """
+    if len(text) <= limit:
+        return text
+
+    window = text[:limit]
+
+    # 1) Prefer the last full sentence boundary within the tail 40%.
+    last_period = window.rfind(". ")
+    if last_period > limit * 0.6:
+        return window[: last_period + 1] + " [...]"
+
+    # 2) Next best: the last clause boundary (comma/semicolon) within the
+    # tail 25%, so we at least stop at a grammatical pause.
+    last_clause = max(window.rfind(", "), window.rfind("; "))
+    if last_clause > limit * 0.75:
+        return window[: last_clause + 1] + " [...]"
+
+    # 3) Otherwise, cut at the nearest word boundary so we never slice a
+    # word in half, even though it may land mid-clause.
+    last_space = window.rfind(" ")
+    if last_space > 0:
+        return window[:last_space] + " [...]"
+
+    # 4) Degenerate case: no whitespace at all in the window (e.g. one
+    # extremely long unbroken token) — hard cut is the only option left.
+    return window + " [...]"
 
 
 # ── Step 3: Format context for AI injection ────────────────────────────────────
@@ -566,14 +633,11 @@ def _format_context(query: str, title: str, data: dict) -> str:
     raw_timestamp = (data.get("timestamp") or "").strip()
     last_updated  = raw_timestamp.split("T")[0] if raw_timestamp else ""
 
-    # Truncate extract to keep tokens light
+    # FIX (§5.4): use _smart_truncate() — sentence boundary, then clause
+    # boundary, then word boundary, in that order — instead of a single
+    # sentence-boundary check that fell back to a hard mid-word cut.
     if len(extract) > MAX_EXTRACT_CHARS:
-        # Cut at last sentence boundary within limit
-        trimmed = extract[:MAX_EXTRACT_CHARS]
-        last_dot = trimmed.rfind(". ")
-        if last_dot > MAX_EXTRACT_CHARS * 0.6:
-            trimmed = trimmed[: last_dot + 1]
-        extract = trimmed + " [...]"
+        extract = _smart_truncate(extract, MAX_EXTRACT_CHARS)
 
     # FIX: flag structurally time-sensitive topics with an explicit
     # caveat, so the AI doesn't present a static snapshot as a live fact
@@ -630,11 +694,19 @@ def search_wikipedia(query: str, lang: str = DEFAULT_LANG) -> dict:
           "tool":   "wikipedia"
         }
     """
-    print(f"📚 [Wiki] query: {query[:80]} (lang={lang})")
+    # FIX (§5.3): normalize the query once, here, rather than sending the
+    # raw (possibly whitespace-padded / multi-spaced) text to the search
+    # API, the skip-pattern check, cache keys, and logs separately. This
+    # doesn't change matching behavior (should_skip_wikipedia already
+    # lowercases internally) — it just keeps cache keys and log lines
+    # clean and avoids sending "  Albert   Einstein  " to Wikipedia as-is.
+    query = re.sub(r"\s+", " ", query).strip()
+
+    print(f"[WIKI] query: {query[:80]} (lang={lang})")
 
     # Fast-skip check — don't waste a round-trip for real-time questions
     if should_skip_wikipedia(query):
-        print(f"⏩ [Wiki] skipping (real-time/not suitable): {query[:60]}")
+        print(f"[WIKI][SKIP] skipping (real-time/not suitable): {query[:60]}")
         return {"found": False, "reason": "skip", "tool": "wikipedia"}
 
     # FIX (§4.3): check the cache before hitting the network at all. Only
@@ -644,7 +716,7 @@ def search_wikipedia(query: str, lang: str = DEFAULT_LANG) -> dict:
     cache_key = _cache_key(query, lang)
     cached = _cache_get(cache_key)
     if cached is not None:
-        print(f"💾 [Wiki] cache hit for '{query[:50]}' (lang={lang})")
+        print(f"[WIKI][CACHE] cache hit for '{query[:50]}' (lang={lang})")
         return cached
 
     result = _search_and_build(query, lang)
@@ -652,7 +724,7 @@ def search_wikipedia(query: str, lang: str = DEFAULT_LANG) -> dict:
     # FIX (§4.4): if a non-English search found nothing usable, retry once
     # in English before giving up entirely, instead of just failing.
     if not result["found"] and lang != DEFAULT_LANG:
-        print(f"🌐 [Wiki] no usable result in lang={lang}, falling back to "
+        print(f"[WIKI][INFO] no usable result in lang={lang}, falling back to "
               f"{DEFAULT_LANG}")
         result = _search_and_build(query, DEFAULT_LANG)
 
@@ -712,10 +784,10 @@ def _search_and_build(query: str, lang: str) -> dict:
     try:
         context = _format_context(query, title, data)
     except Exception as e:
-        print(f"❌ [Wiki] format_context exception: {e}")
+        print(f"[WIKI][ERROR] format_context exception: {e}")
         return {"found": False, "reason": "error", "tool": "wikipedia"}
 
-    print(f"✅ [Wiki] context ready: {len(context)} chars for '{title}' (lang={lang})")
+    print(f"[WIKI][OK] context ready: {len(context)} chars for '{title}' (lang={lang})")
 
     return {
         "found":   True,
