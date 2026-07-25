@@ -114,19 +114,74 @@ FIXED in this version (see wiki_py_audit_report.md, section 1):
          fix would replace/augment this with a cheap LLM or NER-based
          real-time-intent classifier instead of regex; noted here as a
          longer-term follow-up, not implemented in this pass.
+  - Reliability/performance (§4):
+         4.1 Connection reuse — all requests now go through one
+             module-level requests.Session() instead of opening a fresh
+             TCP/TLS connection per call.
+         4.2 Retry with backoff — _request_get() retries up to
+             MAX_RETRIES times (short exponential backoff) on timeouts,
+             connection errors, and 5xx responses. 4xx responses are NOT
+             retried (retrying a bad request just wastes time).
+         4.3 In-memory TTL cache — search_wikipedia() now caches
+             "found" and stable-negative ("no_result"/"short_extract")
+             results for CACHE_TTL_SECONDS (24h) keyed on
+             (lang, normalized query). "error"/"skip" outcomes are never
+             cached since they can be transient or query-dependent.
+         4.4 Language support — WIKI_SEARCH_URL/WIKI_SUMMARY_URL are now
+             templates taking a `lang` subdomain instead of a hardcoded
+             "en". search_wikipedia(query, lang=...) accepts a language
+             code; if a non-English search comes back empty, it now
+             automatically falls back to English rather than just
+             failing.
+         4.5 Specific exception handling — _request_get() now
+             distinguishes Timeout / ConnectionError (retried) from
+             HTTPError on non-5xx (not retried) and logs each case
+             differently, instead of one blanket `except Exception`
+             that made "Wikipedia is down" indistinguishable from "we
+             sent a malformed request" in the logs. JSON decode errors
+             are also now caught and logged separately from network
+             errors.
 """
 
 import requests
+import requests.exceptions
 import re
+import time
 
 # ── Constants ──────────────────────────────────────────────────────────────────
-WIKI_SEARCH_URL  = "https://en.wikipedia.org/w/rest.php/v1/search/page"
-WIKI_SUMMARY_URL = "https://en.wikipedia.org/api/rest_v1/page/summary/{title}"
+# FIX (§4.4): these were hardcoded to en.wikipedia.org with no way to
+# query a regional Wikipedia. Now templates taking a `lang` subdomain —
+# see DEFAULT_LANG and the `lang` param threaded through search_wikipedia().
+WIKI_SEARCH_URL_TEMPLATE  = "https://{lang}.wikipedia.org/w/rest.php/v1/search/page"
+WIKI_SUMMARY_URL_TEMPLATE = "https://{lang}.wikipedia.org/api/rest_v1/page/summary/{title}"
+DEFAULT_LANG = "en"
+
 WIKI_HEADERS     = {
     "User-Agent": "CaturaAI/1.0 (educational AI assistant; python-requests)",
     "Accept":     "application/json",
 }
 REQUEST_TIMEOUT  = 6   # seconds — keep it snappy
+
+# FIX (§4.1): one shared session instead of a fresh TCP/TLS connection on
+# every single requests.get() call.
+_SESSION = requests.Session()
+_SESSION.headers.update(WIKI_HEADERS)
+
+# FIX (§4.2): retry tuning — short exponential backoff, only for
+# transient failures (timeouts, connection errors, 5xx). 4xx responses
+# are never retried since the request itself is the problem, not the
+# network.
+MAX_RETRIES          = 2
+RETRY_BACKOFF_BASE    = 0.5   # seconds; actual sleep = BASE * (2 ** attempt)
+
+# FIX (§4.3): simple in-memory TTL cache. Not persisted across process
+# restarts and not safe for multi-process deployment (each worker gets
+# its own cache) — fine for a single-process app; swap for
+# redis/memcached if you scale out.
+_CACHE: dict = {}
+CACHE_TTL_SECONDS = 24 * 60 * 60   # 24h — Wikipedia content doesn't move
+                                     # fast enough to need less than this
+                                     # for the vast majority of topics
 
 # Minimum extract length to be considered a useful result.
 # NOTE: this is intentionally the WEAKEST quality check and is applied
@@ -278,8 +333,85 @@ def _is_volatile_topic(query: str, title: str, description: str) -> bool:
     return bool(_VOLATILE_TOPIC_PATTERNS.search(combined))
 
 
+# ── Shared request helper (§4.1, §4.2, §4.5) ───────────────────────────────────
+def _request_get(url: str, params: dict | None = None) -> requests.Response | None:
+    """
+    GET a URL through the shared session, retrying transient failures
+    with short exponential backoff. Returns the Response on success (any
+    status code the caller still needs to check, e.g. 404), or None if
+    every attempt failed outright (timeout/connection error) or a 5xx
+    was never resolved after retries.
+
+    FIX (§4.5): distinguishes failure types instead of one blanket
+    `except Exception` — timeouts and connection errors are retried;
+    a non-5xx HTTP error (4xx) is NOT retried, since resending the same
+    bad request won't help and just wastes time/quota.
+    """
+    last_error = None
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            resp = _SESSION.get(url, params=params, timeout=REQUEST_TIMEOUT)
+            if resp.status_code >= 500 and attempt < MAX_RETRIES:
+                wait = RETRY_BACKOFF_BASE * (2 ** attempt)
+                print(f"⚠️ [Wiki] HTTP {resp.status_code} from {url} — "
+                      f"retrying in {wait:.1f}s (attempt {attempt + 1}/{MAX_RETRIES})")
+                time.sleep(wait)
+                continue
+            return resp  # success, or a non-5xx status the caller should handle
+
+        except requests.exceptions.Timeout as e:
+            last_error = e
+            if attempt < MAX_RETRIES:
+                wait = RETRY_BACKOFF_BASE * (2 ** attempt)
+                print(f"⏱️ [Wiki] timeout on {url} — retrying in {wait:.1f}s "
+                      f"(attempt {attempt + 1}/{MAX_RETRIES})")
+                time.sleep(wait)
+            else:
+                print(f"❌ [Wiki] timeout on {url} after {MAX_RETRIES} retries: {e}")
+
+        except requests.exceptions.ConnectionError as e:
+            last_error = e
+            if attempt < MAX_RETRIES:
+                wait = RETRY_BACKOFF_BASE * (2 ** attempt)
+                print(f"⚠️ [Wiki] connection error on {url} — retrying in "
+                      f"{wait:.1f}s (attempt {attempt + 1}/{MAX_RETRIES})")
+                time.sleep(wait)
+            else:
+                print(f"❌ [Wiki] connection error on {url} after "
+                      f"{MAX_RETRIES} retries: {e}")
+
+        except requests.exceptions.RequestException as e:
+            # Anything else requests-specific (bad URL, too many redirects,
+            # etc.) — not worth retrying, fail fast with a clear log tag.
+            print(f"❌ [Wiki] request exception on {url}: {e}")
+            return None
+
+    print(f"❌ [Wiki] giving up on {url} after {MAX_RETRIES} retries: {last_error}")
+    return None
+
+
+# ── Cache helpers (§4.3) ────────────────────────────────────────────────────────
+def _cache_key(query: str, lang: str) -> str:
+    return f"{lang}:{query.strip().lower()}"
+
+
+def _cache_get(key: str) -> dict | None:
+    entry = _CACHE.get(key)
+    if entry is None:
+        return None
+    cached_at, value = entry
+    if time.time() - cached_at > CACHE_TTL_SECONDS:
+        del _CACHE[key]
+        return None
+    return value
+
+
+def _cache_set(key: str, value: dict) -> None:
+    _CACHE[key] = (time.time(), value)
+
+
 # ── Step 1: Search ─────────────────────────────────────────────────────────────
-def _search_wikipedia(query: str) -> list[dict]:
+def _search_wikipedia(query: str, lang: str = DEFAULT_LANG) -> list[dict]:
     """
     Call the Wikimedia search API and return a list of candidate pages
     (each a dict with "title" and "description"), in the API's own
@@ -292,34 +424,39 @@ def _search_wikipedia(query: str) -> list[dict]:
 
     Returns [] if nothing found or on error.
     """
-    try:
-        resp = requests.get(
-            WIKI_SEARCH_URL,
-            params={"q": query, "limit": SEARCH_CANDIDATES},
-            headers=WIKI_HEADERS,
-            timeout=REQUEST_TIMEOUT,
-        )
-        if resp.status_code != 200:
-            print(f"⚠️ [Wiki] search HTTP {resp.status_code} for: {query[:60]}")
-            return []
+    url = WIKI_SEARCH_URL_TEMPLATE.format(lang=lang)
+    resp = _request_get(url, params={"q": query, "limit": SEARCH_CANDIDATES})
 
-        pages = resp.json().get("pages", [])
-        if not pages:
-            print(f"ℹ️ [Wiki] no search results for: {query[:60]}")
-            return []
-
-        candidates = [
-            {"title": p.get("title"), "description": p.get("description") or ""}
-            for p in pages
-            if p.get("title")
-        ]
-        print(f"🔎 [Wiki] search hits: '{query[:50]}' → "
-              f"{[c['title'] for c in candidates]}")
-        return candidates
-
-    except Exception as e:
-        print(f"❌ [Wiki] search exception: {e}")
+    if resp is None:
+        # _request_get already logged the specific failure (timeout /
+        # connection error / etc.) — nothing more to add here.
         return []
+
+    if resp.status_code != 200:
+        print(f"⚠️ [Wiki] search HTTP {resp.status_code} for: {query[:60]}")
+        return []
+
+    try:
+        pages = resp.json().get("pages", [])
+    except ValueError as e:
+        # FIX (§4.5): JSON decode errors are now caught and logged
+        # distinctly from network errors instead of falling into the
+        # same generic "exception" bucket.
+        print(f"❌ [Wiki] search response was not valid JSON: {e}")
+        return []
+
+    if not pages:
+        print(f"ℹ️ [Wiki] no search results for: {query[:60]}")
+        return []
+
+    candidates = [
+        {"title": p.get("title"), "description": p.get("description") or ""}
+        for p in pages
+        if p.get("title")
+    ]
+    print(f"🔎 [Wiki] search hits: '{query[:50]}' → "
+          f"{[c['title'] for c in candidates]}")
+    return candidates
 
 
 def _score_candidate(query: str, title: str, description: str) -> int:
@@ -351,47 +488,54 @@ def _rank_candidates(query: str, candidates: list[dict]) -> list[dict]:
 
 
 # ── Step 2: Fetch summary ──────────────────────────────────────────────────────
-def _fetch_summary(title: str) -> dict | None:
+def _fetch_summary(title: str, lang: str = DEFAULT_LANG) -> dict | None:
     """
     Fetch the Wikimedia page summary for a given article title.
     Returns a dict with extract, description, coordinates, etc.
     Returns None on error or if extract is too short to be useful.
     """
-    try:
-        url  = WIKI_SUMMARY_URL.format(title=requests.utils.quote(title, safe=""))
-        resp = requests.get(url, headers=WIKI_HEADERS, timeout=REQUEST_TIMEOUT)
+    url = WIKI_SUMMARY_URL_TEMPLATE.format(
+        lang=lang, title=requests.utils.quote(title, safe="")
+    )
+    resp = _request_get(url)
 
-        if resp.status_code != 200:
-            print(f"⚠️ [Wiki] summary HTTP {resp.status_code} for: {title}")
-            return None
-
-        data = resp.json()
-
-        # FIX: reject disambiguation pages. The summary API returns
-        # "type": "disambiguation" for pages that are just a list of
-        # links to unrelated topics sharing a name (e.g. "Mercury" could
-        # resolve to the disambiguation page instead of the planet or the
-        # element). That blurb routinely clears MIN_EXTRACT_LEN, so
-        # without this check it was silently accepted as a real answer.
-        if data.get("type") == "disambiguation":
-            print(f"ℹ️ [Wiki] '{title}' is a disambiguation page — rejecting")
-            return None
-
-        # FIX 1.1: `.get("extract", "")` only defaults when the key is
-        # ABSENT. If the API returns "extract": null, .get() returns None
-        # and .strip() would raise AttributeError. `or ""` covers both
-        # "key missing" and "key present but null".
-        extract = (data.get("extract") or "").strip()
-
-        if len(extract) < MIN_EXTRACT_LEN:
-            print(f"ℹ️ [Wiki] extract too short ({len(extract)} chars) for: {title}")
-            return None
-
-        return data
-
-    except Exception as e:
-        print(f"❌ [Wiki] summary exception: {e}")
+    if resp is None:
+        # _request_get already logged the specific failure.
         return None
+
+    if resp.status_code != 200:
+        print(f"⚠️ [Wiki] summary HTTP {resp.status_code} for: {title}")
+        return None
+
+    try:
+        data = resp.json()
+    except ValueError as e:
+        # FIX (§4.5): JSON decode errors logged distinctly from network
+        # errors instead of one generic "exception" bucket.
+        print(f"❌ [Wiki] summary response was not valid JSON for '{title}': {e}")
+        return None
+
+    # FIX: reject disambiguation pages. The summary API returns
+    # "type": "disambiguation" for pages that are just a list of
+    # links to unrelated topics sharing a name (e.g. "Mercury" could
+    # resolve to the disambiguation page instead of the planet or the
+    # element). That blurb routinely clears MIN_EXTRACT_LEN, so
+    # without this check it was silently accepted as a real answer.
+    if data.get("type") == "disambiguation":
+        print(f"ℹ️ [Wiki] '{title}' is a disambiguation page — rejecting")
+        return None
+
+    # FIX 1.1: `.get("extract", "")` only defaults when the key is
+    # ABSENT. If the API returns "extract": null, .get() returns None
+    # and .strip() would raise AttributeError. `or ""` covers both
+    # "key missing" and "key present but null".
+    extract = (data.get("extract") or "").strip()
+
+    if len(extract) < MIN_EXTRACT_LEN:
+        print(f"ℹ️ [Wiki] extract too short ({len(extract)} chars) for: {title}")
+        return None
+
+    return data
 
 
 # ── Step 3: Format context for AI injection ────────────────────────────────────
@@ -460,9 +604,17 @@ def _format_context(query: str, title: str, data: dict) -> str:
 
 
 # ── Public API ─────────────────────────────────────────────────────────────────
-def search_wikipedia(query: str) -> dict:
+def search_wikipedia(query: str, lang: str = DEFAULT_LANG) -> dict:
     """
     Main entry point. Search Wikipedia for the query and return a result dict.
+
+    Args:
+        query: the user's question / search text.
+        lang:  Wikipedia language subdomain (e.g. "en", "hi", "bn").
+               FIX (§4.4): previously hardcoded to English with no way to
+               query a regional Wikipedia. If a non-English search comes
+               back with no usable result, this now automatically falls
+               back to English rather than just failing outright.
 
     Returns:
         {
@@ -478,15 +630,47 @@ def search_wikipedia(query: str) -> dict:
           "tool":   "wikipedia"
         }
     """
-    print(f"📚 [Wiki] query: {query[:80]}")
+    print(f"📚 [Wiki] query: {query[:80]} (lang={lang})")
 
     # Fast-skip check — don't waste a round-trip for real-time questions
     if should_skip_wikipedia(query):
         print(f"⏩ [Wiki] skipping (real-time/not suitable): {query[:60]}")
         return {"found": False, "reason": "skip", "tool": "wikipedia"}
 
+    # FIX (§4.3): check the cache before hitting the network at all. Only
+    # "found" / stable-negative results are ever cached (see _cache_set
+    # calls below) — "skip" is cheap to recompute and "error" may well be
+    # transient, so neither is cached.
+    cache_key = _cache_key(query, lang)
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        print(f"💾 [Wiki] cache hit for '{query[:50]}' (lang={lang})")
+        return cached
+
+    result = _search_and_build(query, lang)
+
+    # FIX (§4.4): if a non-English search found nothing usable, retry once
+    # in English before giving up entirely, instead of just failing.
+    if not result["found"] and lang != DEFAULT_LANG:
+        print(f"🌐 [Wiki] no usable result in lang={lang}, falling back to "
+              f"{DEFAULT_LANG}")
+        result = _search_and_build(query, DEFAULT_LANG)
+
+    if result["found"] or result.get("reason") in ("no_result", "short_extract"):
+        _cache_set(cache_key, result)
+
+    return result
+
+
+def _search_and_build(query: str, lang: str) -> dict:
+    """
+    The actual search -> rank -> fetch -> format pipeline for one
+    language, factored out of search_wikipedia() so it can be called
+    twice (requested language, then English fallback) without duplicating
+    the logic.
+    """
     # Step 1: Search — now returns multiple candidates instead of just 1
-    candidates = _search_wikipedia(query)
+    candidates = _search_wikipedia(query, lang)
     if not candidates:
         return {"found": False, "reason": "no_result", "tool": "wikipedia"}
 
@@ -512,7 +696,7 @@ def search_wikipedia(query: str) -> dict:
     # ever tried the single #1 result and gave up immediately.
     data, title = None, None
     for candidate in try_order:
-        data = _fetch_summary(candidate["title"])
+        data = _fetch_summary(candidate["title"], lang)
         if data is not None:
             title = candidate["title"]
             break
@@ -531,7 +715,7 @@ def search_wikipedia(query: str) -> dict:
         print(f"❌ [Wiki] format_context exception: {e}")
         return {"found": False, "reason": "error", "tool": "wikipedia"}
 
-    print(f"✅ [Wiki] context ready: {len(context)} chars for '{title}'")
+    print(f"✅ [Wiki] context ready: {len(context)} chars for '{title}' (lang={lang})")
 
     return {
         "found":   True,
