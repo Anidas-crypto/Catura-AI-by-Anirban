@@ -67,6 +67,25 @@ FIXED in this version (see wiki_py_audit_report.md, section 1):
          scores 0 (in which case we fall back to trying them anyway
          rather than returning no_result on a query with a real match
          that just used very different wording).
+  - Skip-pattern coverage (real-time false negatives, §3.1): the old
+         regex matched "currently" but not "current", so "current CEO of
+         Tesla" / "current PM of India" / "current exchange rate" all
+         slipped straight past the skip check and got answered from a
+         static Wikipedia snapshot. Added: "current", "now", "at
+         present", "as of now", "this week", "this year", "recently",
+         "upcoming", "next", "who (holds|currently leads/is leading) the
+         record". Added _has_year_anchored_realtime() to catch
+         year-anchored queries like "election results 2026" / "budget
+         2026-27" regardless of word order. Added common
+         Hindi/Bengali/Hinglish real-time words (abhi, vartaman, is
+         samay, अभी, वर्तमान, আজ, এখন, বর্তমান) since your userbase is
+         India-based and these never had any coverage at all.
+         TRADEOFF: bare "current" also matches legitimate encyclopedia
+         topics like "electric current" or "ocean current" — this is a
+         deliberate choice per your explicit request to close the gap;
+         if that false-positive rate turns out to matter in practice,
+         narrow it to require a co-occurring role/person word instead
+         (see the commented alternative next to the pattern).
 """
 
 import requests
@@ -110,19 +129,74 @@ SEARCH_CANDIDATES = 5
 # ── Quality gate: topics Wikipedia is NOT good for ────────────────────────────
 # If the question is clearly real-time or opinion-based, skip Wikipedia entirely.
 _SKIP_WIKI_PATTERNS = [
-    r'\b(today|right now|currently|live|latest|breaking|just now|this moment)\b',
+    # FIX (§3.1): old pattern matched "currently" but not bare "current",
+    # so "current CEO of Tesla" / "current PM of India" slipped through
+    # entirely. Also added "now", "at present", "as of now", "this
+    # week/year", "recently", "upcoming", "next".
+    # TRADEOFF: "current" also appears in legitimate encyclopedia topics
+    # ("electric current", "ocean current"). Kept broad per explicit
+    # request; if that matters in practice, swap for the narrower
+    # alternative: r'\bcurrent (ceo|president|pm|prime minister|leader|
+    # head|holder|champion|price|rate|status)\b'
+    r'\b(today|right now|currently|current|now|at present|as of now|'
+    r'live|latest|breaking|just now|this moment|'
+    r'this week|this year|recently|upcoming|next)\b',
+
     r'\b(price|stock|share|nifty|sensex|crypto|bitcoin|weather|temperature)\b',
     r'\b(score|match score|who (won|is winning)|ipl today)\b',
+
+    # FIX (§3.1): "who holds the record" / "who currently leads" had no
+    # coverage at all.
+    r'\bwho (holds|currently leads|is leading)\b',
+
     r'\b(news|headlines|happened today|recent news)\b',
     r'\bhow (much|many).*(cost|price|rupee|dollar)\b',
     r'\bmy (name|age|location|city)\b',
     r'\b(code|program|debug|fix|error|implement|build|create) (this|the|a|my)\b',
+
+    # FIX (§3.1): common Hindi/Bengali/Hinglish real-time words — the
+    # original patterns were English-only despite an India-based
+    # userbase, so e.g. "abhi ka PM kaun hai" never got skipped.
+    r'\b(abhi|abhi ka|is samay|vartaman)\b',      # Hindi/Hinglish: now/at present/current
+    r'अभी|वर्तमान|इस\s*समय',                        # Hindi (Devanagari)
+    r'এখন|বর্তমান|এই\s*মুহূর্তে',                    # Bengali
 ]
 
 def should_skip_wikipedia(query: str) -> bool:
     """Return True if the query is clearly not suitable for Wikipedia."""
     lower = query.lower()
-    return any(re.search(p, lower) for p in _SKIP_WIKI_PATTERNS)
+    if any(re.search(p, lower) for p in _SKIP_WIKI_PATTERNS):
+        return True
+    # FIX (§3.1): year-anchored real-time queries like "election results
+    # 2026" or "2026-27 budget" — a single regex can't cleanly handle the
+    # year appearing before OR after the keyword, so this is a separate
+    # co-occurrence check instead of another entry in the OR-list above.
+    if _has_year_anchored_realtime(query):
+        return True
+    return False
+
+
+# Words that, when they co-occur with a bare year anywhere in the query
+# (in either order — "budget 2026" or "2026 budget"), mark it as a
+# fast-changing, non-encyclopedic query rather than history.
+_YEAR_ANCHORED_REALTIME_WORDS = re.compile(
+    r'\b(election results?|results?|winner|champion|budget|standings|'
+    r'schedule|fixtures?)\b',
+    re.IGNORECASE,
+)
+_YEAR_TOKEN = re.compile(r'\b(19|20)\d{2}\b')
+
+
+def _has_year_anchored_realtime(query: str) -> bool:
+    """
+    True if the query contains BOTH a bare 4-digit year AND a
+    fast-changing keyword (results, winner, budget, standings, etc.),
+    regardless of which comes first. Catches "election results 2026" and
+    "2026 budget" alike, neither of which the old skip list caught.
+    """
+    return bool(_YEAR_TOKEN.search(query)) and bool(
+        _YEAR_ANCHORED_REALTIME_WORDS.search(query)
+    )
 
 
 # Words/patterns that suggest a topic is structurally likely to go stale
