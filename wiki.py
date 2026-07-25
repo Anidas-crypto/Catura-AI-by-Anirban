@@ -55,6 +55,18 @@ FIXED in this version (see wiki_py_audit_report.md, section 1):
          "CEO," "current," "list of," a 4-digit year, "population,"
          "champion," "holder") with an explicit caveat telling the AI to
          prefer web_search for the current value of that sub-fact.
+  - Quality gate ordering: MIN_EXTRACT_LEN=80 was previously the ONLY
+         quality gate — a disambiguation stub or a completely unrelated
+         short biography can both clear 80 characters easily, so length
+         alone said nothing about correctness. It is now explicitly the
+         LAST/weakest check, applied only after two stronger checks have
+         already passed: (1) type != "disambiguation" (§ above), and
+         (2) MIN_RELEVANCE_SCORE — a candidate whose title/description
+         shares zero words with the query is now rejected outright before
+         its length is even considered, unless literally every candidate
+         scores 0 (in which case we fall back to trying them anyway
+         rather than returning no_result on a query with a real match
+         that just used very different wording).
 """
 
 import requests
@@ -69,8 +81,20 @@ WIKI_HEADERS     = {
 }
 REQUEST_TIMEOUT  = 6   # seconds — keep it snappy
 
-# Minimum extract length to be considered a useful result
+# Minimum extract length to be considered a useful result.
+# NOTE: this is intentionally the WEAKEST quality check and is applied
+# LAST — length alone doesn't imply correctness or relevance (a
+# disambiguation stub or a totally unrelated short bio can both clear
+# this easily). The disambiguation-type check and MIN_RELEVANCE_SCORE
+# below are stronger signals and are checked first.
 MIN_EXTRACT_LEN  = 80
+
+# Minimum lexical-overlap score (see _score_candidate) for a candidate to
+# be trusted as an actual match for the query, rather than an unrelated
+# namesake that merely happened to rank in the API's top N. A candidate
+# scoring 0 shares not a single word with the query — that's a strong
+# signal it's the wrong article, and it's checked BEFORE length.
+MIN_RELEVANCE_SCORE = 1
 
 # Maximum characters of Wikipedia extract we send to the AI
 # (keeps token usage light while giving full context for simple questions)
@@ -185,16 +209,18 @@ def _score_candidate(query: str, title: str, description: str) -> int:
 
 def _rank_candidates(query: str, candidates: list[dict]) -> list[dict]:
     """
-    Sort candidates best-match-first by lexical overlap with the query.
+    Sort candidates best-match-first by lexical overlap with the query,
+    and attach each candidate's "score" so callers can also use it as a
+    hard quality gate (see MIN_RELEVANCE_SCORE), not just a sort key.
     Python's sort is stable, so candidates that tie on score keep the
     API's original relative order (its own ranking is still a useful
     tiebreaker signal).
     """
-    return sorted(
-        candidates,
-        key=lambda c: _score_candidate(query, c["title"], c["description"]),
-        reverse=True,
-    )
+    scored = [
+        {**c, "score": _score_candidate(query, c["title"], c["description"])}
+        for c in candidates
+    ]
+    return sorted(scored, key=lambda c: c["score"], reverse=True)
 
 
 # ── Step 2: Fetch summary ──────────────────────────────────────────────────────
@@ -342,12 +368,23 @@ def search_wikipedia(query: str) -> dict:
     # top hit is a wrong namesake or an overly-broad redirect target.
     ranked = _rank_candidates(query, candidates)
 
-    # Step 2: Fetch summary — try each candidate best-match-first until
-    # one isn't a disambiguation page and clears MIN_EXTRACT_LEN.
-    # Previously this only ever tried the single #1 result and gave up
-    # immediately if it wasn't good enough.
+    # FIX (quality gate ordering): try candidates that clear
+    # MIN_RELEVANCE_SCORE first — a 0-score candidate shares no words at
+    # all with the query, which is a stronger "this is probably wrong"
+    # signal than a short extract is a "this is probably right" signal.
+    # Only fall back to the zero-score leftovers if nothing relevant
+    # panned out, so an unusual/short query still gets *some* answer
+    # rather than a hard no_result.
+    relevant    = [c for c in ranked if c["score"] >= MIN_RELEVANCE_SCORE]
+    fallback    = [c for c in ranked if c["score"] < MIN_RELEVANCE_SCORE]
+    try_order   = relevant + fallback
+
+    # Step 2: Fetch summary — try each candidate in that order until one
+    # isn't a disambiguation page (strongest check) and clears
+    # MIN_EXTRACT_LEN (weakest check, applied last). Previously this only
+    # ever tried the single #1 result and gave up immediately.
     data, title = None, None
-    for candidate in ranked:
+    for candidate in try_order:
         data = _fetch_summary(candidate["title"])
         if data is not None:
             title = candidate["title"]
