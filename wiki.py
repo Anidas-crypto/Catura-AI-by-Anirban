@@ -46,6 +46,15 @@ FIXED in this version (see wiki_py_audit_report.md, section 1):
          them by lexical word-overlap against the query, and
          search_wikipedia() tries them best-match-first rather than
          trusting raw API order.
+  - Freshness signal: the summary API's "timestamp" field (last revision
+         time) was discarded entirely, so the AI had no way to know how
+         stale a snapshot was. _format_context() now extracts and injects
+         "Wikipedia article last updated: <date>" into the context, and
+         _is_volatile_topic() flags topics that are structurally likely to
+         go stale (titles/descriptions containing words like "president,"
+         "CEO," "current," "list of," a 4-digit year, "population,"
+         "champion," "holder") with an explicit caveat telling the AI to
+         prefer web_search for the current value of that sub-fact.
 """
 
 import requests
@@ -90,6 +99,32 @@ def should_skip_wikipedia(query: str) -> bool:
     """Return True if the query is clearly not suitable for Wikipedia."""
     lower = query.lower()
     return any(re.search(p, lower) for p in _SKIP_WIKI_PATTERNS)
+
+
+# Words/patterns that suggest a topic is structurally likely to go stale
+# even though the underlying article is perfectly Wikipedia-appropriate
+# (e.g. "Tesla" is fine for Wikipedia, but "who is Tesla's current CEO"
+# is a sub-fact that can easily be out of date by the time it's read).
+# NOT used to skip Wikipedia — only to attach a freshness caveat so the
+# caller/AI knows to double check fast-changing sub-facts elsewhere.
+_VOLATILE_TOPIC_PATTERNS = re.compile(
+    r'\b(president|prime minister|ceo|chairman|chairperson|current|incumbent|'
+    r'champion|record holder|title holder|population|list of|governor|'
+    r'head coach|director general|secretary general)\b|\b(19|20)\d{2}\b',
+    re.IGNORECASE,
+)
+
+
+def _is_volatile_topic(query: str, title: str, description: str) -> bool:
+    """
+    Heuristic-only check (word-list based, not a skip decision). Flags a
+    result as "likely to go stale" so _format_context() can attach a
+    caveat telling the AI to prefer web_search for the current value of
+    any time-sensitive sub-fact, instead of presenting a Wikipedia
+    snapshot as if it were guaranteed current.
+    """
+    combined = f"{query} {title} {description}"
+    return bool(_VOLATILE_TOPIC_PATTERNS.search(combined))
 
 
 # ── Step 1: Search ─────────────────────────────────────────────────────────────
@@ -207,7 +242,7 @@ def _fetch_summary(title: str) -> dict | None:
 
 
 # ── Step 3: Format context for AI injection ────────────────────────────────────
-def _format_context(title: str, data: dict) -> str:
+def _format_context(query: str, title: str, data: dict) -> str:
     """
     Convert raw Wikipedia summary JSON into a clean, token-efficient
     context string for injection into the AI system prompt.
@@ -228,6 +263,12 @@ def _format_context(title: str, data: dict) -> str:
     desktop      = content_urls.get("desktop") or {}
     page_url     = desktop.get("page", "")
 
+    # FIX: capture the article's last-revision timestamp instead of
+    # discarding it. Wikipedia summary timestamps look like
+    # "2025-11-02T14:03:00Z" — take just the date portion for readability.
+    raw_timestamp = (data.get("timestamp") or "").strip()
+    last_updated  = raw_timestamp.split("T")[0] if raw_timestamp else ""
+
     # Truncate extract to keep tokens light
     if len(extract) > MAX_EXTRACT_CHARS:
         # Cut at last sentence boundary within limit
@@ -237,16 +278,31 @@ def _format_context(title: str, data: dict) -> str:
             trimmed = trimmed[: last_dot + 1]
         extract = trimmed + " [...]"
 
+    # FIX: flag structurally time-sensitive topics with an explicit
+    # caveat, so the AI doesn't present a static snapshot as a live fact
+    # (e.g. "who is the current CEO" answered from a months-old extract).
+    volatile_note = ""
+    if _is_volatile_topic(query, title, description):
+        volatile_note = (
+            "⏳ Note: this topic may include roles, titles, or figures that "
+            "change over time (e.g. a current officeholder or a running "
+            "total). If the question depends on the CURRENT value of such "
+            "a detail, verify with a real-time source (web_search) rather "
+            "than relying solely on this Wikipedia snapshot."
+        )
+
     lines = [
         f"📖 WIKIPEDIA CONTEXT — {title}",
         f"Description: {description}" if description else "",
+        f"Wikipedia article last updated: {last_updated}" if last_updated else "",
         "",
         extract,
         "",
+        volatile_note,
         f"Source: {page_url}" if page_url else "",
     ]
 
-    context = "\n".join(l for l in lines if l is not None)
+    context = "\n".join(l for l in lines if l is not None and l != "")
     return context.strip()
 
 
@@ -306,7 +362,7 @@ def search_wikipedia(query: str) -> dict:
     # "found": False instead of throwing an uncaught exception up to the
     # caller (which was likely producing the "I don't know" fallback text).
     try:
-        context = _format_context(title, data)
+        context = _format_context(query, title, data)
     except Exception as e:
         print(f"❌ [Wiki] format_context exception: {e}")
         return {"found": False, "reason": "error", "tool": "wikipedia"}
