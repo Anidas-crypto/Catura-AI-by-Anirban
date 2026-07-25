@@ -86,6 +86,34 @@ FIXED in this version (see wiki_py_audit_report.md, section 1):
          if that false-positive rate turns out to matter in practice,
          narrow it to require a co-occurring role/person word instead
          (see the commented alternative next to the pattern).
+  - Skip-pattern false positives (§3.2): several patterns fired on bare
+         common words with a dominant NON-real-time meaning, wrongly
+         skipping Wikipedia for legitimate questions:
+           * "create/build a ___" matched "create a timeline of WW2" and
+             "build a case for why Rome fell". Narrowed to require an
+             actual code-ish noun (code/script/function/bug/program/app/
+             component) right next to the verb, so only real dev
+             requests trigger it.
+           * bare "score" matched "what is a music/film score" and
+             "credit score history". Narrowed to require a live-sports
+             qualifier (live score / match score / current score / score
+             update), removing the bare word entirely.
+           * bare "stock" / "share" matched "stock structure of the East
+             India Company" and any historical use of "share". Narrowed
+             to only fire when paired with price/market/value/today.
+           * bare "temperature" matched "temperature of the sun" — a
+             textbook Wikipedia question, not a weather query. Narrowed
+             to require a live-weather qualifier (today/now/this week/
+             forecast/outside); bare "weather" is left as-is since it is
+             overwhelmingly asked as a live-conditions question.
+         KNOWN REMAINING GAP (per your own point 4): this is still a
+         hand-written regex blacklist, which structurally cannot fully
+         separate word from sense — narrowing reduces false positives but
+         can't eliminate them (e.g. "share price of the Dutch East India
+         Company in 1637" would still trigger on "share price"). A real
+         fix would replace/augment this with a cheap LLM or NER-based
+         real-time-intent classifier instead of regex; noted here as a
+         longer-term follow-up, not implemented in this pass.
 """
 
 import requests
@@ -142,17 +170,42 @@ _SKIP_WIKI_PATTERNS = [
     r'live|latest|breaking|just now|this moment|'
     r'this week|this year|recently|upcoming|next)\b',
 
-    r'\b(price|stock|share|nifty|sensex|crypto|bitcoin|weather|temperature)\b',
-    r'\b(score|match score|who (won|is winning)|ipl today)\b',
+    # FIX (§3.2): bare "stock"/"share" wrongly skipped things like "stock
+    # structure of the East India Company" or "market share of the Roman
+    # Empire's trade". Now requires a co-occurring market/price cue.
+    # nifty/sensex/crypto/bitcoin are kept bare — they have no dominant
+    # non-financial meaning, so the false-positive risk is negligible.
+    r'\b(stock|share)\s+(price|market|value|today|now)\b',
+    r'\b(nifty|sensex|crypto|bitcoin)\b',
+    r'\bhow (much|many).*(cost|price|rupee|dollar)\b',
+
+    # FIX (§3.2): bare "weather"/"temperature" wrongly skipped "temperature
+    # of the sun" — a textbook encyclopedia question. "temperature" now
+    # needs a live-conditions cue. Bare "weather" is left as-is since it's
+    # overwhelmingly asked as a live-conditions question in practice.
+    r'\bweather\b',
+    r'\b(temperature|forecast)\s+(today|now|right now|this week|outside)\b',
+
+    # FIX (§3.2): bare "score" wrongly skipped "what is a music/film
+    # score" and "credit score history". Now requires a live-sports cue.
+    r'\b(live score|match score|current score|score update|'
+    r'who (won|is winning)|ipl today)\b',
 
     # FIX (§3.1): "who holds the record" / "who currently leads" had no
     # coverage at all.
     r'\bwho (holds|currently leads|is leading)\b',
 
     r'\b(news|headlines|happened today|recent news)\b',
-    r'\bhow (much|many).*(cost|price|rupee|dollar)\b',
     r'\bmy (name|age|location|city)\b',
-    r'\b(code|program|debug|fix|error|implement|build|create) (this|the|a|my)\b',
+
+    # FIX (§3.2): the old pattern matched ANY "create/build/implement a
+    # ___", wrongly skipping "create a timeline of WW2" and "build a
+    # case for why Rome fell". Now requires an actual code-ish noun next
+    # to the verb, so only real dev requests trigger it.
+    r'\b(debug|fix|error|implement) (this|the|a|my) (\w+\s+)?'
+    r'(code|script|function|bug|program)\b',
+    r'\b(write|create|build) (a|the|this|my) (\w+\s+)?'
+    r'(script|function|program|app|api|component|code)\b',
 
     # FIX (§3.1): common Hindi/Bengali/Hinglish real-time words — the
     # original patterns were English-only despite an India-based
