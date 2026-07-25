@@ -45,8 +45,14 @@ MAX_PLANNED_QUERIES   = 10
 
 # ── How many raw results to fetch per engine ─────────────────────────────────
 RESULTS_PER_ENGINE = 5
-# ── How many results to deep-crawl with Firecrawl (expensive — keep low) ─────
-FIRECRAWL_TOP_N    = 2
+# ── How many results to deep-crawl with Firecrawl ─────────────────────────────
+# ── CHANGED: was a fixed FIRECRAWL_TOP_N = 2. Now dynamic — the pipeline
+# decides how many pages are worth crawling per query (between these bounds)
+# based on how much genuinely good, diverse evidence is available. See
+# _select_firecrawl_candidates() for the selection logic.
+FIRECRAWL_MIN_PAGES = 5
+FIRECRAWL_MAX_PAGES = 15
+FIRECRAWL_TOP_N      = FIRECRAWL_MIN_PAGES  # kept for backward compatibility
 # ── Max Cohere rerank candidates ─────────────────────────────────────────────
 RERANK_TOP_N       = 8
 
@@ -796,28 +802,112 @@ def _firecrawl_extract(url: str) -> Optional[str]:
         return None
 
 
-def enrich_with_firecrawl(results: list[dict], top_n: int = FIRECRAWL_TOP_N) -> list[dict]:
+def _firecrawl_priority_score(url: str, result: dict) -> float:
     """
-    For the top N crawlable results, replace their snippet with full page content.
-    Runs Firecrawl calls IN PARALLEL using ThreadPoolExecutor.
-    Each call has a hard 5-second timeout — slow pages are skipped, not waited on.
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Scores a candidate for CRAWL PRIORITY (not the final trust_score field —
+    that's assigned later in Step 5). Reuses the same domain-tier + recency
+    logic as compute_trust_score() so "official / high trust / fresh" means
+    the same thing here as it does everywhere else in the pipeline, plus a
+    small bonus for direct/answer-box results which tend to sit on the most
+    authoritative page for the query.
     """
-    from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FuturesTimeout
+    score = float(compute_trust_score(url, result))
+    if result.get("is_direct_answer"):
+        score += 5
+    return score
 
-    # Collect crawlable candidates (index, url) pairs
+
+def _select_firecrawl_candidates(
+    results: list[dict],
+    min_pages: int = FIRECRAWL_MIN_PAGES,
+    max_pages: int = FIRECRAWL_MAX_PAGES,
+) -> list[tuple[int, str]]:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Dynamically picks how many and which pages to deep-crawl, instead of a
+    fixed top-2. Selection order:
+
+      1. Filter to crawlable URLs (_should_crawl — same domain blocklist as
+         before).
+      2. Rank by priority score (official / high trust / freshness, via
+         _firecrawl_priority_score — same signals compute_trust_score uses).
+      3. Diversity pass — walk the ranked list taking at most one URL per
+         domain first, so a single high-authority domain with many results
+         can't eat every crawl slot.
+      4. Backfill pass — if diversity alone didn't fill the target count,
+         take the next-best remaining URLs (repeat domains allowed) until
+         the target is reached or candidates run out.
+
+    Target page count = number of good crawlable candidates, clamped to
+    [min_pages, max_pages] — quiet/thin result sets crawl fewer pages,
+    rich result sets crawl up to max_pages, never more.
+    """
     candidates = []
     for i, r in enumerate(results):
-        if len(candidates) >= top_n:
-            break
         url = r.get("url", "")
         if _should_crawl(url):
-            candidates.append((i, url))
+            candidates.append((i, url, _firecrawl_priority_score(url, r)))
+
+    if not candidates:
+        return []
+
+    candidates.sort(key=lambda c: c[2], reverse=True)
+
+    target_n = max(min_pages, min(max_pages, len(candidates)))
+
+    diverse: list[tuple[int, str]] = []
+    seen_domains: set[str] = set()
+    leftovers: list[tuple[int, str]] = []
+
+    for i, url, _score in candidates:
+        domain = _get_domain(url)
+        if domain not in seen_domains:
+            seen_domains.add(domain)
+            diverse.append((i, url))
+        else:
+            leftovers.append((i, url))
+        if len(diverse) >= target_n:
+            break
+
+    if len(diverse) < target_n:
+        diverse.extend(leftovers[: target_n - len(diverse)])
+
+    return diverse[:target_n]
+
+
+def enrich_with_firecrawl(
+    results: list[dict],
+    top_n: Optional[int] = None,
+    min_pages: int = FIRECRAWL_MIN_PAGES,
+    max_pages: int = FIRECRAWL_MAX_PAGES,
+) -> list[dict]:
+    """
+    ── CHANGED ────────────────────────────────────────────────────────────
+    Deep-crawls a DYNAMIC number of results (5-15, was a fixed top 2),
+    prioritizing official / high-trust / fresh sources with diverse domains
+    (see _select_firecrawl_candidates). Still runs entirely in parallel via
+    ThreadPoolExecutor with the same per-call and overall timeout protection
+    as before.
+
+    `top_n` is kept as an optional override for backward compatibility: if
+    passed, it's used as both min_pages and max_pages (i.e. crawl exactly
+    that many, old behavior). Callers that don't pass it get the new dynamic
+    5-15 range.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    if top_n is not None:
+        min_pages = max_pages = top_n
+
+    candidates = _select_firecrawl_candidates(results, min_pages, max_pages)
 
     if not candidates:
         print(f"🕷️ [Firecrawl] No crawlable URLs found")
         return results
 
-    print(f"🕷️ [Firecrawl] Crawling {len(candidates)} URLs in parallel (5s timeout each)")
+    print(f"🕷️ [Firecrawl] Crawling {len(candidates)} URLs in parallel "
+          f"(official/high-trust/fresh/diverse, 5s timeout each)")
 
     # Submit all Firecrawl calls simultaneously
     with ThreadPoolExecutor(max_workers=len(candidates)) as executor:
@@ -826,7 +916,11 @@ def enrich_with_firecrawl(results: list[dict], top_n: int = FIRECRAWL_TOP_N) -> 
             for idx, url in candidates
         }
         enriched_count = 0
-        for future in as_completed(future_to_idx, timeout=6):  # 6s overall wall-clock max
+        # Overall wall-clock cap scales with batch size but stays bounded —
+        # each individual call already hard-times-out at 5s, this is just
+        # the ceiling for collecting up to max_pages results concurrently.
+        overall_timeout = 8
+        for future in as_completed(future_to_idx, timeout=overall_timeout):
             idx = future_to_idx[future]
             try:
                 content = future.result(timeout=0.1)  # already done — just collect
@@ -838,7 +932,7 @@ def enrich_with_firecrawl(results: list[dict], top_n: int = FIRECRAWL_TOP_N) -> 
             except Exception:
                 pass  # timeout or error — snippet stays as-is
 
-    print(f"🕷️ [Firecrawl] Enriched {enriched_count} results")
+    print(f"🕷️ [Firecrawl] Enriched {enriched_count}/{len(candidates)} results")
     return results
 
 
@@ -1260,7 +1354,7 @@ def run_production_search(query: str) -> dict:
         print(f"⚡ [Firecrawl] Skipping — direct answers from both engines available")
         enriched = deduped
     else:
-        enriched = enrich_with_firecrawl(deduped, top_n=FIRECRAWL_TOP_N)
+        enriched = enrich_with_firecrawl(deduped)  # dynamic 5-15 pages, see function docstring
 
     # Step 5: Trust scoring
     scored = score_all_results(enriched)
