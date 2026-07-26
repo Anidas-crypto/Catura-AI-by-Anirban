@@ -958,7 +958,7 @@ TRUST_TIERS = {
     # regulators, central banks, national statistics offices ─────────────────
     1: {
         # India — Government / Regulators
-        "gov", "gov.in", "nic.in", "india.gov.in", "pib.gov.in", "mea.gov.in",
+        "gov", "gov.in", "nic.in", "india.gov.in", "pib.gov.in", "mea.gov.in","x.com","twitter.com",
         "rbi.org.in", "sebi.gov.in", "irdai.gov.in", "npci.org.in", "uidai.gov.in",
         "incometax.gov.in", "gst.gov.in", "isro.gov.in", "drdo.gov.in",
         "mospi.gov.in", "rbi.gov.in", "eci.gov.in","services.india.gov.in","registry.gov.in",
@@ -969,7 +969,7 @@ TRUST_TIERS = {
         "foodprocessingindia.gov.in","civilaviation.gov.in","shipping.gov.in","roadtransport.gov.in",
         "railways.gov.in","tourism.gov.in","culture.gov.in","tribal.nic.in","socialjustice.gov.in","wcd.gov.in",
         "yas.nic.in","consumeraffairs.nic.in","moef.gov.in","moes.gov.in","dst.gov.in","dbtindia.gov.in","ayush.gov.in",
-        "dopt.gov.in",
+        "dopt.gov.in","sec.gov",
         # Finance / Regulators
         "pfrda.org.in","ibbi.gov.in","ifsca.gov.in","cci.gov.in","trai.gov.in","pngrb.gov.in","aera.gov.in",
         "cercind.gov.in","aptel.gov.in","fssai.gov.in","cdsco.gov.in", "cbic.gov.in","cbec.gov.in",
@@ -1015,16 +1015,31 @@ TRUST_TIERS = {
     # (heavy editorial/fact-check standards), and top peer-reviewed journals ──
     2: {
         # Wire services
-        "reuters.com", "apnews.com", "afp.com","pti.in",
+        "reuters.com", "apnews.com", "afp.com","pti.in","youtube.com",
+        # Indian Tier 2 (Score 88)
+        "pti.in",
+        "thehindu.com",
+        "indianexpress.com",
+        "livemint.com","business-standard.com","thehindubusinessline.com","prasarbharati.gov.in","newsonair.gov.in",
+        "livelaw.in","barandbench.com","medianama.com","indiascienceandtechnology.gov.in","factchecker.in","altnews.in","indiaspend.com",
         # Flagship global news
         "bbc.com", "bbc.co.uk", "nytimes.com", "theguardian.com",
         "washingtonpost.com", "ft.com", "economist.com", "wsj.com",
         # Peer-reviewed / academic journals
         "nature.com", "science.org", "thelancet.com", "nejm.org",
         "cell.com", "pnas.org", "jamanetwork.com", "bmj.com",
+        "huggingface.co","paperswithcode.com","kaggle.com","ai.google.dev","deepmind.google","ollama.com",
+        "mistral.ai","cohere.com","meta.com","llama.com","perplexity.ai","together.ai",
+        "replicate.com","fireworks.ai","groq.com","vllm.ai","langchain.com","langchain.dev","langgraph.dev",
         # Reference
         "wikipedia.org", "britannica.com", "scholar.google.com",
         "pubmed.ncbi.nlm.nih.gov", "arxiv.org",
+        "python.org","nodejs.org","npmjs.com","rust-lang.org","crates.io","golang.org","go.dev",
+        "kotlinlang.org","oracle.com","java.com","docs.oracle.com","postgresql.org","mysql.com","mariadb.org","sqlite.org",
+        "redis.io","mongodb.com","docker.com","kubernetes.io","helm.sh","nginx.org","apache.org","gnu.org",
+        "linux.org","kernel.org","ubuntu.com","debian.org","fedora.org","archlinux.org","cloudflare.com","vercel.com",
+        "netlify.com","render.com","digitalocean.com","aws.amazon.com","azure.microsoft.com","cloud.google.com",
+        "gitlab.com","sourceforge.net","gnu.org","freedesktop.org","gnome.org","kde.org",
     },
 
     # ── Tier 3 (score 78) — Major national/regional news, established tech &
@@ -1034,10 +1049,14 @@ TRUST_TIERS = {
         "timesofindia.com", "hindustantimes.com", "ndtv.com", "thehindu.com",
         "indianexpress.com", "livemint.com", "economictimes.indiatimes.com",
         "businessstandard.com", "financialexpress.com", "thewire.in",
-        "theprint.in", "scroll.in", "thequint.com",
+        "theprint.in", "scroll.in", "thequint.com","abcnews.go.com","cnn.com",
+        "npr.org","pbs.org","aljazeera.com","dw.com","france24.com","cbc.ca",
+        "cbcnews.ca","sky.com","abc.net.au","smh.com.au","straitstimes.com",
+        "scmp.com","nikkei.com","asia.nikkei.com",
         # International business/finance news
         "bloomberg.com", "cnbc.com", "forbes.com", "moneycontrol.com",
-        "finance.yahoo.com",
+        "finance.yahoo.com","fred.stlouisfed.org","morningstar.com","marketwatch.com",
+        "investopedia.com","tradingeconomics.com","coinmarketcap.com","coingecko.com",
         # Tech — official company sources & major docs
         "techcrunch.com", "theverge.com", "arstechnica.com", "wired.com",
         "stackoverflow.com", "github.com", "docs.python.org",
@@ -1045,6 +1064,12 @@ TRUST_TIERS = {
         "amazon.com", "openai.com", "anthropic.com", "meta.com", "nvidia.com",
         # Health — established institutions
         "mayoclinic.org", "webmd.com", "healthline.com", "clevelandclinic.org",
+        "cisa.gov","mitre.org","cve.org","nvd.nist.gov","nist.gov","owasp.org",
+        "sans.org","krebsonsecurity.com","bleepingcomputer.com","malwarebytes.com",
+        "virustotal.com","abuse.ch","security.googleblog.com","theverge.com",
+        "arstechnica.com","wired.com","engadget.com","tomshardware.com","anandtech.com",
+        "9to5google.com","9to5mac.com","androidauthority.com","androidpolice.com",
+        "macrumors.com","xda-developers.com",
     },
 
     # ── Tier 4 (score 65) — Solid secondary sources: trade press, niche news,
@@ -1055,20 +1080,57 @@ TRUST_TIERS = {
         "javatpoint.com", "codecademy.com", "freecodecamp.org",
         "cricbuzz.com", "espncricinfo.com", "sportskeeda.com", "espn.com",
         "news18.com", "indiatoday.in", "business-standard.com",
-        "investopedia.com", "statista.com",
+        "investopedia.com", "statista.com","mit.edu","stanford.edu","harvard.edu",
+        "ox.ac.uk","cam.ac.uk","berkeley.edu","edx.org","coursera.org","udacity.com",
     },
 
     # ── Tier 5 (score 52) — Community platforms & blogging sites: useful but
     # unmoderated/self-published, verify against a higher tier when possible ─
     5: {
         "medium.com", "substack.com", "dev.to", "hackernoon.com",
-        "towardsdatascience.com",
+        "towardsdatascience.com","esa.int","jpl.nasa.gov","space.com",
+        "spacenews.com",
     },
 
     # ── Tier 6 (score 40) — Open discussion/UGC platforms: lowest default
     # weight, treat as a lead to verify rather than a citation on its own ────
     6: {
         "reddit.com", "quora.com",
+        # ── Tier 6 (score 40) — Open discussion / UGC / Community ──
+        # General Discussion & Q&A
+        "stackexchange.com","superuser.com","serverfault.com","askubuntu.com",
+        # Programming Communities
+        "hashnode.com","codeproject.com","daniweb.com","bytes.com",
+        # Hacker / Developer Communities
+        "news.ycombinator.com","lobste.rs",
+        # Linux Communities
+        "linuxquestions.org",
+        "ubuntuforums.org","bbs.archlinux.org","forum.manjaro.org","forums.opensuse.org",
+        # AI Communities
+        "discuss.huggingface.co",
+        # Official Community Forums
+        "community.openai.com","community.cloudflare.com","community.atlassian.com",
+        "discuss.python.org","discuss.kotlinlang.org",
+        # Git Communities
+        "github.community",
+        # Hardware Communities
+        "linustechtips.com","forums.tomshardware.com","overclock.net",
+        # Android
+        "xdaforums.com",
+        # Gaming
+        "steamcommunity.com","gamefaqs.gamespot.com",
+        # SEO / Webmaster
+        "webmasterworld.com",
+        # Community Platforms
+        "discourse.org",
+        # Social Platforms (UGC)
+        "facebook.com","instagram.com","threads.net","mastodon.social",
+        # Video UGC
+        "youtu.be","tiktok.com","bilibili.com","rumble.com","odysee.com",
+        # Blogs / Personal Publishing
+        "blogspot.com","wordpress.com","tumblr.com",
+        # Wiki / Community Knowledge
+        "fandom.com","techenclave.com","pagalguy.com","mouthshut.com","team-bhp.com",
     },
 }
 
