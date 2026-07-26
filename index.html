@@ -144,7 +144,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
-    <link rel="stylesheet" href="static/style.css?v=0.0.400">   <!-- this is CSS linking section -->
+    <link rel="stylesheet" href="static/style.css?v=0.0.401">   <!-- this is CSS linking section -->
     
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#000000" />
@@ -722,12 +722,13 @@
             </div>
 
             <p class="claude-puter-modal-text">
-                This is an external model from <strong>Puter</strong>. To start a conversation with it,
-                you'll need to sign in to Puter once — a small popup window will open for that.
+                This model is provided through our trusted external partner, <strong>Puter</strong>. To use it, you'll be asked to sign in to your Puter account once via a secure pop-up window. 
+                This one-time authentication is required before you can begin chatting with the model.
             </p>
             <p class="claude-puter-modal-text">
-                We hope this won't degrade your experience. Thank you for your patience 🙏<br>
-                — Anirban &amp; Team
+                We sincerely apologize for any inconvenience this may cause. While we understand this additional step isn't ideal, it allows us to bring advanced AI capabilities to our community while we continue working toward a fully integrated experience. 
+                Thank you for your understanding, patience, and continued support—it truly means a great deal to us.<br>
+                — Anirban & Team
             </p>
 
             <button class="claude-puter-modal-btn" onclick="closeClaudePuterInfoModal()">Got it</button>
@@ -797,18 +798,18 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
     
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <script src="static/firebase-config.js?v=0.0.400"></script>
-    <script src="static/live-sync.js?v=0.0.400"></script>
-    <script src="static/logic.js?v=0.0.400"></script>
-    <script src="static/feedback.js?v=0.0.400"></script>
-    <script src="static/file-upload.js?v=0.0.400"></script>
+    <script src="static/firebase-config.js?v=0.0.401"></script>
+    <script src="static/live-sync.js?v=0.0.401"></script>
+    <script src="static/logic.js?v=0.0.401"></script>
+    <script src="static/feedback.js?v=0.0.401"></script>
+    <script src="static/file-upload.js?v=0.0.401"></script>
 
     <script>
         console.log('🚀 Catura AI v27.0.5 loaded');
         
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js?v=0.0.400')
+                navigator.serviceWorker.register('/service-worker.js?v=0.0.401')
                     .then(() => console.log('✅ Catura AI PWA Ready - v27.0.5'))
                     .catch((err) => console.log('❌ SW Error:', err));
             });
