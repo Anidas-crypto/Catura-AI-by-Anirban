@@ -4236,6 +4236,49 @@ document.addEventListener("DOMContentLoaded", async function () {
         try {
             const model = getSelectedModel();
 
+            // ── 🟣 CLAUDE (via Puter.js) — frontend-only, skips /chat entirely ──
+            if (model === 'claude_puter') {
+                const fullReply = await sendViaPuterClaude(promptText, thinking, chatbox);
+
+                activeAbortController = null;
+                setStreamingState(false);
+
+                if (fullReply) {
+                    if (ghostChatEnabled) {
+                        ghostMemory.push({ role: "assistant", content: fullReply });
+                        if (ghostMemory.length > GHOST_WINDOW) {
+                            ghostMemory = ghostMemory.slice(ghostMemory.length - GHOST_WINDOW);
+                        }
+                    } else {
+                        const { error: botError } = await supabaseClient.from("messages").insert([{
+                            role      : "bot",
+                            content   : fullReply,
+                            session_id: currentSessionId,
+                            user_id   : currentUser.id
+                        }]);
+                        if (botError) console.error("❌ Bot message save failed:", botError.message);
+                    }
+                }
+
+                if (memoryEnabled && !ghostChatEnabled && currentUser && message) {
+                    maybeExtractAndSaveMemory(message);
+                }
+
+                if (_editGroupId) {
+                    const claudeWrapper = chatbox.querySelector(".bot-msg-wrapper:last-child");
+                    if (claudeWrapper) {
+                        claudeWrapper.dataset.turnGroup = _editGroupId;
+                        claudeWrapper.dataset.version   = "2";
+                        const v1User = chatbox.querySelector(`.user-msg-wrapper[data-turn-group="${_editGroupId}"][data-version="1"]`);
+                        const v1Bot  = chatbox.querySelector(`.bot-msg-wrapper[data-turn-group="${_editGroupId}"][data-version="1"]`);
+                        const nav = createVersionNavigator(_editGroupId, v1User, v1Bot);
+                        chatbox.insertBefore(nav, userBubble);
+                    }
+                }
+
+                return;
+            }
+
             // ── Build ghost history payload (sliding window) ─────────────────
             if (ghostChatEnabled) {
                 ghostMemory.push({ role: "user", content: promptText });
@@ -5257,7 +5300,7 @@ window.toggleModelSelector = function (e) {
             dropdown.classList.add('open');
             btn.classList.add('open');
 
-            const moreModels = ['apep', 'gemma', 'gemma4', 'nivo', 'laguna', 'laguna_core', 'laguna_s', 'laguna_lite', 'nemotron','omni','glm','cohere','minimax_m3','glm52','ling'];
+            const moreModels = ['apep', 'gemma', 'gemma4', 'nivo', 'laguna', 'laguna_core', 'laguna_s', 'laguna_lite', 'nemotron','omni','glm','cohere','minimax_m3','glm52','ling','claude_puter'];
             if (moreModels.includes(selectedModel)) {
                 requestAnimationFrame(() => {
                     requestAnimationFrame(() => { toggleMoreModels(null); });
@@ -5297,7 +5340,7 @@ window.toggleModelSelector = function (e) {
             dropdown.classList.add('open');
             btn.classList.add('open');
 
-            const moreModels = ['apep', 'gemma', 'gemma4', 'nivo', 'laguna', 'laguna_core', 'laguna_s', 'laguna_lite','nemotron','omni', 'cohere','glm','minimax_m3','glm52','ling'];
+            const moreModels = ['apep', 'gemma', 'gemma4', 'nivo', 'laguna', 'laguna_core', 'laguna_s', 'laguna_lite','nemotron','omni', 'cohere','glm','minimax_m3','glm52','ling','claude_puter'];
             if (moreModels.includes(selectedModel)) {
                 requestAnimationFrame(() => {
                     requestAnimationFrame(() => { window.openMoreModels(); });
@@ -5627,6 +5670,90 @@ document.addEventListener('click', function (e) {
 // Get currently selected model
 function getSelectedModel() {
     return selectedModel;
+}
+
+// ============================================================
+// 🟣 CLAUDE SONNET VIA PUTER.JS (frontend-only — bypasses /chat)
+// ============================================================
+// Puter renames/upgrades its Claude Sonnet model over time, so instead of
+// hardcoding a model id, we ask Puter for its live catalog and pick the
+// newest "sonnet" entry. If that lookup ever fails, we fall back to the
+// latest known id rather than breaking the feature.
+const CLAUDE_SONNET_FALLBACK_MODEL = 'claude-sonnet-5';
+let _cachedClaudeSonnetModel = null;
+
+async function getLatestClaudeSonnetModel() {
+    if (_cachedClaudeSonnetModel) return _cachedClaudeSonnetModel;
+    try {
+        const models = await puter.ai.listModels();
+        const sonnets = (models || []).filter(m =>
+            m.provider === 'claude' && /sonnet/i.test(m.id || m.name || '')
+        );
+        if (sonnets.length === 0) return (_cachedClaudeSonnetModel = CLAUDE_SONNET_FALLBACK_MODEL);
+
+        // Highest version wins, e.g. claude-sonnet-5 beats claude-sonnet-4-6
+        sonnets.sort((a, b) => {
+            const ver = id => (id.match(/[\d.]+/g) || ['0']).map(Number);
+            const va = ver(a.id), vb = ver(b.id);
+            for (let i = 0; i < Math.max(va.length, vb.length); i++) {
+                const diff = (vb[i] || 0) - (va[i] || 0);
+                if (diff) return diff;
+            }
+            return 0;
+        });
+        return (_cachedClaudeSonnetModel = sonnets[0].id);
+    } catch (err) {
+        console.warn("⚠️ Puter listModels() failed, using fallback Claude model:", err);
+        return (_cachedClaudeSonnetModel = CLAUDE_SONNET_FALLBACK_MODEL);
+    }
+}
+
+async function ensurePuterAuth() {
+    if (typeof puter === 'undefined') {
+        throw new Error("Puter.js failed to load. Check your connection and try again.");
+    }
+    const signedIn = await puter.auth.isSignedIn();
+    if (!signedIn) {
+        await puter.auth.signIn(); // shows Puter's own login popup automatically
+    }
+}
+
+// Streams a Claude Sonnet reply into the SAME bot bubble UI every other
+// model uses, then returns the full text so the caller can save it to
+// chat history exactly like a normal bot message.
+async function sendViaPuterClaude(promptText, thinking, chatbox) {
+    await ensurePuterAuth();
+    const model = await getLatestClaudeSonnetModel();
+
+    const response = await puter.ai.chat(promptText, { model: model, stream: true });
+
+    let wrapper = null, botMsg = null, fullReply = "";
+    for await (const part of response) {
+        const chunk = part?.text || "";
+        if (!chunk) continue;
+        if (!wrapper) {
+            thinking.remove();
+            const created = createBotWrapper();
+            wrapper = created.wrapper;
+            botMsg  = created.botMsg;
+            chatbox.appendChild(wrapper);
+        }
+        fullReply += chunk;
+        botMsg.innerHTML = formatMessage(repairTruncated(fullReply));
+        chatbox.scrollTop = chatbox.scrollHeight;
+    }
+
+    // Fallback in case nothing streamed but a reply did come back
+    if (!wrapper) {
+        thinking.remove();
+        const created = createBotWrapper();
+        wrapper = created.wrapper;
+        botMsg  = created.botMsg;
+        chatbox.appendChild(wrapper);
+    }
+
+    renderBotContent(wrapper, botMsg, fullReply.trimEnd());
+    return fullReply.trimEnd();
 }
 
 // ============================================================
