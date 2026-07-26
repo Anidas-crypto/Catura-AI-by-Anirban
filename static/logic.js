@@ -5257,7 +5257,7 @@ window.toggleModelSelector = function (e) {
             dropdown.classList.add('open');
             btn.classList.add('open');
 
-            const moreModels = ['apep', 'gemma', 'gemma4', 'nivo', 'laguna', 'laguna_core', 'laguna_s', 'laguna_lite', 'nemotron','omni','glm','cohere','minimax_m3','glm52'];
+            const moreModels = ['apep', 'gemma', 'gemma4', 'nivo', 'laguna', 'laguna_core', 'laguna_s', 'laguna_lite', 'nemotron','omni','glm','cohere','minimax_m3','glm52','ling'];
             if (moreModels.includes(selectedModel)) {
                 requestAnimationFrame(() => {
                     requestAnimationFrame(() => { toggleMoreModels(null); });
@@ -5297,7 +5297,7 @@ window.toggleModelSelector = function (e) {
             dropdown.classList.add('open');
             btn.classList.add('open');
 
-            const moreModels = ['apep', 'gemma', 'gemma4', 'nivo', 'laguna', 'laguna_core', 'laguna_s', 'laguna_lite','nemotron','omni', 'cohere','glm','minimax_m3','glm52'];
+            const moreModels = ['apep', 'gemma', 'gemma4', 'nivo', 'laguna', 'laguna_core', 'laguna_s', 'laguna_lite','nemotron','omni', 'cohere','glm','minimax_m3','glm52','ling'];
             if (moreModels.includes(selectedModel)) {
                 requestAnimationFrame(() => {
                     requestAnimationFrame(() => { window.openMoreModels(); });

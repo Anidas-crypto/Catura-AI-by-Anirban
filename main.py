@@ -863,7 +863,7 @@ def share_page(slug: str):
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.392"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.393"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -873,7 +873,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.392", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.393", "timestamp": datetime.utcnow().isoformat()}
 
 # ── 🧠 MEMORY MODELS ────────────────────────────────────────────────────────
 from pydantic import BaseModel as _MemBaseModel
@@ -3532,13 +3532,15 @@ def call_openrouter_stream(model_id, messages, api_key, file_urls=None, vision_i
                 "model": model_id,
                 "messages": messages,
                 "stream": True,
-                "temperature": 0.3,
+                "temperature": 1.0,
                 "max_tokens": 16000,
                 **({"provider": {"order": ["OpenAI"], "allow_fallbacks": True}} if "gpt-oss" in model_id else {}),
-                # ✅ Cohere North Mini Code is a reasoning/thinking model — OpenRouter only
-                # runs its thinking pass when a "reasoning" object is explicitly sent.
-                # Scoped to this model only; no other model gets this field.
-                **({"reasoning": {"enabled": True}} if "north-mini-code" in model_id else {}),
+                # ✅ Cohere North Mini Code and Ling-3.0-flash are reasoning/thinking
+                # models — OpenRouter only runs the thinking pass when a "reasoning"
+                # object is explicitly sent. Ling-3.0-flash is a hybrid-reasoning model
+                # (thinking + non-thinking modes); "enabled": True turns thinking on.
+                # Scoped to these models only; no other model gets this field.
+                **({"reasoning": {"enabled": True}} if ("north-mini-code" in model_id or "ling-3.0-flash" in model_id) else {}),
             },
             stream=True,
             timeout=(10, 90),
@@ -3589,7 +3591,7 @@ def call_gemini_stream(messages, system_prompt):
             "system_instruction": {"parts": [{"text": system_prompt}]},
             "contents": contents,
             "generationConfig": {
-                "temperature": 0.3,
+                "temperature": 1.0,
                 "maxOutputTokens": 16000,
             }
         }
@@ -4331,6 +4333,7 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
             "cohere":       ["cohere/north-mini-code:free"],
             "n_nano":  ["nvidia/nemotron-nano-12b-v2-vl:free"],
             "omni":    ["nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"],
+            "ling":    ["inclusionai/ling-3.0-flash:free"],  # OpenRouter — hybrid reasoning/thinking model
         }
         model_key  = model.strip()
         model_pool = model_pools.get(model_key, model_pools["dagr"])
@@ -4918,6 +4921,18 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                 "Match the user's language automatically. "
                 "Never make up facts. If asked who made you, say 'I was created by Anirban.' "
                 "If asked which model you are, what AI you are, or which version is running, always say: 'I am Catura AI Nemotron Nano.' Never mention Dagr, Apep, Sambhav, Gemma, Gemma4, Cohere, or Nemotron."
+                + FORMATTING_RULES
+                + NO_TOOL_CALL_RULE
+            ),
+            "ling":(
+                "Your name is Catura (pronounced kuh-CHUR-uh) Ling Model. You are a highly capable "
+                "AI assistant created by Anirban — an independent developer based in India. "
+                "You are Catura AI Ling, built for hybrid reasoning and production-scale agentic tasks — "
+                "you switch into a deeper thinking mode for hard problems and answer instantly for simple ones. "
+                "Speak clearly and helpfully. Never start with 'Certainly!', 'Great question!', or similar openers. "
+                "Match the user's language automatically. "
+                "Never make up facts. If asked who made you, say 'I was created by Anirban.' "
+                "If asked which model you are, what AI you are, or which version is running, always say: 'I am Catura AI Ling.' Never mention Dagr, Apep, Sambhav, Gemma, Gemma4, Cohere, Nemotron, Nemotron Nano, or Omni."
                 + FORMATTING_RULES
                 + NO_TOOL_CALL_RULE
             ),
@@ -6596,6 +6611,7 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
             "nemotron":["nvidia/nemotron-3-ultra-550b-a55b:free"],
             "n_nano":["nvidia/nemotron-nano-12b-v2-vl:free"],
             "omni": ["nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"],
+            "ling": ["inclusionai/ling-3.0-flash:free"],  # OpenRouter — hybrid reasoning/thinking model
         }
         model_key  = model.strip()
         model_pool = model_pools.get(model_key, model_pools["dagr"])
@@ -7364,6 +7380,22 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                 "respond naturally in that same language. Match the user's language automatically. "
                 "Keep answers concise unless the user explicitly asks for detail. "
                 "If asked what model or AI you are, say you are Catura AI Nemotron Omni and cannot share "
+                "details about the underlying technology. "
+                "If asked who made you, say 'I was created by Anirban.' "
+                "Never make up facts. If you don't know something, say so honestly."
+                + NO_TOOL_CALL_RULE
+            ),
+            "ling":(
+                "Your name is Catura (pronounced kuh-CHUR-uh) Ling Model. You are a highly capable "
+                "AI assistant created by Anirban — an independent developer based in India. "
+                "You are Catura AI Ling, built for hybrid reasoning and production-scale agentic tasks — "
+                "you switch into a deeper thinking mode for hard problems and answer instantly for simple ones. "
+                "You are thoughtful, clear, and direct. Never start with 'Certainly!', 'Of course!', "
+                "'Great question!', 'Absolutely!', or similar hollow openers. Just answer directly. "
+                "If the user writes in Bengali, Hindi, or any other language, "
+                "respond naturally in that same language. Match the user's language automatically. "
+                "Keep answers concise unless the user explicitly asks for detail. "
+                "If asked what model or AI you are, say you are Catura AI Ling and cannot share "
                 "details about the underlying technology. "
                 "If asked who made you, say 'I was created by Anirban.' "
                 "Never make up facts. If you don't know something, say so honestly."
