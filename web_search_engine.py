@@ -1980,13 +1980,138 @@ def _extract_key_claims(text: str) -> list[str]:
     return [s.strip() for s in sentences if 20 < len(s) < 120 and s[0].isupper()]
 
 
+def _estimate_source_age_days(result: dict) -> Optional[float]:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Best-effort age (in days) for a single result, used to rank sources
+    newest → oldest during contradiction analysis. Returns None (not 0)
+    when no date signal exists at all, so "unknown age" stays distinguishable
+    from "very fresh" — an undated source shouldn't win "newest" by default.
+    """
+    now = datetime.utcnow()
+    published = (result.get("published") or "").strip()
+    if published:
+        for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%Y/%m/%d"):
+            try:
+                dt = datetime.strptime(published[:19], fmt)
+                return (now - dt).days
+            except ValueError:
+                continue
+
+    date_str = (result.get("date") or "").lower().strip()
+    if date_str:
+        m = re.match(r'(\d+)\s*(hour|day|week|month|year)s?\s*ago', date_str)
+        if m:
+            n, unit = int(m.group(1)), m.group(2)
+            return {"hour": n / 24, "day": n, "week": n * 7,
+                    "month": n * 30, "year": n * 365}[unit]
+
+    return None
+
+
+def _is_official_domain(domain: str) -> bool:
+    """── NEW ── Reuses the same official-source signal as trust scoring."""
+    return _official_source_boost(domain) > 0
+
+
+def _analyze_contradiction(entity: str, records: list[dict]) -> dict:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Runs the full analysis pipeline for ONE contradicting entity:
+      detect contradiction (caller already found conflicting values)
+        → identify newest source
+        → identify official source
+        → determine majority consensus
+        → produce confidence score
+        → explain why sources disagree
+
+    `records` — one dict per (value, source) mention:
+        {"value": str, "domain": str, "result": dict}
+    """
+    total = len(records)
+
+    # ── Majority consensus — which value has the most independent sources ──
+    value_groups: dict[str, list[dict]] = {}
+    for rec in records:
+        value_groups.setdefault(rec["value"], []).append(rec)
+    majority_value, majority_records = max(value_groups.items(), key=lambda kv: len(kv[1]))
+    majority_share = len(majority_records) / total if total else 0.0
+
+    # ── Identify newest source (across ALL conflicting records) ────────────
+    dated = [(rec, _estimate_source_age_days(rec["result"])) for rec in records]
+    dated_known = [(rec, age) for rec, age in dated if age is not None]
+    newest_rec, newest_age = min(dated_known, key=lambda t: t[1]) if dated_known else (records[0], None)
+
+    # ── Identify official source (across ALL conflicting records) ──────────
+    official_matches = [rec for rec in records if _is_official_domain(rec["domain"])]
+    official_rec = official_matches[0] if official_matches else None
+
+    # ── Confidence score (0-100) ────────────────────────────────────────────
+    # Blends: how dominant the majority is, average trust of the sources
+    # backing it, whether an official source backs it, and whether the
+    # newest source agrees with it.
+    avg_trust = sum(rec["result"].get("trust_score", 50) for rec in majority_records) / len(majority_records)
+    confidence = (majority_share * 50) + (avg_trust / 100 * 30)
+    if official_rec is not None and official_rec in majority_records:
+        confidence += 15
+    if newest_rec in majority_records:
+        confidence += 5
+    confidence = round(min(confidence, 100), 1)
+
+    # ── Explain why sources disagree ────────────────────────────────────────
+    reasons = []
+    if majority_share < 1.0:
+        reasons.append(f"{len(majority_records)}/{total} sources agree on '{majority_value}'")
+    if official_rec is not None:
+        if official_rec["value"] == majority_value:
+            reasons.append(f"an official source ({official_rec['domain']}) confirms it")
+        else:
+            reasons.append(f"an official source ({official_rec['domain']}) instead reports '{official_rec['value']}'")
+    if newest_age is not None:
+        if newest_rec["value"] != majority_value:
+            reasons.append(
+                f"the most recent source ({newest_rec['domain']}, ~{int(newest_age)}d old) "
+                f"reports a different value ('{newest_rec['value']}') — may reflect an update"
+            )
+        else:
+            reasons.append(f"the most recent source ({newest_rec['domain']}) agrees with the majority")
+    if not reasons:
+        reasons.append("sources differ with no clear majority, official confirmation, or recency signal")
+
+    return {
+        "entity":            entity,
+        "values":            list(value_groups.keys())[:3],
+        "sources":           [rec["domain"] for rec in records[:4]],
+        "majority_value":    majority_value,
+        "majority_share":    round(majority_share, 2),
+        "newest_source": {
+            "domain": newest_rec["domain"],
+            "value":  newest_rec["value"],
+            "age_days": newest_age,
+        } if dated_known else None,
+        "official_source": {
+            "domain": official_rec["domain"],
+            "value":  official_rec["value"],
+        } if official_rec is not None else None,
+        "confidence_score":  confidence,
+        "explanation":       "; ".join(reasons),
+    }
+
+
 def cross_reference_results(results: list[dict], top_n: int = 6) -> dict:
     """
+    ── CHANGED ──────────────────────────────────────────────────────────────
     Analyse top N results to find:
     - consensus_signals: facts that appear in 2+ sources (higher confidence)
-    - contradiction_signals: conflicting values for the same entity
+    - contradiction_signals: conflicting values for the same entity, each
+      run through the full analysis pipeline — newest source, official
+      source, majority consensus, a confidence score, and an explanation
+      of why sources disagree.
 
     Returns a metadata dict that gets injected into the AI context.
+    Existing keys (consensus_count, contradiction_count, contradictions,
+    and each contradiction's entity/values/sources) are unchanged, so
+    existing callers keep working — the new fields are additive.
     """
     sample = [r for r in results if r.get("body")][:top_n]
 
@@ -2010,10 +2135,10 @@ def cross_reference_results(results: list[dict], top_n: int = 6) -> dict:
         if len(srcs) >= 2
     ]
 
-    # Simple contradiction detection: look for "X is Y" vs "X is Z" patterns
-    # We use a lightweight keyword approach — no LLM needed
-    contradictions = []
-    entity_values: dict[str, list[tuple[str, str]]] = {}  # entity → [(value, source)]
+    # ── STEP 1: Detect contradictions — same lightweight keyword approach,
+    # but now records the full result (not just the domain) per mention so
+    # the analysis pipeline below can pull recency/trust/official signals.
+    entity_values: dict[str, list[dict]] = {}  # entity → [{"value","domain","result"}]
 
     for r in sample:
         body   = r.get("body", "")
@@ -2025,18 +2150,22 @@ def cross_reference_results(results: list[dict], top_n: int = 6) -> dict:
         ):
             entity = m.group(1).strip()
             value  = m.group(2).strip()
-            if entity not in entity_values:
-                entity_values[entity] = []
-            entity_values[entity].append((value, domain))
-
-    for entity, val_srcs in entity_values.items():
-        unique_vals = list({v for v, _ in val_srcs})
-        if len(unique_vals) > 1:
-            contradictions.append({
-                "entity":  entity,
-                "values":  unique_vals[:3],
-                "sources": [s for _, s in val_srcs[:4]],
+            entity_values.setdefault(entity, []).append({
+                "value": value, "domain": domain, "result": r,
             })
+
+    # ── STEPS 2-6: for every entity with 2+ distinct values, run the full
+    # analysis pipeline (newest source → official source → majority
+    # consensus → confidence score → explanation).
+    contradictions = []
+    for entity, records in entity_values.items():
+        unique_vals = {rec["value"] for rec in records}
+        if len(unique_vals) > 1:
+            contradictions.append(_analyze_contradiction(entity, records))
+
+    # Highest-confidence-need-first: surface the least-resolved conflicts
+    # (lowest confidence score) at the top, since those most need a caveat.
+    contradictions.sort(key=lambda c: c["confidence_score"])
 
     return {
         "consensus_count":      len(consensus),
