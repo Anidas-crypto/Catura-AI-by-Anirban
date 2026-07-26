@@ -233,6 +233,202 @@ def detect_recency_window(query: str) -> Optional[str]:
     return classify_freshness_category(query)["window"]
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# QUERY ROUTING — domain-aware search routing
+# Detects the question's subject-matter TYPE and biases the search engines
+# toward the domains most likely to hold an authoritative answer for that
+# type, instead of running every query through the same undifferentiated
+# search:
+#   Programming → GitHub, docs sites, StackOverflow
+#   Medicine    → WHO, PubMed, CDC
+#   Finance     → Bloomberg, Yahoo Finance
+#   Government  → official .gov / intergovernmental domains
+#   Science     → Nature, ScienceDirect
+#   General     → no domain bias — plain Google (Serper) + Tavily, as before
+# ══════════════════════════════════════════════════════════════════════════════
+
+_QUERY_ROUTES: dict[str, dict] = {
+    "programming": {
+        "patterns": [
+            r'\b(error|exception|traceback|stack trace|bug|debug|compil(e|ing)|syntax error)\b',
+            r'\b(function|method|class|variable|library|package|module|api|sdk|framework)\b',
+            r'\b(python|javascript|typescript|\bjava\b|c\+\+|rust|golang|kotlin|swift|php|ruby|\bsql\b)\b',
+            r'\bhow (do|to) i\b.{0,40}\b(code|program|implement|write a function)\b',
+            r'\b(install|npm|pip|cargo|yarn|docker|kubernetes|\bgit\b|github|repo|repository)\b',
+        ],
+        "domains": [
+            # Q&A / code hosting
+            "stackoverflow.com", "github.com", "gitlab.com", "sourceforge.net",
+            "github.community",
+            # Languages / runtimes / package registries
+            "python.org", "docs.python.org", "nodejs.org", "npmjs.com",
+            "rust-lang.org", "crates.io", "golang.org", "go.dev", "kotlinlang.org",
+            "oracle.com", "java.com", "docs.oracle.com",
+            # Databases
+            "postgresql.org", "mysql.com", "mariadb.org", "sqlite.org", "redis.io",
+            "mongodb.com",
+            # Containers / infra / OS
+            "docker.com", "kubernetes.io", "helm.sh", "nginx.org", "apache.org",
+            "gnu.org", "linux.org", "kernel.org", "ubuntu.com", "debian.org",
+            "fedora.org", "archlinux.org", "freedesktop.org", "gnome.org", "kde.org",
+            # Cloud platforms
+            "cloudflare.com", "vercel.com", "netlify.com", "render.com",
+            "digitalocean.com", "aws.amazon.com", "azure.microsoft.com", "cloud.google.com",
+            # Browser/web dev reference
+            "developer.mozilla.org",
+            # AI/ML dev platforms
+            "huggingface.co", "paperswithcode.com", "kaggle.com", "ai.google.dev",
+            "deepmind.google", "ollama.com", "mistral.ai", "cohere.com", "llama.com",
+            "perplexity.ai", "together.ai", "replicate.com", "fireworks.ai", "groq.com",
+            "vllm.ai", "langchain.com", "langchain.dev", "langgraph.dev",
+            "openai.com", "anthropic.com",
+            # Security tooling/reference
+            "mitre.org", "cve.org", "nvd.nist.gov", "owasp.org", "sans.org",
+            "malwarebytes.com", "virustotal.com", "abuse.ch",
+            # Learning platforms
+            "geeksforgeeks.org", "w3schools.com", "tutorialspoint.com", "javatpoint.com",
+            "codecademy.com", "freecodecamp.org", "edx.org", "coursera.org", "udacity.com",
+            # Dev communities
+            "stackexchange.com", "superuser.com", "serverfault.com", "askubuntu.com",
+            "hashnode.com", "codeproject.com", "daniweb.com", "bytes.com",
+            "news.ycombinator.com", "lobste.rs", "linuxquestions.org",
+            "ubuntuforums.org", "bbs.archlinux.org", "forum.manjaro.org",
+            "forums.opensuse.org", "discuss.huggingface.co", "community.openai.com",
+            "community.cloudflare.com", "community.atlassian.com", "discuss.python.org",
+            "discuss.kotlinlang.org",
+        ],
+    },
+    "medicine": {
+        "patterns": [
+            r'\b(symptom|treatment|diagnos(is|e)|disease|medicine|medication|dosage|side effect|'
+            r'vaccine|virus|infection|surgery|therapy|clinical trial|\bdrug\b)\b',
+            r'\b(cancer|diabetes|covid|\bflu\b|\bhiv\b|malaria|tuberculosis)\b',
+        ],
+        "domains": [
+            # Global health authorities / IGOs
+            "who.int", "unicef.org", "unaids.org",
+            # US health agencies
+            "cdc.gov", "nih.gov", "fda.gov",
+            # India health/regulatory agencies
+            "mohfw.gov.in", "nhm.gov.in", "nhp.gov.in", "icmr.gov.in", "ayush.gov.in",
+            "cdsco.gov.in", "fssai.gov.in",
+            # Peer-reviewed medical journals
+            "thelancet.com", "nejm.org", "jamanetwork.com", "bmj.com", "cell.com",
+            "pnas.org", "nature.com", "science.org",
+            # Research indexes
+            "pubmed.ncbi.nlm.nih.gov",
+            # Established health institutions/reference
+            "mayoclinic.org", "webmd.com", "healthline.com", "clevelandclinic.org",
+        ],
+    },
+    "finance": {
+        "patterns": [
+            r'\b(stock|share price|market cap|nasdaq|nyse|\bipo\b|earnings|dividend|revenue|'
+            r'quarterly results|investment|mutual fund|bond yield|interest rate|inflation)\b',
+            r'\b(nifty|sensex|crypto|bitcoin|forex|exchange rate)\b',
+        ],
+        "domains": [
+            # Wire/business news
+            "bloomberg.com", "reuters.com", "cnbc.com", "forbes.com",
+            "finance.yahoo.com", "moneycontrol.com", "morningstar.com",
+            "marketwatch.com", "investopedia.com", "tradingeconomics.com",
+            "coinmarketcap.com", "coingecko.com", "statista.com",
+            # India business news
+            "livemint.com", "business-standard.com", "businessstandard.com",
+            "thehindubusinessline.com", "economictimes.indiatimes.com",
+            "financialexpress.com",
+            # India financial regulators / exchanges
+            "rbi.org.in", "sebi.gov.in", "irdai.gov.in", "npci.org.in",
+            "pfrda.org.in", "ibbi.gov.in", "ifsca.gov.in", "cci.gov.in",
+            "trai.gov.in", "mcxindia.com", "nseindia.com", "bseindia.com",
+            # US financial regulators
+            "sec.gov", "federalreserve.gov", "treasury.gov", "finra.org",
+            "cftc.gov", "fdic.gov", "occ.treas.gov", "cfpb.gov",
+            # International financial institutions
+            "imf.org", "worldbank.org", "oecd.org", "fred.stlouisfed.org",
+            # Central banks (other countries)
+            "ecb.europa.eu", "bankofengland.co.uk", "bankofcanada.ca",
+            "rba.gov.au", "rbnz.govt.nz", "boj.or.jp", "bok.or.kr", "mas.gov.sg",
+            "snb.ch", "bundesbank.de", "banque-france.fr", "bancaditalia.it",
+            "bde.es", "dnb.nl", "nbb.be", "centralbank.ie", "riksbank.se",
+            "norges-bank.no", "suomenpankki.fi", "oenb.at", "bportugal.pt",
+            "bcb.gov.br", "banxico.org.mx",
+        ],
+    },
+    "government": {
+        "patterns": [
+            r'\b(\blaw\b|\bbill\b|\bact\b|regulation|policy|ministry|parliament|congress|senate|'
+            r'court ruling|government scheme|notification|gazette|census|budget|election commission)\b',
+            r'\b(prime minister|chief minister|governor|cabinet)\b',
+        ],
+        "domains": [
+            # India — government / regulators (core)
+            "gov.in", "nic.in", "india.gov.in", "pib.gov.in", "mea.gov.in",
+            "mha.gov.in", "mod.gov.in", "education.gov.in", "meity.gov.in",
+            "dpiit.gov.in", "commerce.gov.in", "msme.gov.in", "finance.gov.in",
+            "mca.gov.in", "labour.gov.in", "eci.gov.in", "sci.gov.in",
+            "ecourts.gov.in", "dopt.gov.in", "mygov.in", "data.gov.in",
+            # US government
+            "usa.gov", "congress.gov", "supremecourt.gov", "state.gov",
+            "justice.gov", "whitehouse.gov", "commerce.gov", "energy.gov",
+            "defense.gov", "dhs.gov", "transportation.gov", "labor.gov",
+            "interior.gov", "usda.gov", "va.gov", "cisa.gov",
+            # UK / EU / international bodies
+            "gov.uk", "europa.eu", "un.org", "who.int", "worldbank.org",
+            "imf.org", "unesco.org", "wto.org", "oecd.org", "interpol.int",
+            "undp.org", "unhcr.org", "ilo.org",
+            # Other national governments
+            "canada.ca", "gov.au", "govt.nz", "go.jp", "go.kr", "gov.sg",
+            "admin.ch", "bund.de", "gouvernement.fr", "governo.it",
+            "lamoncloa.gob.es", "government.nl", "belgium.be", "gov.ie",
+            "government.se", "regjeringen.no", "valtioneuvosto.fi",
+            "oesterreich.gv.at", "portugal.gov.pt", "gov.br", "gob.mx",
+        ],
+    },
+    "science": {
+        "patterns": [
+            r'\b(research|\bstudy\b|experiment|hypothesis|peer.?review|journal article|research paper)\b',
+            r'\b(physics|chemistry|biology|astronomy|genome|quantum|climate science)\b',
+        ],
+        "domains": [
+            # Peer-reviewed journals
+            "nature.com", "science.org", "thelancet.com", "nejm.org", "cell.com",
+            "pnas.org", "jamanetwork.com", "bmj.com",
+            # Research indexes / reference
+            "arxiv.org", "scholar.google.com", "pubmed.ncbi.nlm.nih.gov",
+            "britannica.com",
+            # Science news
+            "sciencedaily.com", "livescience.com", "space.com", "spacenews.com",
+            # Space/science agencies
+            "esa.int", "jpl.nasa.gov", "nasa.gov", "noaa.gov", "usgs.gov",
+            "nsf.gov", "nist.gov", "isro.gov.in", "drdo.gov.in", "barc.gov.in",
+            "csir.res.in", "imd.gov.in", "incois.gov.in",
+            # Universities
+            "mit.edu", "stanford.edu", "harvard.edu", "ox.ac.uk", "cam.ac.uk",
+            "berkeley.edu", "iisc.ac.in",
+        ],
+    },
+}
+
+
+def classify_query_domain(query: str) -> dict:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Domain-aware query routing: detects which subject-matter category a
+    question belongs to (programming, medicine, finance, government,
+    science) and returns the domains most likely to hold an authoritative
+    answer for that category. Falls back to "general" with an empty domain
+    list when nothing matches — those queries run across both engines with
+    no domain bias, exactly as before.
+    Returns {"category": str, "domains": list[str]}.
+    """
+    lower = query.lower()
+    for category, spec in _QUERY_ROUTES.items():
+        if any(re.search(p, lower) for p in spec["patterns"]):
+            return {"category": category, "domains": spec["domains"]}
+    return {"category": "general", "domains": []}
+
+
 def _rewrite_queries_regex_fallback(original: str) -> list[str]:
     """
     ── RENAMED from the old rewrite_queries() ──────────────────────────────
@@ -410,7 +606,11 @@ def rewrite_queries(original: str) -> list[str]:
 # Both engines run simultaneously via asyncio.gather
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _tavily_search_sync(query: str, max_results: int = RESULTS_PER_ENGINE) -> list[dict]:
+def _tavily_search_sync(
+    query: str,
+    max_results: int = RESULTS_PER_ENGINE,
+    preferred_domains: Optional[list[str]] = None,
+) -> list[dict]:
     """Synchronous Tavily search — called from thread pool."""
     if not TAVILY_KEY:
         return []
@@ -439,6 +639,14 @@ def _tavily_search_sync(query: str, max_results: int = RESULTS_PER_ENGINE) -> li
             # on the general index.
             if recency in ("day", "week"):
                 payload["topic"] = "news"
+
+        # ── Domain-aware routing ─────────────────────────────────────────────
+        # When classify_query_domain() has identified this as a programming/
+        # medicine/finance/government/science question, bias Tavily toward
+        # the authoritative domains for that category instead of leaving it
+        # to generic relevance ranking alone.
+        if preferred_domains:
+            payload["include_domains"] = preferred_domains[:20]
 
         resp = requests.post(
             "https://api.tavily.com/search",
@@ -484,12 +692,27 @@ def _tavily_search_sync(query: str, max_results: int = RESULTS_PER_ENGINE) -> li
         return []
 
 
-def _serper_search_sync(query: str, max_results: int = RESULTS_PER_ENGINE) -> list[dict]:
+def _serper_search_sync(
+    query: str,
+    max_results: int = RESULTS_PER_ENGINE,
+    preferred_domains: Optional[list[str]] = None,
+) -> list[dict]:
     """Synchronous Serper (Google Search API) — called from thread pool."""
     if not SERPER_KEY:
         return []
     try:
-        payload = {"q": query, "num": max_results, "gl": "in", "hl": "en"}
+        # ── Domain-aware routing ─────────────────────────────────────────────
+        # Serper/Google has no native "preferred domains" parameter, so route
+        # by appending a site: OR filter to the query text itself — biasing
+        # Google toward the authoritative domains for this question's
+        # category (see classify_query_domain) without hard-excluding
+        # everything else.
+        q_text = query
+        if preferred_domains:
+            site_filter = " OR ".join(f"site:{d}" for d in preferred_domains[:8])
+            q_text = f"{query} ({site_filter})"
+
+        payload = {"q": q_text, "num": max_results, "gl": "in", "hl": "en"}
 
         # ── Freshness ──────────────────────────────────────────────────────
         # Serper exposes Google's native date-range filter via "tbs". Without
@@ -562,34 +785,33 @@ def _serper_search_sync(query: str, max_results: int = RESULTS_PER_ENGINE) -> li
         return []
 
 
-async def _search_parallel(query: str) -> tuple[list, list]:
+async def _search_parallel(query: str, preferred_domains: Optional[list[str]] = None) -> tuple[list, list]:
     """Run Tavily + Serper simultaneously, return both result lists."""
     loop = asyncio.get_event_loop()
-    tavily_task = loop.run_in_executor(None, _tavily_search_sync, query)
-    serper_task = loop.run_in_executor(None, _serper_search_sync, query)
+    tavily_task = loop.run_in_executor(None, _tavily_search_sync, query, RESULTS_PER_ENGINE, preferred_domains)
+    serper_task = loop.run_in_executor(None, _serper_search_sync, query, RESULTS_PER_ENGINE, preferred_domains)
     tavily_res, serper_res = await asyncio.gather(tavily_task, serper_task)
     return tavily_res, serper_res
 
 
-def _execute_search_queries(queries: list[str]) -> list[dict]:
+def _execute_search_queries(queries: list[str], preferred_domains: Optional[list[str]] = None) -> list[dict]:
     """
-    ── NEW ──────────────────────────────────────────────────────────────────
+    ── CHANGED ──────────────────────────────────────────────────────────────
     Runs Tavily + Serper for every query in `queries` and returns the
-    combined raw results. This is just the old inline loop from
-    run_production_search(), extracted so the iterative planner (below) can
-    call it once per round without duplicating the event-loop plumbing.
+    combined raw results. Now threads `preferred_domains` (from
+    classify_query_domain) through to both engines for domain-aware routing.
     """
     all_raw: list[dict] = []
     for q in queries:
         try:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            tavily_res, serper_res = loop.run_until_complete(_search_parallel(q))
+            tavily_res, serper_res = loop.run_until_complete(_search_parallel(q, preferred_domains))
             loop.close()
         except Exception:
             # Fallback to sequential if event loop issues
-            tavily_res = _tavily_search_sync(q)
-            serper_res = _serper_search_sync(q)
+            tavily_res = _tavily_search_sync(q, preferred_domains=preferred_domains)
+            serper_res = _serper_search_sync(q, preferred_domains=preferred_domains)
 
         all_raw.extend(tavily_res)
         all_raw.extend(serper_res)
@@ -749,12 +971,23 @@ def plan_and_execute_search(query: str) -> tuple[list[str], list[dict]]:
     queries_run: list[str] = []
     all_raw: list[dict] = []
 
+    # ── Domain-aware routing ─────────────────────────────────────────────
+    # Classify the ORIGINAL question once (category is a property of user
+    # intent, not of any one rewritten sub-query) and reuse the resulting
+    # preferred domains across every round below.
+    route = classify_query_domain(query)
+    preferred_domains = route["domains"]
+    print(
+        f"🧭 [Router] '{query[:60]}' → category='{route['category']}'"
+        + (f", routing to {preferred_domains}" if preferred_domains else " (no domain bias)")
+    )
+
     # ── Round 1 — initial plan + search ──────────────────────────────────
     round_num = 1
     queries = rewrite_queries(query)
     print(f"📝 [Planner] Round {round_num}/{MAX_SEARCH_ROUNDS} queries: {queries}")
     queries_run.extend(queries)
-    all_raw.extend(_execute_search_queries(queries))
+    all_raw.extend(_execute_search_queries(queries, preferred_domains))
 
     # ── Rounds 2..MAX_SEARCH_ROUNDS — analyze, fill gaps, repeat ─────────
     while round_num < MAX_SEARCH_ROUNDS:
@@ -768,7 +1001,7 @@ def plan_and_execute_search(query: str) -> tuple[list[str], list[dict]]:
         follow_up = assessment["additional_queries"]
         print(f"📝 [Planner] Round {round_num}/{MAX_SEARCH_ROUNDS} follow-up queries: {follow_up}")
         queries_run.extend(follow_up)
-        all_raw.extend(_execute_search_queries(follow_up))
+        all_raw.extend(_execute_search_queries(follow_up, preferred_domains))
 
     if round_num >= MAX_SEARCH_ROUNDS:
         print(f"🛑 [Planner] Reached MAX_SEARCH_ROUNDS ({MAX_SEARCH_ROUNDS}) — stopping")
