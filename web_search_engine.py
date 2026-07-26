@@ -2441,24 +2441,235 @@ def _get_domain(url: str) -> str:
 # Re-orders results by semantic relevance to the query
 # ══════════════════════════════════════════════════════════════════════════════
 
+# ── NEW: Diversity balancing ──────────────────────────────────────────────
+# Reranking previously optimized purely for relevance/trust, which could
+# fill the final result set with many pages from one publisher (e.g. 6 of
+# 8 slots all from the same news site). This caps how many pages any one
+# domain can contribute and interleaves different SOURCE TYPES in a
+# preferred order, so the final set is both relevant and diverse.
+_SOURCE_TYPE_ORDER = [
+    "official", "news", "documentation", "wikipedia",
+    "academic", "community", "blogs", "other",
+]
+_MAX_PER_DOMAIN = 2
+
+_NEWS_DOMAINS = {
+    # Wire services
+    "reuters.com", "apnews.com", "afp.com", "pti.in",
+    # Indian news
+    "thehindu.com", "indianexpress.com", "livemint.com", "business-standard.com",
+    "businessstandard.com", "thehindubusinessline.com", "livelaw.in", "barandbench.com",
+    "medianama.com", "factchecker.in", "altnews.in", "indiaspend.com",
+    "timesofindia.com", "hindustantimes.com", "ndtv.com", "economictimes.indiatimes.com",
+    "financialexpress.com", "thewire.in", "theprint.in", "scroll.in", "thequint.com",
+    "news18.com", "indiatoday.in",
+    # Flagship global news
+    "bbc.com", "bbc.co.uk", "nytimes.com", "theguardian.com", "washingtonpost.com",
+    "ft.com", "economist.com", "wsj.com", "abcnews.go.com", "cnn.com", "npr.org",
+    "pbs.org", "aljazeera.com", "dw.com", "france24.com", "cbc.ca", "cbcnews.ca",
+    "sky.com", "abc.net.au", "smh.com.au", "straitstimes.com", "scmp.com",
+    "nikkei.com", "asia.nikkei.com",
+    # Business/finance news & data
+    "bloomberg.com", "cnbc.com", "forbes.com", "moneycontrol.com", "finance.yahoo.com",
+    "fred.stlouisfed.org", "morningstar.com", "marketwatch.com", "investopedia.com",
+    "tradingeconomics.com", "coinmarketcap.com", "coingecko.com", "statista.com",
+    # Tech news
+    "techcrunch.com", "theverge.com", "arstechnica.com", "wired.com", "engadget.com",
+    "tomshardware.com", "anandtech.com", "9to5google.com", "9to5mac.com",
+    "androidauthority.com", "androidpolice.com", "macrumors.com", "xda-developers.com",
+    # Science/space news
+    "sciencedaily.com", "livescience.com", "space.com", "spacenews.com",
+    # Sports data/news
+    "cricbuzz.com", "espncricinfo.com", "sportskeeda.com", "espn.com",
+    # Security news
+    "krebsonsecurity.com", "bleepingcomputer.com",
+}
+
+_DOCUMENTATION_DOMAINS = {
+    # AI vendors / infra / model hubs
+    "huggingface.co", "paperswithcode.com", "kaggle.com", "ai.google.dev",
+    "deepmind.google", "ollama.com", "mistral.ai", "cohere.com", "meta.com",
+    "llama.com", "perplexity.ai", "together.ai", "replicate.com", "fireworks.ai",
+    "groq.com", "vllm.ai", "langchain.com", "langchain.dev", "langgraph.dev",
+    "openai.com", "anthropic.com", "nvidia.com", "microsoft.com", "google.com",
+    "apple.com", "amazon.com",
+    # Languages / runtimes / package registries
+    "python.org", "docs.python.org", "nodejs.org", "npmjs.com", "rust-lang.org",
+    "crates.io", "golang.org", "go.dev", "kotlinlang.org", "oracle.com", "java.com",
+    "docs.oracle.com",
+    # Databases / infra / containers / OS
+    "postgresql.org", "mysql.com", "mariadb.org", "sqlite.org", "redis.io",
+    "mongodb.com", "docker.com", "kubernetes.io", "helm.sh", "nginx.org",
+    "apache.org", "gnu.org", "linux.org", "kernel.org", "ubuntu.com", "debian.org",
+    "fedora.org", "archlinux.org",
+    # Cloud/hosting platforms
+    "cloudflare.com", "vercel.com", "netlify.com", "render.com", "digitalocean.com",
+    "aws.amazon.com", "azure.microsoft.com", "cloud.google.com", "gitlab.com",
+    "sourceforge.net", "freedesktop.org", "gnome.org", "kde.org",
+    # Dev references
+    "stackoverflow.com", "github.com", "developer.mozilla.org",
+    # Security references (advisory/tooling, not news)
+    "mitre.org", "cve.org", "nvd.nist.gov", "owasp.org", "sans.org",
+    "malwarebytes.com", "virustotal.com", "abuse.ch", "security.googleblog.com",
+    # Learning/tutorial platforms
+    "geeksforgeeks.org", "w3schools.com", "tutorialspoint.com", "javatpoint.com",
+    "codecademy.com", "freecodecamp.org", "edx.org", "coursera.org", "udacity.com",
+}
+
+_ACADEMIC_DOMAINS = {
+    # Peer-reviewed journals
+    "nature.com", "science.org", "thelancet.com", "nejm.org", "cell.com",
+    "pnas.org", "jamanetwork.com", "bmj.com",
+    # Reference / research indexes
+    "scholar.google.com", "pubmed.ncbi.nlm.nih.gov", "arxiv.org", "britannica.com",
+    # Established health institutions
+    "mayoclinic.org", "webmd.com", "healthline.com", "clevelandclinic.org",
+    # Universities
+    "mit.edu", "stanford.edu", "harvard.edu", "ox.ac.uk", "cam.ac.uk",
+    "berkeley.edu", "iisc.ac.in",
+}
+
+_COMMUNITY_DOMAINS = {
+    "reddit.com", "quora.com", "stackexchange.com", "superuser.com",
+    "serverfault.com", "askubuntu.com", "hashnode.com", "codeproject.com",
+    "daniweb.com", "bytes.com", "news.ycombinator.com", "lobste.rs",
+    "linuxquestions.org", "ubuntuforums.org", "bbs.archlinux.org",
+    "forum.manjaro.org", "forums.opensuse.org", "discuss.huggingface.co",
+    "community.openai.com", "community.cloudflare.com", "community.atlassian.com",
+    "discuss.python.org", "discuss.kotlinlang.org", "github.community",
+    "linustechtips.com", "forums.tomshardware.com", "overclock.net",
+    "xdaforums.com", "steamcommunity.com", "gamefaqs.gamespot.com",
+    "webmasterworld.com", "discourse.org", "facebook.com", "instagram.com",
+    "threads.net", "mastodon.social", "youtu.be", "youtube.com", "tiktok.com",
+    "bilibili.com", "rumble.com", "odysee.com", "fandom.com", "techenclave.com",
+    "pagalguy.com", "mouthshut.com", "team-bhp.com",
+}
+
+_BLOG_DOMAINS = {
+    "medium.com", "substack.com", "dev.to", "hackernoon.com",
+    "towardsdatascience.com", "blogspot.com", "wordpress.com", "tumblr.com",
+}
+
+
+def _classify_source_type(domain: str) -> str:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Classifies a domain into one of the preferred source-type buckets:
+    official, news, documentation, wikipedia, academic, community, blogs,
+    or other. Reuses the existing TRUST_TIERS domain lists where they
+    already capture a category (official = Tier 1 + gov/mil/int patterns;
+    community/blogs draw on Tier 6 / Tier 5), plus dedicated lists above for
+    news, documentation, and academic sources that TRUST_TIERS mixes
+    together with everything else.
+    """
+    domain = (domain or "").lower()
+    if not domain:
+        return "other"
+
+    def _matches(d: str, domain_set) -> bool:
+        return any(d == t or d.endswith("." + t) for t in domain_set)
+
+    if re.search(r'\.(gov|mil|int)(\.[a-z]{2})?$', domain) or ".gov." in domain:
+        return "official"
+    if _matches(domain, TRUST_TIERS.get(1, ())):
+        return "official"
+
+    if domain == "wikipedia.org" or domain.endswith(".wikipedia.org") \
+            or domain in ("wikimedia.org", "wiktionary.org"):
+        return "wikipedia"
+
+    if domain.startswith("docs.") or domain.startswith("developer.") \
+            or _matches(domain, _DOCUMENTATION_DOMAINS):
+        return "documentation"
+
+    if domain.endswith(".edu") or domain.endswith(".ac.uk") or domain.endswith(".ac.in") \
+            or _matches(domain, _ACADEMIC_DOMAINS):
+        return "academic"
+
+    if _matches(domain, _NEWS_DOMAINS):
+        return "news"
+
+    if domain.startswith("community.") or domain.startswith("discuss.") \
+            or domain.startswith("forum") \
+            or _matches(domain, _COMMUNITY_DOMAINS) or _matches(domain, TRUST_TIERS.get(6, ())):
+        return "community"
+
+    if _matches(domain, _BLOG_DOMAINS) or _matches(domain, TRUST_TIERS.get(5, ())):
+        return "blogs"
+
+    return "other"
+
+
+def _apply_diversity_balance(
+    ranked_results: list[dict],
+    top_n: int,
+    max_per_domain: int = _MAX_PER_DOMAIN,
+) -> list[dict]:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Post-processing diversity pass over an already relevance/trust-ranked
+    list. Buckets candidates by source type, then round-robins across
+    types in the preferred order (official → news → documentation →
+    wikipedia → academic → community → blogs → other), taking the
+    highest-ranked still-eligible candidate from each bucket every round —
+    preserving relevance order *within* each type — while enforcing
+    `max_per_domain` so no single publisher can fill the result set.
+    Falls through to remaining candidates if buckets run dry before top_n
+    is reached, so results are never short just because a type ran out.
+    """
+    buckets: dict[str, list[dict]] = {t: [] for t in _SOURCE_TYPE_ORDER}
+    for r in ranked_results:
+        domain = _get_domain(r.get("url", ""))
+        buckets[_classify_source_type(domain)].append(r)
+
+    domain_counts: dict[str, int] = {}
+    pointer = {t: 0 for t in _SOURCE_TYPE_ORDER}
+    selected: list[dict] = []
+    selected_ids: set = set()
+
+    def _take_next(t: str):
+        while pointer[t] < len(buckets[t]):
+            cand = buckets[t][pointer[t]]
+            pointer[t] += 1
+            domain = _get_domain(cand.get("url", ""))
+            if domain and domain_counts.get(domain, 0) >= max_per_domain:
+                continue
+            cand_id = id(cand)
+            if cand_id in selected_ids:
+                continue
+            domain_counts[domain] = domain_counts.get(domain, 0) + 1
+            selected_ids.add(cand_id)
+            return cand
+        return None
+
+    while len(selected) < top_n:
+        progressed = False
+        for t in _SOURCE_TYPE_ORDER:
+            if len(selected) >= top_n:
+                break
+            cand = _take_next(t)
+            if cand is not None:
+                selected.append(cand)
+                progressed = True
+        if not progressed:
+            break  # every bucket exhausted (or capped out) — stop early
+
+    return selected
+
+
 def rerank_with_cohere(query: str, results: list[dict], top_n: int = RERANK_TOP_N) -> list[dict]:
     """
-    Use Cohere Rerank API to semantically re-order search results.
-    Falls back to trust-score sorting if Cohere is unavailable.
+    ── CHANGED ──────────────────────────────────────────────────────────────
+    Use Cohere Rerank API to semantically re-order search results, then
+    apply diversity balancing (max 2 pages per domain, source types mixed
+    in preferred order — see _apply_diversity_balance) before returning.
+    Falls back to trust-score sorting (also diversity-balanced) if Cohere
+    is unavailable.
 
     Cohere free tier: 1000 reranks/month at cohere.com
     """
     if not COHERE_KEY or not results:
-        # Fallback: sort by trust_score descending, direct answers first
-        return sorted(
-            results,
-            key=lambda r: (
-                r.get("is_direct_answer", False),
-                r.get("trust_score", 50),
-                r.get("multi_source", False),
-            ),
-            reverse=True,
-        )[:top_n]
+        return _trust_sort(results, top_n)
 
     # Prepare documents for Cohere — use title + body
     candidates = results[:min(len(results), 20)]  # Cohere limit per call
@@ -2466,6 +2677,11 @@ def rerank_with_cohere(query: str, results: list[dict], top_n: int = RERANK_TOP_
         f"{r.get('title', '')} — {r.get('body', '')[:300]}"
         for r in candidates
     ]
+
+    # Ask Cohere to rank ALL candidates (not just top_n) so diversity
+    # balancing afterward has a real pool of relevance-ordered alternatives
+    # to pick from instead of being handed an already-truncated top_n.
+    cohere_n = len(candidates)
 
     try:
         resp = requests.post(
@@ -2478,7 +2694,7 @@ def rerank_with_cohere(query: str, results: list[dict], top_n: int = RERANK_TOP_
                 "model":      "rerank-v3.5",
                 "query":      query,
                 "documents":  documents,
-                "top_n":      min(top_n, len(candidates)),
+                "top_n":      cohere_n,
                 "return_documents": False,
             },
             timeout=6,   # hard 6s timeout — fall back to trust-sort if slow
@@ -2506,8 +2722,11 @@ def rerank_with_cohere(query: str, results: list[dict], top_n: int = RERANK_TOP_
 
         # Sort by final blended score
         reordered.sort(key=lambda r: r.get("final_score", 0), reverse=True)
-        print(f"✅ [Cohere] Reranked {len(reordered)} results")
-        return reordered
+
+        balanced = _apply_diversity_balance(reordered, top_n)
+        print(f"✅ [Cohere] Reranked {len(reordered)} results → "
+              f"{len(balanced)} after diversity balancing")
+        return balanced
 
     except Exception as e:
         print(f"❌ [Cohere] {e} — falling back to trust sort")
@@ -2515,7 +2734,7 @@ def rerank_with_cohere(query: str, results: list[dict], top_n: int = RERANK_TOP_
 
 
 def _trust_sort(results: list[dict], top_n: int) -> list[dict]:
-    return sorted(
+    ranked = sorted(
         results,
         key=lambda r: (
             r.get("is_direct_answer", False),
@@ -2523,7 +2742,8 @@ def _trust_sort(results: list[dict], top_n: int) -> list[dict]:
             r.get("multi_source", False),
         ),
         reverse=True,
-    )[:top_n]
+    )
+    return _apply_diversity_balance(ranked, top_n)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
