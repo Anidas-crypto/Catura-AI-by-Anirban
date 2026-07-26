@@ -21,7 +21,7 @@ import math
 import asyncio
 import hashlib
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.parse import urlparse
 from typing import Optional
 
@@ -108,48 +108,129 @@ RERANK_TOP_N       = 8
 # doesn't use those words but is just as time-sensitive.
 # ══════════════════════════════════════════════════════════════════════════════
 
-# Needs the tightest window — today/this-instant data (prices, scores, weather,
-# breaking news). Maps to Tavily time_range="day" / Serper tbs="qdr:d".
-_RECENCY_DAY_PATTERNS = [
-    r'\b(today|right now|currently|live|breaking|just (now|happened)|this (morning|moment))\b',
-    r'\b(price|stock|share price|nifty|sensex|crypto|bitcoin|exchange rate)\b',
-    r'\b(score|live score|match score|who\'?s? (winning|leading))\b',
-    r'\bweather\b',
-]
+# ── Named freshness categories: purpose-specific detectors instead of 3 flat
+# pattern buckets. Each category still resolves to a "day"/"week"/"month"
+# search window (Tavily/Serper time-boxing contract is unchanged), but is
+# also exposed BY NAME so result-side scoring can reason about WHY a query
+# is time-sensitive — breaking news, a live event, a model/version release,
+# a recently released product, an election, a price, a CEO, or a government
+# official — instead of just knowing THAT it's time-sensitive.
+_WINDOW_RANK = {"day": 3, "week": 2, "month": 1}
 
-# Needs a wider window — recent-but-not-instant (this week's news, a recent
-# release, an ongoing situation). Maps to time_range="week" / tbs="qdr:w".
-_RECENCY_WEEK_PATTERNS = [
-    r'\b(latest|newest|recent(ly)?|this week|new (version|release|update|model))\b',
-    r'\b(news|headlines|happened|announcement|announced)\b',
-]
+_FRESHNESS_CATEGORIES: dict[str, dict] = {
+    "breaking_news": {
+        "window": "day",
+        "patterns": [
+            r'\b(today|breaking|just (now|happened)|this (morning|moment)|developing story)\b',
+            r'\bright now\b',
+        ],
+    },
+    "live_event": {
+        "window": "day",
+        "patterns": [
+            r'\b(live|live score|live stream|livestream|ongoing|happening now)\b',
+            r'\b(score|match score|who\'?s? (winning|leading))\b',
+        ],
+    },
+    "current_price": {
+        "window": "day",
+        "patterns": [
+            r'\b(price|stock|share price|nifty|sensex|crypto|bitcoin|'
+            r'exchange rate|market cap|nav)\b',
+        ],
+    },
+    "weather": {
+        "window": "day",
+        "patterns": [r'\bweather\b'],
+    },
+    "model_version": {
+        "window": "week",
+        "patterns": [
+            r'\b(latest|newest) (version|release|model|update)\b',
+            r'\bv\d+(\.\d+)*\b',
+            r'\b(gpt|claude|gemini|llama|mistral)[- ]?\d+(\.\d+)?\b',
+        ],
+    },
+    "product_release": {
+        "window": "week",
+        "patterns": [
+            r'\b(new|newly|just|recently) (released|launched|unveiled|announced)\b',
+            r'\brelease date\b',
+            r'\b(iphone|pixel|galaxy)\s?\d+\b',
+        ],
+    },
+    "recent_news": {
+        "window": "week",
+        "patterns": [
+            r'\b(latest|newest|recent(ly)?|this week|new (version|release|update|model))\b',
+            r'\b(news|headlines|happened|announcement|announced)\b',
+        ],
+    },
+    "election": {
+        "window": "month",
+        "patterns": [
+            r'\b(election|elected|poll results?|won (the )?election|voted (in|out)|exit poll|by-?election)\b',
+        ],
+    },
+    "ceo": {
+        "window": "month",
+        "patterns": [
+            r'\b(ceo|chief executive|chairman|managing director)\b',
+        ],
+    },
+    "government_official": {
+        "window": "month",
+        "patterns": [
+            r'\b(cm|chief minister|prime minister|president|governor|minister|mayor|'
+            r'chancellor|appointed|resigned)\b',
+            r'\bwho is the (current|new)\b',
+            r'\bstill (the|in|alive|running|active|ceo|president)\b',
+        ],
+    },
+    "current_event": {
+        "window": "month",
+        "patterns": [
+            r'\b(current(ly)?|ongoing|status of|as of (today|now|\d{4}))\b',
+        ],
+    },
+}
 
-# Needs a moderate window — "who currently holds this role" style questions.
-# These aren't as urgent as breaking news but are still wrong if answered from
-# stale training data. Maps to time_range="month" / tbs="qdr:m".
-_RECENCY_MONTH_PATTERNS = [
-    r'\b(cm|chief minister|prime minister|president|governor|minister|mayor|'
-    r'ceo|chancellor|elected|appointed|resigned|won (the )?election)\b',
-    r'\bwho is the (current|new)\b',
-    r'\bstill (the|in|alive|running|active|ceo|president)\b',
-]
+
+def classify_freshness_category(query: str) -> dict:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Named freshness classification for a query: which categories it matches
+    (breaking_news, live_event, current_price, weather, model_version,
+    product_release, recent_news, election, ceo, government_official,
+    current_event) and the strongest resulting search window. Used both for
+    query-side time-boxing (via detect_recency_window) and result-side
+    freshness scoring (via _freshness_score), so both sides agree on why a
+    query is time-sensitive.
+    """
+    lower = query.lower()
+    matched = [name for name, spec in _FRESHNESS_CATEGORIES.items()
+               if any(re.search(p, lower) for p in spec["patterns"])]
+    if not matched:
+        return {"categories": [], "window": None}
+    window = max((_FRESHNESS_CATEGORIES[m]["window"] for m in matched),
+                 key=lambda w: _WINDOW_RANK[w])
+    return {"categories": matched, "window": window}
 
 
 def detect_recency_window(query: str) -> Optional[str]:
     """
-    Returns "day" | "week" | "month" | None.
+    ── CHANGED ──────────────────────────────────────────────────────────────
+    Same contract as before — returns "day" | "week" | "month" | None, used
+    to time-box Tavily/Serper requests. Now backed by the named freshness
+    category classifier above instead of 3 flat keyword lists, so detection
+    explicitly covers breaking news, live events, prices, model/version
+    releases, recently released products, elections, CEOs, and government
+    officials — not just a handful of generic recency words.
     None means: generic search, no time constraint needed (e.g. "what is
     photosynthesis" — Wikipedia-style facts don't benefit from date-boxing
     and over-constraining them can actually *reduce* result quality).
     """
-    lower = query.lower()
-    if any(re.search(p, lower) for p in _RECENCY_DAY_PATTERNS):
-        return "day"
-    if any(re.search(p, lower) for p in _RECENCY_WEEK_PATTERNS):
-        return "week"
-    if any(re.search(p, lower) for p in _RECENCY_MONTH_PATTERNS):
-        return "month"
-    return None
+    return classify_freshness_category(query)["window"]
 
 
 def _rewrite_queries_regex_fallback(original: str) -> list[str]:
@@ -1670,7 +1751,180 @@ def _semantic_relevance_score(query: str, result: dict) -> float:
     return min(raw / max_possible, 1.0) if max_possible else 0.5
 
 
-def _publication_date_confidence(result: dict, url: str) -> float:
+def _verify_publication_date(result: dict, url: str) -> dict:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Publication verification: doesn't just parse a date, it sanity-checks
+    it. Catches common bad signals — a "published" date in the future
+    (clock-skew or a bad scrape), a date predating the web (an obvious
+    placeholder/default), or no date at all — and reports a confidence
+    level instead of blindly trusting whatever the engine handed back.
+    Returns {"days_old": float|None, "verified": bool,
+             "confidence": "high"|"medium"|"low"|"none", "reason": str}.
+    """
+    now = datetime.utcnow()
+    published = (result.get("published") or "").strip()
+
+    parsed_dt = None
+    if published:
+        for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%Y/%m/%d"):
+            try:
+                parsed_dt = datetime.strptime(published[:19], fmt)
+                break
+            except ValueError:
+                continue
+
+    if parsed_dt is not None:
+        days_old = (now - parsed_dt).days
+        if parsed_dt > now + timedelta(days=1):
+            return {"days_old": days_old, "verified": False, "confidence": "low",
+                    "reason": "published date is in the future — likely a bad scrape"}
+        if parsed_dt.year < 1995:
+            return {"days_old": days_old, "verified": False, "confidence": "low",
+                    "reason": "published date predates the web — likely a placeholder"}
+        return {"days_old": days_old, "verified": True, "confidence": "high",
+                "reason": "parsed ISO/engine-supplied publish date"}
+
+    date_str = (result.get("date") or "").lower().strip()
+    if date_str:
+        m = re.match(r'(\d+)\s*(hour|day|week|month|year)s?\s*ago', date_str)
+        if m:
+            n, unit = int(m.group(1)), m.group(2)
+            days_old = {"hour": n / 24, "day": n, "week": n * 7,
+                        "month": n * 30, "year": n * 365}[unit]
+            return {"days_old": days_old, "verified": True, "confidence": "medium",
+                    "reason": "relative date string from engine"}
+
+    if str(now.year) in (url or ""):
+        return {"days_old": None, "verified": False, "confidence": "low",
+                "reason": "current year appears in URL only — weak, unverified signal"}
+
+    return {"days_old": None, "verified": False, "confidence": "none",
+            "reason": "no date signal found"}
+
+
+_CONTENT_FRESHNESS_SIGNALS: dict[str, list[str]] = {
+    # Model/version detection — a version number or named model mentioned
+    # in the content itself, independent of any metadata date.
+    "model_version_mention": [
+        r'\bv\d+(\.\d+){1,2}\b',
+        r'\b(version|release)\s+\d+(\.\d+)*\b',
+        r'\b(gpt|claude|gemini|llama|mistral)[- ]?\d+(\.\d+)?\b',
+    ],
+    # Recently released products
+    "just_released": [
+        r'\b(just|newly|recently) (released|launched|unveiled|announced|debuted)\b',
+        r'\brelease date\b.{0,20}\b(today|this week|20\d{2})\b',
+    ],
+    # Recent elections
+    "election_result": [
+        r'\b(wins?|won|elected|sworn in|takes? office|declared winner)\b.{0,30}\b(election|poll|seat)\b',
+        r'\belection results?\b',
+    ],
+    # Live events / breaking news markers inside the content itself
+    "live_or_breaking": [
+        r'\b(breaking|live update|developing story|as it happened)\b',
+    ],
+    # Current prices
+    "current_price_data": [
+        r'[$₹€£]\s?\d[\d,.]*',
+        r'\b\d+(\.\d+)?%\s*(up|down|higher|lower)\b',
+        r'\bas of (today|writing|press time)\b',
+    ],
+    # Current CEOs / current government officials
+    "current_role_holder": [
+        r'\b(currently serves as|now serves as|current(ly)? (ceo|president|prime minister|chief minister|governor))\b',
+        r'\bincumbent\b',
+        r'\bsince (20\d{2})\b',
+    ],
+}
+
+
+def _detect_content_freshness_signals(result: dict) -> dict:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Looks INSIDE the result's own text (not just its metadata date) for
+    signals that it's inherently fresh/time-sensitive content: model/version
+    mentions, "just released" phrasing, election-result language,
+    live/breaking markers, current price data, and "currently serves as /
+    incumbent" role-holder phrasing (current CEOs, current government
+    officials). These corroborate — or, when absent, fail to corroborate —
+    whatever the metadata date claims.
+    Returns {"signals": [...], "boost": float 0..6}.
+    """
+    text = ((result.get("title", "") or "") + " " + (result.get("body", "") or "")).lower()
+    if not text.strip():
+        return {"signals": [], "boost": 0.0}
+
+    hits = [name for name, patterns in _CONTENT_FRESHNESS_SIGNALS.items()
+            if any(re.search(p, text) for p in patterns)]
+    return {"signals": hits, "boost": min(len(hits) * 2.0, 6.0)}
+
+
+def _freshness_score(result: dict, url: str, query: str = "") -> float:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Master freshness pipeline for trust scoring — replaces the previous flat
+    "_recency_boost + _publication_date_confidence" combo with one that:
+      1. Verifies the publication date (_verify_publication_date) instead of
+         blindly trusting a parsed date — rejects future/implausible dates.
+      2. Detects content-based freshness signals as corroboration
+         (_detect_content_freshness_signals): model/version mentions, just-
+         released phrasing, election results, live/breaking markers,
+         current prices, current CEO/government-official role phrasing.
+      3. Classifies the QUERY's freshness category (breaking news, live
+         event, current price, model/version, product release, election,
+         CEO, government official, current event — classify_freshness_
+         category) and scales the urgency accordingly: a week-old result is
+         fine for "who is the CEO of X" but stale for "live score".
+    "Prioritize newest reliable information" = verified, recent,
+    content-corroborated results score highest; unverifiable or
+    stale-for-its-category content is actively pushed down rather than
+    scored as neutral.
+    Returns roughly -6..+18.
+    """
+    verification = _verify_publication_date(result, url)
+    content      = _detect_content_freshness_signals(result)
+    category     = classify_freshness_category(query) if query else {"categories": [], "window": None}
+
+    score = 0.0
+    days_old = verification["days_old"]
+
+    # ── Base recency boost from the verified age ──
+    if days_old is not None:
+        base = _days_to_boost(max(days_old, 0))
+        if not verification["verified"]:
+            base *= 0.3  # implausible/unverified date — don't trust it much
+        score += base
+        if not verification["verified"]:
+            score -= 3  # active distrust for a future/placeholder date
+    elif verification["confidence"] == "low":
+        score += 1     # weak year-in-URL signal only
+    elif verification["confidence"] == "none":
+        score -= 3      # no date signal at all
+
+    # ── Content-based corroboration ──
+    score += content["boost"]
+
+    # ── Query-category urgency scaling — only for a VERIFIED, non-negative
+    # age; a future/implausible date shouldn't get "comfortably fresh"
+    # credit just because the (bogus) gap happens to be small or negative.
+    window = category.get("window")
+    if window and days_old is not None and verification["verified"] and days_old >= 0:
+        urgency_limits = {"day": 2, "week": 10, "month": 45}
+        limit = urgency_limits[window]
+        if days_old > limit:
+            # Stale relative to how urgent this query category is — the
+            # tighter the window, the harsher the penalty for being old.
+            score -= {"day": 8, "week": 5, "month": 2}[window]
+        elif days_old <= limit / 3:
+            # Comfortably fresh for this category
+            score += {"day": 4, "week": 3, "month": 2}[window]
+
+    return round(score, 1)
+
+
+
     """
     ── NEW ──────────────────────────────────────────────────────────────────
     Distinct from freshness (how recent) — this measures whether we can
@@ -1922,9 +2176,9 @@ def compute_trust_score(
     if result.get("firecrawled"):
         score += 4
 
-    # ── Freshness (recency) + publication-date confidence ───────────────────
-    score += _recency_boost(result, url)
-    score += _publication_date_confidence(result, url)
+    # ── Freshness — verified recency, content-signal corroboration, and
+    # query-category urgency scaling (see _freshness_score) ─────────────────
+    score += _freshness_score(result, url, query)
 
     # ── Semantic relevance to the query ──────────────────────────────────────
     if query:
