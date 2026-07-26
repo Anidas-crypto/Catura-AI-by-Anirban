@@ -17,6 +17,7 @@
 import os
 import re
 import json
+import math
 import asyncio
 import hashlib
 import requests
@@ -70,6 +71,20 @@ _STOPWORDS        = {
     "was", "were", "what", "who", "when", "where", "how", "does", "do", "did",
     "this", "that", "with", "at", "by", "be", "it", "as", "from",
 }
+
+# ── NEW: Embedding retrieval config — provider-independent ──────────────────
+# Embedding generation → vector search → retrieve only relevant chunks.
+# EMBEDDING_PROVIDER picks the backend; swapping providers is a config
+# change, not a code change. Any provider missing its key simply can't be
+# selected — retrieval falls back to the keyword scorer, nothing breaks.
+EMBEDDING_PROVIDER    = os.getenv("EMBEDDING_PROVIDER", "openai").lower()  # "openai" | "cohere" | "voyage"
+OPENAI_KEY            = os.getenv("OPENAI_API_KEY", "")
+VOYAGE_KEY            = os.getenv("VOYAGE_API_KEY", "")
+EMBEDDING_MODEL_OPENAI = os.getenv("EMBEDDING_MODEL_OPENAI", "text-embedding-3-small")
+EMBEDDING_MODEL_COHERE = os.getenv("EMBEDDING_MODEL_COHERE", "embed-english-v3.0")
+EMBEDDING_MODEL_VOYAGE = os.getenv("EMBEDDING_MODEL_VOYAGE", "voyage-3-lite")
+EMBEDDING_TIMEOUT      = 6      # seconds — fail fast, fall back to keyword scoring
+RETRIEVAL_TOP_K        = _PAGE_MAX_CHUNKS  # same cap as before, now vector-driven when available
 # ── Max Cohere rerank candidates ─────────────────────────────────────────────
 RERANK_TOP_N       = 8
 
@@ -899,6 +914,174 @@ def _score_chunk(chunk: dict, query_terms: set[str]) -> float:
     return score
 
 
+def _embed_openai(texts: list[str]) -> Optional[list[list[float]]]:
+    if not OPENAI_KEY:
+        return None
+    try:
+        resp = requests.post(
+            "https://api.openai.com/v1/embeddings",
+            headers={"Authorization": f"Bearer {OPENAI_KEY}", "Content-Type": "application/json"},
+            json={"model": EMBEDDING_MODEL_OPENAI, "input": texts},
+            timeout=EMBEDDING_TIMEOUT,
+        )
+        if resp.status_code != 200:
+            print(f"⚠️ [Embeddings/OpenAI] HTTP {resp.status_code}")
+            return None
+        data = resp.json().get("data", [])
+        return [d["embedding"] for d in sorted(data, key=lambda d: d["index"])]
+    except Exception as e:
+        print(f"⚠️ [Embeddings/OpenAI] {e}")
+        return None
+
+
+def _embed_cohere(texts: list[str], input_type: str = "search_document") -> Optional[list[list[float]]]:
+    if not COHERE_KEY:
+        return None
+    try:
+        resp = requests.post(
+            "https://api.cohere.ai/v1/embed",
+            headers={"Authorization": f"Bearer {COHERE_KEY}", "Content-Type": "application/json"},
+            json={"model": EMBEDDING_MODEL_COHERE, "texts": texts, "input_type": input_type},
+            timeout=EMBEDDING_TIMEOUT,
+        )
+        if resp.status_code != 200:
+            print(f"⚠️ [Embeddings/Cohere] HTTP {resp.status_code}")
+            return None
+        return resp.json().get("embeddings")
+    except Exception as e:
+        print(f"⚠️ [Embeddings/Cohere] {e}")
+        return None
+
+
+def _embed_voyage(texts: list[str], input_type: str = "document") -> Optional[list[list[float]]]:
+    if not VOYAGE_KEY:
+        return None
+    try:
+        resp = requests.post(
+            "https://api.voyageai.com/v1/embeddings",
+            headers={"Authorization": f"Bearer {VOYAGE_KEY}", "Content-Type": "application/json"},
+            json={"model": EMBEDDING_MODEL_VOYAGE, "input": texts, "input_type": input_type},
+            timeout=EMBEDDING_TIMEOUT,
+        )
+        if resp.status_code != 200:
+            print(f"⚠️ [Embeddings/Voyage] HTTP {resp.status_code}")
+            return None
+        data = resp.json().get("data", [])
+        return [d["embedding"] for d in sorted(data, key=lambda d: d["index"])]
+    except Exception as e:
+        print(f"⚠️ [Embeddings/Voyage] {e}")
+        return None
+
+
+def _get_embeddings(texts: list[str], is_query: bool = False) -> Optional[list[list[float]]]:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Provider-independent embedding call. Dispatches on EMBEDDING_PROVIDER
+    (openai | cohere | voyage) so swapping providers is a config change, not
+    a code change. Returns None — never raises — if the selected provider
+    has no key configured or the call fails; callers fall back to the
+    keyword scorer, so a missing/broken embedding provider degrades
+    retrieval quality instead of breaking the pipeline.
+    """
+    if not texts:
+        return None
+    if EMBEDDING_PROVIDER == "cohere":
+        return _embed_cohere(texts, "search_query" if is_query else "search_document")
+    if EMBEDDING_PROVIDER == "voyage":
+        return _embed_voyage(texts, "query" if is_query else "document")
+    return _embed_openai(texts)  # default provider
+
+
+def _normalize_vec(v: list[float]) -> list[float]:
+    norm = math.sqrt(sum(x * x for x in v)) or 1.0
+    return [x / norm for x in v]
+
+
+def _dot(a: list[float], b: list[float]) -> float:
+    return sum(x * y for x, y in zip(a, b))
+
+
+class _LocalVectorIndex:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Minimal local vector index for one page's chunks. Uses FAISS
+    (IndexFlatIP over L2-normalized vectors == cosine similarity) when the
+    `faiss` package is installed, and transparently falls back to a pure
+    Python cosine-similarity implementation with the same add()/search()
+    interface when it isn't. FAISS stays an optional accelerator, not a
+    hard dependency — this keeps the pipeline running either way.
+    """
+
+    def __init__(self, dim: int):
+        self.dim = dim
+        self._vectors: list[list[float]] = []
+        self._faiss_index = None
+        self._faiss = None
+        self._np = None
+        try:
+            import faiss  # type: ignore
+            import numpy as np  # type: ignore
+            self._faiss = faiss
+            self._np = np
+            self._faiss_index = faiss.IndexFlatIP(dim)
+        except Exception:
+            pass  # no faiss/numpy available — use the pure-python fallback below
+
+    def add(self, vectors: list[list[float]]) -> None:
+        if self._faiss_index is not None:
+            arr = self._np.array(vectors, dtype="float32")
+            self._faiss.normalize_L2(arr)
+            self._faiss_index.add(arr)
+        else:
+            self._vectors = [_normalize_vec(v) for v in vectors]
+
+    def search(self, query_vector: list[float], top_k: int) -> list[tuple[int, float]]:
+        """Returns [(chunk_index, similarity_score), ...] sorted best-first."""
+        if self._faiss_index is not None:
+            q = self._np.array([query_vector], dtype="float32")
+            self._faiss.normalize_L2(q)
+            scores, idxs = self._faiss_index.search(q, min(top_k, self._faiss_index.ntotal))
+            return [(int(i), float(s)) for i, s in zip(idxs[0], scores[0]) if i != -1]
+        qn = _normalize_vec(query_vector)
+        sims = [(i, _dot(qn, v)) for i, v in enumerate(self._vectors)]
+        sims.sort(key=lambda t: t[1], reverse=True)
+        return sims[:top_k]
+
+
+def _select_chunks_by_embedding(
+    chunks: list[dict], query: str, top_k: int
+) -> Optional[list[dict]]:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Embedding retrieval: embed every chunk + the query, run a local
+    FAISS-compatible vector search, and return the top_k chunks by cosine
+    similarity, restored to original page order. Returns None (not an empty
+    list) on any failure so the caller can tell "embeddings unavailable"
+    apart from "ran fine, nothing matched" and fall back cleanly.
+    """
+    if not chunks:
+        return None
+
+    texts = [c["text"] for c in chunks]
+    doc_vectors = _get_embeddings(texts, is_query=False)
+    if not doc_vectors or len(doc_vectors) != len(texts):
+        return None
+
+    query_vectors = _get_embeddings([query], is_query=True)
+    if not query_vectors:
+        return None
+
+    index = _LocalVectorIndex(dim=len(doc_vectors[0]))
+    index.add(doc_vectors)
+
+    hits = index.search(query_vectors[0], top_k)
+    if not hits:
+        return None
+
+    kept_idx = sorted(i for i, _score in hits)
+    return [chunks[i] for i in kept_idx]
+
+
 def _select_best_chunks(
     chunks: list[dict],
     query: str,
@@ -906,30 +1089,39 @@ def _select_best_chunks(
     char_budget: int = _PAGE_CHAR_BUDGET,
 ) -> list[dict]:
     """
-    ── NEW ──────────────────────────────────────────────────────────────────
-    STEP 4: score every chunk against the query, then greedily keep the
-    highest-scoring chunks until either `max_chunks` or `char_budget` is
-    hit. Kept chunks are returned in their original page order (not score
-    order) so the AI reads them as coherent, ordered sections rather than a
-    shuffled pile of unrelated snippets.
+    ── CHANGED ──────────────────────────────────────────────────────────────
+    STEP 4 (retrieval): embedding generation → vector search → retrieve
+    only the relevant chunks. Tries provider embeddings + the local
+    FAISS-compatible index first; if no embedding provider is configured or
+    the calls fail, falls back to the original keyword-overlap scorer so
+    retrieval always degrades gracefully instead of breaking the pipeline.
+    Either path is then trimmed to `char_budget`, in original page order.
     """
-    query_terms = {w for w in re.findall(r'[a-z0-9]+', query.lower()) if w not in _STOPWORDS}
+    id_to_idx = {id(c): i for i, c in enumerate(chunks)}
+    vector_hits = _select_chunks_by_embedding(chunks, query, max_chunks)
 
-    scored = [(i, c, _score_chunk(c, query_terms)) for i, c in enumerate(chunks)]
-    scored.sort(key=lambda t: t[2], reverse=True)
+    if vector_hits is None:
+        # ── Fallback: keyword-overlap scoring (unchanged from before) ──
+        query_terms = {w for w in re.findall(r'[a-z0-9]+', query.lower()) if w not in _STOPWORDS}
+        scored = [(i, c, _score_chunk(c, query_terms)) for i, c in enumerate(chunks)]
+        scored.sort(key=lambda t: t[2], reverse=True)
+        ordered = [c for _i, c, _score in scored]
+    else:
+        ordered = vector_hits
 
-    kept_idx: list[int] = []
+    kept: list[dict] = []
     used_chars = 0
-    for i, c, _score in scored:
-        if len(kept_idx) >= max_chunks:
+    for c in ordered:
+        if len(kept) >= max_chunks:
             break
-        if used_chars + len(c["text"]) > char_budget and kept_idx:
+        if used_chars + len(c["text"]) > char_budget and kept:
             continue  # too big for what's left of the budget — keep scanning smaller ones
-        kept_idx.append(i)
+        kept.append(c)
         used_chars += len(c["text"])
 
-    kept_idx.sort()  # restore original page order
-    return [chunks[i] for i in kept_idx]
+    # Restore original page order (reading-order output, not score order)
+    kept.sort(key=lambda c: id_to_idx[id(c)])
+    return kept
 
 
 def _assemble_chunks(chunks: list[dict], page_title: str) -> str:
