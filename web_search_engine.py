@@ -53,6 +53,23 @@ RESULTS_PER_ENGINE = 5
 FIRECRAWL_MIN_PAGES = 5
 FIRECRAWL_MAX_PAGES = 15
 FIRECRAWL_TOP_N      = FIRECRAWL_MIN_PAGES  # kept for backward compatibility
+
+# ── NEW: Page-processing (chunk → store → score → select) config ────────────
+# Replaces the old "shove content[:3000] straight at the AI" behavior. A raw
+# page is chopped mid-sentence by a blind char truncate and often throws away
+# the part that actually answers the query. Instead we split the page into
+# semantic sections, drop duplicates, score each section against the query,
+# and keep only the best ones — within the same overall char ceiling.
+_CHUNK_MAX_CHARS  = 900    # per-chunk cap — keeps each chunk a focused unit
+_CHUNK_MIN_CHARS  = 40     # drop near-empty slivers (nav/footer junk, stray lines)
+_PAGE_MAX_CHUNKS  = 6      # hard cap on chunks kept per page
+_PAGE_CHAR_BUDGET = 3000   # total chars kept per page after scoring (same ceiling as before)
+_HEADER_RE        = re.compile(r'^(#{1,6})\s+(.*)$', re.MULTILINE)
+_STOPWORDS        = {
+    "the", "a", "an", "of", "in", "on", "for", "to", "and", "or", "is", "are",
+    "was", "were", "what", "who", "when", "where", "how", "does", "do", "did",
+    "this", "that", "with", "at", "by", "be", "it", "as", "from",
+}
 # ── Max Cohere rerank candidates ─────────────────────────────────────────────
 RERANK_TOP_N       = 8
 
@@ -757,10 +774,193 @@ def _should_crawl(url: str) -> bool:
         return False
 
 
-def _firecrawl_extract(url: str) -> Optional[str]:
+def _split_long_text(text: str, max_chars: int) -> list[str]:
     """
-    Call Firecrawl API to extract clean markdown from a URL.
-    Returns clean text or None on failure.
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Splits an over-long chunk into smaller pieces along paragraph boundaries
+    (never mid-sentence) so no single chunk blows past `_CHUNK_MAX_CHARS`.
+    """
+    text = text.strip()
+    if len(text) <= max_chars:
+        return [text] if text else []
+
+    parts, buf = [], ""
+    for para in re.split(r'\n\s*\n', text):
+        candidate = f"{buf}\n\n{para}".strip() if buf else para
+        if len(candidate) > max_chars and buf:
+            parts.append(buf)
+            buf = para
+        else:
+            buf = candidate
+    if buf:
+        parts.append(buf)
+    return parts
+
+
+def _chunk_page_markdown(markdown: str, page_title: str) -> list[dict]:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    STEP 1 of page processing: split page markdown into semantic sections
+    along heading boundaries (#, ##, ### ...). Falls back to paragraph
+    grouping when the page has no headings at all (common on news/blog
+    pages that render as one unbroken block).
+
+    Each chunk: {"heading": str, "text": str}. `heading` is always populated
+    — the nearest markdown heading above the chunk, or the page title for
+    lede text / headerless pages — so titles are preserved, never dropped.
+    """
+    markdown = markdown.strip()
+    if not markdown:
+        return []
+
+    headers = list(_HEADER_RE.finditer(markdown))
+    chunks: list[dict] = []
+
+    if headers:
+        # Lede text before the first heading still belongs to the page title
+        if headers[0].start() > 0:
+            lead = markdown[:headers[0].start()].strip()
+            if len(lead) >= _CHUNK_MIN_CHARS:
+                chunks.append({"heading": page_title or "Introduction", "text": lead})
+
+        for i, h in enumerate(headers):
+            heading_text = h.group(2).strip()
+            body_start   = h.end()
+            body_end     = headers[i + 1].start() if i + 1 < len(headers) else len(markdown)
+            body         = markdown[body_start:body_end].strip()
+            if len(body) < _CHUNK_MIN_CHARS:
+                continue
+            # Long sections under one heading get split further so no single
+            # chunk balloons past the per-chunk cap — still the same section.
+            for piece in _split_long_text(body, _CHUNK_MAX_CHARS):
+                chunks.append({"heading": heading_text, "text": piece})
+    else:
+        # No headings — fall back to paragraph boundaries, grouping
+        # consecutive paragraphs up to the per-chunk cap.
+        paragraphs = [p.strip() for p in re.split(r'\n\s*\n', markdown) if p.strip()]
+        buf = ""
+        for p in paragraphs:
+            candidate = f"{buf}\n\n{p}".strip() if buf else p
+            if len(candidate) > _CHUNK_MAX_CHARS and buf:
+                chunks.append({"heading": page_title or "", "text": buf})
+                buf = p
+            else:
+                buf = candidate
+        if len(buf) >= _CHUNK_MIN_CHARS:
+            chunks.append({"heading": page_title or "", "text": buf})
+
+    return chunks
+
+
+def _dedupe_chunks(chunks: list[dict]) -> list[dict]:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    STEP 2 (store) + duplicate removal: drop exact/near-duplicate chunks —
+    common with repeated nav/footer boilerplate or sections a page renders
+    twice. Fingerprint = whitespace-normalized, lowercased text, hashed.
+    """
+    seen: set[str] = set()
+    unique: list[dict] = []
+    for c in chunks:
+        norm = re.sub(r'\s+', ' ', c["text"].strip().lower())
+        fp = hashlib.md5(norm.encode("utf-8", "ignore")).hexdigest()
+        if fp in seen:
+            continue
+        seen.add(fp)
+        unique.append(c)
+    return unique
+
+
+def _score_chunk(chunk: dict, query_terms: set[str]) -> float:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    STEP 3: cheap, dependency-free relevance score — keyword overlap between
+    the chunk and the query terms, with heading matches weighted heavier
+    than body matches (a chunk whose *heading* is on-topic is usually more
+    relevant than one that just happens to mention a query word once), plus
+    a small bonus for well-sized chunks so tiny fragments and giant blocks
+    both rank behind well-formed, on-topic sections.
+    """
+    if not query_terms:
+        return 1.0
+
+    text_words    = set(re.findall(r'[a-z0-9]+', chunk["text"].lower()))
+    heading_words = set(re.findall(r'[a-z0-9]+', chunk.get("heading", "").lower()))
+
+    body_hits    = len(query_terms & text_words)
+    heading_hits = len(query_terms & heading_words)
+
+    score = body_hits + (heading_hits * 3)
+
+    length = len(chunk["text"])
+    if 150 <= length <= _CHUNK_MAX_CHARS:
+        score += 0.5
+
+    return score
+
+
+def _select_best_chunks(
+    chunks: list[dict],
+    query: str,
+    max_chunks: int = _PAGE_MAX_CHUNKS,
+    char_budget: int = _PAGE_CHAR_BUDGET,
+) -> list[dict]:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    STEP 4: score every chunk against the query, then greedily keep the
+    highest-scoring chunks until either `max_chunks` or `char_budget` is
+    hit. Kept chunks are returned in their original page order (not score
+    order) so the AI reads them as coherent, ordered sections rather than a
+    shuffled pile of unrelated snippets.
+    """
+    query_terms = {w for w in re.findall(r'[a-z0-9]+', query.lower()) if w not in _STOPWORDS}
+
+    scored = [(i, c, _score_chunk(c, query_terms)) for i, c in enumerate(chunks)]
+    scored.sort(key=lambda t: t[2], reverse=True)
+
+    kept_idx: list[int] = []
+    used_chars = 0
+    for i, c, _score in scored:
+        if len(kept_idx) >= max_chunks:
+            break
+        if used_chars + len(c["text"]) > char_budget and kept_idx:
+            continue  # too big for what's left of the budget — keep scanning smaller ones
+        kept_idx.append(i)
+        used_chars += len(c["text"])
+
+    kept_idx.sort()  # restore original page order
+    return [chunks[i] for i in kept_idx]
+
+
+def _assemble_chunks(chunks: list[dict], page_title: str) -> str:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    STEP 5 (return): render the selected chunks back into one text block,
+    keeping each section's heading so the AI still sees page structure
+    instead of a bare stitched-together blob. Page title is always kept.
+    """
+    if not chunks:
+        return ""
+    parts = [f"# {page_title}"] if page_title else []
+    last_heading = None
+    for c in chunks:
+        heading = c.get("heading") or ""
+        if heading and heading != last_heading:
+            parts.append(f"## {heading}")
+            last_heading = heading
+        parts.append(c["text"])
+    return "\n\n".join(parts).strip()
+
+
+def _firecrawl_extract(url: str, query: str = "") -> Optional[str]:
+    """
+    Call Firecrawl API to extract clean markdown from a URL, then run it
+    through the page-processing pipeline instead of a blind char truncate:
+
+        Page → chunk into semantic sections → store chunks → score chunks
+             → return only the best chunks
+
+    Returns the assembled best-chunks text, or None on failure.
     Hard timeout: 5 seconds (skip slow pages rather than block the pipeline).
     """
     if not FIRECRAWL_KEY:
@@ -788,13 +988,29 @@ def _firecrawl_extract(url: str) -> Optional[str]:
         if not data.get("success"):
             return None
 
-        content = data.get("data", {}).get("markdown", "")
+        page_data = data.get("data", {}) or {}
+        content   = page_data.get("markdown", "")
         if not content:
             return None
 
-        # Truncate to 3000 chars — enough context without blowing the prompt
-        clean = content.strip()[:3000]
-        print(f"✅ [Firecrawl] Extracted {len(clean)} chars from {url[:60]}")
+        page_title = (page_data.get("metadata") or {}).get("title", "") or ""
+
+        # ── Page processing pipeline (replaces old content[:3000] truncate) ──
+        chunks = _chunk_page_markdown(content, page_title)
+        chunks = _dedupe_chunks(chunks)
+
+        if not chunks:
+            # Page had no usable structure at all — fall back to a flat cap
+            clean = content.strip()[:_PAGE_CHAR_BUDGET]
+            print(f"✅ [Firecrawl] {url[:60]}: no chunk boundaries found, "
+                  f"used flat {len(clean)}-char cap")
+            return clean
+
+        best  = _select_best_chunks(chunks, query)
+        clean = _assemble_chunks(best, page_title)
+
+        print(f"✅ [Firecrawl] {url[:60]}: {len(chunks)} chunks → "
+              f"{len(best)} kept ({len(clean)} chars, query-scored)")
         return clean
 
     except Exception as e:
@@ -878,6 +1094,7 @@ def _select_firecrawl_candidates(
 
 def enrich_with_firecrawl(
     results: list[dict],
+    query: str = "",
     top_n: Optional[int] = None,
     min_pages: int = FIRECRAWL_MIN_PAGES,
     max_pages: int = FIRECRAWL_MAX_PAGES,
@@ -912,7 +1129,7 @@ def enrich_with_firecrawl(
     # Submit all Firecrawl calls simultaneously
     with ThreadPoolExecutor(max_workers=len(candidates)) as executor:
         future_to_idx = {
-            executor.submit(_firecrawl_extract, url): idx
+            executor.submit(_firecrawl_extract, url, query): idx
             for idx, url in candidates
         }
         enriched_count = 0
@@ -927,7 +1144,10 @@ def enrich_with_firecrawl(
                 if content:
                     results[idx]["body"]           = content
                     results[idx]["firecrawled"]    = True
-                    results[idx]["body_truncated"] = len(content) >= 2990
+                    # Chunk selection already trims to the char budget by
+                    # relevance (not a mid-sentence cut), so "truncated" now
+                    # just flags pages where kept content hit that budget.
+                    results[idx]["body_truncated"] = len(content) >= (_PAGE_CHAR_BUDGET - 10)
                     enriched_count += 1
             except Exception:
                 pass  # timeout or error — snippet stays as-is
@@ -1527,7 +1747,7 @@ def run_production_search(query: str) -> dict:
         print(f"⚡ [Firecrawl] Skipping — direct answers from both engines available")
         enriched = deduped
     else:
-        enriched = enrich_with_firecrawl(deduped)  # dynamic 5-15 pages, see function docstring
+        enriched = enrich_with_firecrawl(deduped, query)  # dynamic 5-15 pages, see function docstring
 
     # Step 5: Trust scoring
     scored = score_all_results(enriched)
