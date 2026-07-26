@@ -144,7 +144,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
-    <link rel="stylesheet" href="static/style.css?v=0.0.394">   <!-- this is CSS linking section -->
+    <link rel="stylesheet" href="static/style.css?v=0.0.395">   <!-- this is CSS linking section -->
     
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#000000" />
@@ -707,6 +707,31 @@
         </div>
     </div>
 
+    <!-- 🟣 CLAUDE (PUTER) EXTERNAL MODEL INFO MODAL -->
+    <div id="claudePuterInfoModal" class="claude-puter-modal">
+        <div class="claude-puter-modal-overlay" onclick="closeClaudePuterInfoModal()"></div>
+        <div class="claude-puter-modal-content">
+            <button class="claude-puter-close-btn" onclick="closeClaudePuterInfoModal()">✕</button>
+
+            <div class="claude-puter-modal-icon">🟣</div>
+
+            <div class="claude-puter-modal-header">
+                <h2>Claude Sonnet — External Model</h2>
+            </div>
+
+            <p class="claude-puter-modal-text">
+                This is an external model from <strong>Puter</strong>. To start a conversation with it,
+                you'll need to sign in to Puter once — a small popup window will open for that.
+            </p>
+            <p class="claude-puter-modal-text">
+                We hope this won't degrade your experience. Thank you for your patience 🙏<br>
+                — Anirban &amp; Team
+            </p>
+
+            <button class="claude-puter-modal-btn" onclick="closeClaudePuterInfoModal()">Got it</button>
+        </div>
+    </div>
+
     <!-- FEEDBACK MODAL -->
     <div id="feedbackModal" class="feedback-modal">
         <div class="feedback-modal-overlay" onclick="closeFeedbackModal()"></div>
@@ -770,18 +795,18 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
     
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <script src="static/firebase-config.js?v=0.0.394"></script>
-    <script src="static/live-sync.js?v=0.0.394"></script>
-    <script src="static/logic.js?v=0.0.394"></script>
-    <script src="static/feedback.js?v=0.0.394"></script>
-    <script src="static/file-upload.js?v=0.0.394"></script>
+    <script src="static/firebase-config.js?v=0.0.395"></script>
+    <script src="static/live-sync.js?v=0.0.395"></script>
+    <script src="static/logic.js?v=0.0.395"></script>
+    <script src="static/feedback.js?v=0.0.395"></script>
+    <script src="static/file-upload.js?v=0.0.395"></script>
 
     <script>
         console.log('🚀 Catura AI v27.0.5 loaded');
         
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js?v=0.0.394')
+                navigator.serviceWorker.register('/service-worker.js?v=0.0.395')
                     .then(() => console.log('✅ Catura AI PWA Ready - v27.0.5'))
                     .catch((err) => console.log('❌ SW Error:', err));
             });

@@ -5361,15 +5361,24 @@ window.selectModel = function (modelId, modelName, e) {
     const activeOption = document.querySelector(`[data-model="${modelId}"]`);
     if (activeOption) activeOption.classList.add('active');
 
+    const isClaudePuter = selectedModel === 'claude_puter';
     const isMobile = window.innerWidth <= 768;
     if (isMobile) {
         setTimeout(() => {
             closeAllModelMenus();
-            showToast(`✓ Switched to ${modelName}`, 1500);
+            if (isClaudePuter) {
+                showClaudePuterInfoModal();
+            } else {
+                showToast(`✓ Switched to ${modelName}`, 1500);
+            }
         }, 180);
     } else {
         closeAllModelMenus();
-        showToast(`✓ Switched to ${modelName}`, 1500);
+        if (isClaudePuter) {
+            showClaudePuterInfoModal();
+        } else {
+            showToast(`✓ Switched to ${modelName}`, 1500);
+        }
     }
 };
 
@@ -5681,6 +5690,19 @@ function getSelectedModel() {
 // latest known id rather than breaking the feature.
 const CLAUDE_SONNET_FALLBACK_MODEL = 'claude-sonnet-5';
 let _cachedClaudeSonnetModel = null;
+
+// Shown only when the user selects the Claude Sonnet (Puter) model — tells
+// them a one-time external Puter sign-in popup will appear when they send
+// their first message. Every other model is unaffected.
+window.showClaudePuterInfoModal = function () {
+    const modal = document.getElementById('claudePuterInfoModal');
+    if (modal) modal.classList.add('active');
+};
+
+window.closeClaudePuterInfoModal = function () {
+    const modal = document.getElementById('claudePuterInfoModal');
+    if (modal) modal.classList.remove('active');
+};
 
 async function getLatestClaudeSonnetModel() {
     if (_cachedClaudeSonnetModel) return _cachedClaudeSonnetModel;

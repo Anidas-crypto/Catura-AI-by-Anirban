@@ -5410,6 +5410,148 @@ kbd.shortcut-key {
     color: #aab0c0;
 }
 
+/* ============================
+   🟣 CLAUDE (PUTER) EXTERNAL MODEL INFO MODAL
+   ============================ */
+.claude-puter-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: var(--z-modal);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.claude-puter-modal.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.claude-puter-modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    cursor: pointer;
+}
+
+.claude-puter-modal-content {
+    position: relative;
+    background: linear-gradient(135deg, #1a1a1a 0%, #161616 100%);
+    border: 1px solid #2a2a2a;
+    border-radius: 16px;
+    padding: 28px;
+    max-width: 440px;
+    width: 90%;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+    animation: modalSlideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    z-index: var(--z-modal-sheet);
+}
+
+.claude-puter-close-btn {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: transparent;
+    border: none;
+    color: #666;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+.claude-puter-close-btn:hover {
+    background: #2a2a2a;
+    color: #e5e5e5;
+}
+
+.claude-puter-modal-icon {
+    font-size: 34px;
+    margin-bottom: 10px;
+}
+
+.claude-puter-modal-header h2 {
+    margin: 0 0 14px;
+    font-size: 18px;
+    font-weight: 600;
+    color: #e5e5e5;
+    letter-spacing: -0.02em;
+}
+
+.claude-puter-modal-text {
+    margin: 0 0 12px;
+    font-size: 14px;
+    line-height: 1.6;
+    color: #b5b5b5;
+}
+
+.claude-puter-modal-text strong {
+    color: #e5e5e5;
+}
+
+.claude-puter-modal-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: linear-gradient(135deg, #10a37f 0%, #0d8c6d 100%);
+    border: none;
+    color: white;
+    padding: 11px 24px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 8px rgba(16, 163, 127, 0.3);
+    margin-top: 6px;
+}
+
+.claude-puter-modal-btn:hover {
+    background: linear-gradient(135deg, #0d8c6d 0%, #0a7a5e 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 14px rgba(16, 163, 127, 0.45);
+}
+
+.claude-puter-modal-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 6px rgba(16, 163, 127, 0.2);
+}
+
+@media (max-width: 600px) {
+    .claude-puter-modal-content {
+        max-width: 95%;
+        padding: 20px;
+        border-radius: 12px;
+    }
+    .claude-puter-modal-header h2 {
+        font-size: 16px;
+    }
+}
+
+[data-theme="light"] .claude-puter-modal-overlay { background: rgba(15,17,23,0.35); }
+[data-theme="light"] .claude-puter-modal-content {
+    background: linear-gradient(135deg, #ffffff 0%, #f9fafb 100%);
+    border-color: #e4e7ef;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.14);
+}
+[data-theme="light"] .claude-puter-modal-header h2 { color: #0f1117; }
+[data-theme="light"] .claude-puter-modal-text { color: #5a6178; }
+[data-theme="light"] .claude-puter-modal-text strong { color: #0f1117; }
+[data-theme="light"] .claude-puter-close-btn { color: #9aa0b5; }
+[data-theme="light"] .claude-puter-close-btn:hover { background: #f0f2f7; color: #3d4455; }
+
 /* ── Feedback modal light theme ── */
 [data-theme="light"] .feedback-modal-overlay { background: rgba(15,17,23,0.35); }
 [data-theme="light"] .feedback-modal-content {
