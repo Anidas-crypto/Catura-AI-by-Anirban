@@ -1622,65 +1622,347 @@ def _recency_boost(result: dict, url: str) -> int:
     return 0
 
 
-def compute_trust_score(url: str, result: dict) -> int:
+_AI_SPAM_PATTERNS = [
+    r'\bas an ai( language model)?\b',
+    r'\bin (today\'?s|this) fast-paced world\b',
+    r'\bin conclusion,? it is important to note\b',
+    r'\bit(\'s| is) worth noting that\b',
+    r'\bdelve into\b',
+    r'\bin the realm of\b',
+    r'\bunlock(ing)? the (power|potential) of\b',
+    r'\bnavigating the (complex(ities)?|world) of\b',
+    r'\boverall,? (it is|this) (clear|evident)\b',
+    r'\bwhether you\'?re .{0,40} or .{0,40}, this\b',
+]
+
+_CLICKBAIT_PATTERNS = [
+    r'\byou won\'?t believe\b',
+    r'\bnumber \d+ will (shock|surprise) you\b',
+    r'\bdoctors hate (this|him|her)\b',
+    r'\bthis one (weird|simple) trick\b',
+]
+
+
+def _semantic_relevance_score(query: str, result: dict) -> float:
     """
-    Returns trust score 0–100 for a search result.
-    Factors:
-      - Domain tier (base score) — now 6 tiers, see TRUST_TIERS above
-      - Multi-source confirmation (boost)
-      - Direct answer from engine (boost)
-      - Real recency, based on actual publish date (boost)
-      - Firecrawled full content (slight boost — real page)
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Cheap, dependency-free relevance signal for trust scoring: keyword
+    overlap between the query and the result's title + body, with title
+    matches weighted heavier. This runs on every result on every search, so
+    it deliberately avoids an extra embedding/API call here — the
+    embedding-based retrieval already happened earlier in the pipeline;
+    this is just "does this result still look on-topic" as one input to
+    trust, not a replacement for that retrieval step.
+    Returns 0.0–1.0.
+    """
+    query_terms = {w for w in re.findall(r'[a-z0-9]+', query.lower()) if w not in _STOPWORDS}
+    if not query_terms:
+        return 0.5
+
+    title_words = set(re.findall(r'[a-z0-9]+', result.get("title", "").lower()))
+    body_words  = set(re.findall(r'[a-z0-9]+', (result.get("body", "") or "")[:2000].lower()))
+
+    title_hits = len(query_terms & title_words)
+    body_hits  = len(query_terms & body_words)
+
+    raw = (title_hits * 2) + body_hits
+    max_possible = len(query_terms) * 3  # every term in title AND body
+    return min(raw / max_possible, 1.0) if max_possible else 0.5
+
+
+def _publication_date_confidence(result: dict, url: str) -> float:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Distinct from freshness (how recent) — this measures whether we can
+    actually verify a real publish date at all. Undated content is harder
+    to trust for anything time-sensitive, so it gets a mild penalty rather
+    than being scored as if it were confidently fresh or confidently old.
+    Returns -3..+3.
+    """
+    published = (result.get("published") or "").strip()
+    if published:
+        for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%Y/%m/%d"):
+            try:
+                datetime.strptime(published[:19], fmt)
+                return 3.0  # confirmed, parseable date from the engine
+            except ValueError:
+                continue
+
+    if (result.get("date") or "").strip():
+        return 1.5  # relative date string ("3 days ago") — usable but less precise
+
+    if str(datetime.utcnow().year) in (url or ""):
+        return 0.5  # weak signal only
+
+    return -3.0  # no date signal at all
+
+
+def _content_quality_score(result: dict) -> float:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Heuristic content-quality signal from the actual page/snippet text:
+    rewards substantive, well-formed content (real sentence structure,
+    concrete numbers/facts, reasonable length) and penalizes thin
+    boilerplate, wall-of-caps shouting, or excessive punctuation spam.
+    Returns -5..+8.
+    """
+    body = (result.get("body", "") or result.get("snippet", "") or "").strip()
+    if not body:
+        return 0.0
+
+    score = 0.0
+    length = len(body)
+
+    if length < 80:
+        score -= 3   # too thin to be substantive
+    elif 200 <= length <= 6000:
+        score += 3   # healthy, readable amount of content
+    elif length > 6000:
+        score += 1   # long is fine but not extra credit past a point
+
+    # Concrete facts/numbers tend to correlate with real reporting/reference
+    # content rather than generic filler.
+    number_hits = len(re.findall(r'\b\d[\d,.]*\b', body))
+    if number_hits >= 3:
+        score += 2
+
+    # Sentence structure sanity check
+    sentences = re.split(r'(?<=[.!?])\s+', body)
+    real_sentences = [s for s in sentences if 20 <= len(s) <= 300]
+    if len(real_sentences) >= 3:
+        score += 2
+
+    # Shouting / spammy punctuation
+    caps_words = re.findall(r'\b[A-Z]{4,}\b', body)
+    if len(caps_words) > 5:
+        score -= 2
+    if body.count('!') > 5:
+        score -= 2
+
+    return max(-5.0, min(score, 8.0))
+
+
+def _ai_spam_penalty(result: dict) -> float:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Flags common AI-generated-filler and clickbait phrasing patterns.
+    Not a definitive AI-detector (there isn't a reliable one) — a cheap
+    heuristic pattern match that catches the stock phrases mass-produced
+    SEO/content-farm generators lean on. Returns -12..0.
+    """
+    text = ((result.get("title", "") or "") + " " + (result.get("body", "") or "")).lower()
+    if not text.strip():
+        return 0.0
+
+    hits = sum(1 for p in _AI_SPAM_PATTERNS if re.search(p, text))
+    hits += sum(1 for p in _CLICKBAIT_PATTERNS if re.search(p, text))
+
+    return -min(hits * 4, 12)
+
+
+def _cross_source_agreement_boost(result: dict) -> float:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Scales the multi-source boost with HOW MANY distinct engines/queries
+    surfaced this same URL, instead of a flat "seen twice" boost — three
+    independent confirmations should count for more than two.
+    Returns 0..12.
+    """
+    engines_seen = result.get("engines_seen") or []
+    distinct = len(set(e for e in engines_seen if e))
+    if distinct <= 1:
+        return 0.0
+    return min((distinct - 1) * 6, 12)
+
+
+def _official_source_boost(domain: str) -> float:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Explicit "is this an official/primary source" signal, separate from the
+    general authority tier — governments, central banks, regulators, and
+    international bodies (.gov, .gov.xx, .mil, .int, and Tier-1 domains).
+    Returns 0 or 6.
+    """
+    if not domain:
+        return 0.0
+    if re.search(r'\.(gov|mil|int)(\.[a-z]{2})?$', domain) or ".gov." in domain:
+        return 6.0
+    if any(domain == t or domain.endswith("." + t) for t in TRUST_TIERS.get(1, ())):
+        return 6.0
+    return 0.0
+
+
+def _source_diversity_boost(results: list[dict]) -> dict[int, float]:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Global pass across the WHOLE result set (not a single result): clusters
+    near-duplicate content by a fuzzy fingerprint (first ~40 words,
+    normalized) and rewards results whose story is corroborated by several
+    DIFFERENT domains — true source diversity, distinct from multi_source
+    (which only tracks the same URL appearing in multiple engines).
+    Returns {result_index: boost 0..8}.
+    """
+    clusters: dict[str, set[str]] = {}
+    cluster_of: dict[int, str] = {}
+
+    for i, r in enumerate(results):
+        body = (r.get("body", "") or r.get("snippet", "") or "").strip().lower()
+        if not body:
+            continue
+        words = re.findall(r'[a-z0-9]+', body)[:40]
+        fp = hashlib.md5(" ".join(words).encode("utf-8", "ignore")).hexdigest()[:10]
+        domain = _get_domain(r.get("url", ""))
+        clusters.setdefault(fp, set()).add(domain)
+        cluster_of[i] = fp
+
+    boosts: dict[int, float] = {}
+    for i, fp in cluster_of.items():
+        distinct_domains = len(clusters.get(fp, ()))
+        if distinct_domains >= 2:
+            boosts[i] = min((distinct_domains - 1) * 3, 8)
+    return boosts
+
+
+def _duplicate_penalty(results: list[dict]) -> dict[int, float]:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Global pass: penalizes near-duplicate ARTICLES that survived exact-hash
+    dedup (e.g. the same wire-service story republished with a different
+    intro paragraph on several syndicating domains). Within each fuzzy
+    content cluster, the single highest-tier source is left unpenalized;
+    every other member of that cluster is treated as a redundant repost.
+    Returns {result_index: penalty -6..0}.
+    """
+    clusters: dict[str, list[int]] = {}
+    for i, r in enumerate(results):
+        body = (r.get("body", "") or r.get("snippet", "") or "").strip().lower()
+        if not body:
+            continue
+        words = re.findall(r'[a-z0-9]+', body)[:40]
+        fp = hashlib.md5(" ".join(words).encode("utf-8", "ignore")).hexdigest()[:10]
+        clusters.setdefault(fp, []).append(i)
+
+    penalties: dict[int, float] = {}
+    for idx_list in clusters.values():
+        if len(idx_list) < 2:
+            continue
+        # Keep the current front-runner (by existing base tier score) penalty-free
+        idx_list_sorted = sorted(
+            idx_list,
+            key=lambda i: compute_trust_score(results[i].get("url", ""), results[i]),
+            reverse=True,
+        )
+        for i in idx_list_sorted[1:]:
+            penalties[i] = -6.0
+    return penalties
+
+
+def compute_trust_score(
+    url: str,
+    result: dict,
+    query: str = "",
+    diversity_boost: float = 0.0,
+    duplicate_penalty: float = 0.0,
+) -> int:
+    """
+    ── CHANGED — now dynamic instead of mostly static ──────────────────────
+    Returns trust score 0–100, blending:
+      - Authority       — domain tier base score (TRUST_TIERS)
+      - Official source — explicit gov/regulator/IGO detection (boost)
+      - Freshness       — real recency, based on actual publish date (boost)
+      - Publication date confidence — do we have a verifiable date at all
+      - Cross-source agreement — scaled by how many distinct engines
+        independently surfaced this same URL
+      - Semantic relevance — keyword overlap between query and content
+      - Content quality — heuristic on the actual text (length, structure,
+        concrete facts, shouting/spam punctuation)
+      - AI-generated-spam penalty — stock filler/clickbait phrase detection
+      - Source diversity boost / duplicate-article penalty — precomputed
+        per-result across the WHOLE result set by score_all_results() and
+        passed in (a single result can't tell "am I one of many reposts of
+        the same story" on its own)
+    `diversity_boost` / `duplicate_penalty` default to 0 for callers that
+    score a single result in isolation (e.g. _firecrawl_priority_score,
+    which runs before the full result set is assembled).
     """
     if not url:
         # Direct answer without URL — trust based on source
         engine = result.get("source_engine", "")
-        if engine in ("tavily_answer", "serper_answer", "serper_kg"):
-            return 88
-        return 60
+        base = 88 if engine in ("tavily_answer", "serper_answer", "serper_kg") else 60
+        base += _semantic_relevance_score(query, result) * 6 if query else 0
+        return int(max(0, min(base, 100)))
 
     try:
         domain = urlparse(url).netloc.lower()
-        # Strip www, m., etc.
         domain = re.sub(r'^(www\d?|m|mobile|amp)\.', '', domain)
     except (ValueError, AttributeError):
         domain = ""
 
-    # Base score by tier — walk TRUST_TIERS from most to least trusted and
-    # take the first (i.e. highest) tier the domain matches. A domain never
-    # scores lower than its worst matching tier would suggest, since we stop
-    # at the first hit.
-    score = 50  # default for unknown/unlisted domains
-
+    # ── Authority — base score by tier ──────────────────────────────────────
+    score = 50.0  # default for unknown/unlisted domains
     for tier_score in TRUST_TIER_SCORES:
         tier_domains = TRUST_TIERS.get(tier_score["tier"], ())
         if any(domain == t or domain.endswith("." + t) for t in tier_domains):
-            score = tier_score["score"]
+            score = float(tier_score["score"])
             break
 
     # Penalty for known low-quality domains
     if any(domain == p or domain.endswith("." + p) for p in _PENALISED):
         score = max(score - 10, 30)
 
-    # Boosts
-    if result.get("multi_source"):
-        score = min(score + 8, 100)   # confirmed by 2+ engines
+    # ── Official source detection ────────────────────────────────────────────
+    score += _official_source_boost(domain)
+
+    # ── Cross-source agreement (scaled by distinct engines, not flat) ───────
+    score += _cross_source_agreement_boost(result)
 
     if result.get("is_direct_answer"):
-        score = min(score + 5, 100)   # featured snippet / direct answer
+        score += 5
 
     if result.get("firecrawled"):
-        score = min(score + 4, 100)   # real page content, not just snippet
+        score += 4
 
-    score = min(score + _recency_boost(result, url), 100)
+    # ── Freshness (recency) + publication-date confidence ───────────────────
+    score += _recency_boost(result, url)
+    score += _publication_date_confidence(result, url)
 
-    return score
+    # ── Semantic relevance to the query ──────────────────────────────────────
+    if query:
+        score += _semantic_relevance_score(query, result) * 8   # 0..8
+
+    # ── Content quality ───────────────────────────────────────────────────────
+    score += _content_quality_score(result)
+
+    # ── Penalize AI-generated spam / clickbait phrasing ─────────────────────
+    score += _ai_spam_penalty(result)
+
+    # ── Source diversity boost / duplicate-article penalty (set-level) ──────
+    score += diversity_boost
+    score += duplicate_penalty
+
+    return int(max(0, min(round(score), 100)))
 
 
-def score_all_results(results: list[dict]) -> list[dict]:
-    """Add trust_score field to every result."""
-    for r in results:
-        r["trust_score"] = compute_trust_score(r.get("url", ""), r)
+def score_all_results(results: list[dict], query: str = "") -> list[dict]:
+    """
+    ── CHANGED ──────────────────────────────────────────────────────────────
+    Add a dynamic trust_score field to every result. First runs two
+    set-level passes across ALL results (source-diversity clustering and
+    duplicate-article detection — neither can be computed from a single
+    result in isolation), then scores each result with those signals plus
+    the semantic-relevance-to-query factor folded in.
+    """
+    diversity  = _source_diversity_boost(results)
+    duplicates = _duplicate_penalty(results)
+
+    for i, r in enumerate(results):
+        r["trust_score"] = compute_trust_score(
+            r.get("url", ""),
+            r,
+            query=query,
+            diversity_boost=diversity.get(i, 0.0),
+            duplicate_penalty=duplicates.get(i, 0.0),
+        )
     return results
 
 
@@ -1942,7 +2224,7 @@ def run_production_search(query: str) -> dict:
         enriched = enrich_with_firecrawl(deduped, query)  # dynamic 5-15 pages, see function docstring
 
     # Step 5: Trust scoring
-    scored = score_all_results(enriched)
+    scored = score_all_results(enriched, query)
 
     # Step 6: Cross-reference analysis
     cross_ref = cross_reference_results(scored)
