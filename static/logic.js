@@ -5258,10 +5258,18 @@ window.toggleModelSelector = function (e) {
             dropdown.classList.add('open');
             btn.classList.add('open');
 
-            const moreModels = ['apep', 'gemma', 'gemma4', 'nivo', 'laguna', 'laguna_core', 'laguna_s', 'laguna_lite', 'nemotron','omni','glm','cohere','minimax_m3','glm52','ling','claude_puter','gpt5_puter','gemini_puter'];
+            const moreModels = ['apep', 'gemma', 'gemma4', 'nivo', 'laguna', 'laguna_core', 'laguna_s', 'laguna_lite', 'nemotron','omni','glm','cohere','minimax_m3','glm52','ling'];
+            const puterModelsList = ['claude_puter','gpt5_puter','gemini_puter'];
             if (moreModels.includes(selectedModel)) {
                 requestAnimationFrame(() => {
                     requestAnimationFrame(() => { toggleMoreModels(null); });
+                });
+            } else if (puterModelsList.includes(selectedModel)) {
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        toggleMoreModels(null);
+                        requestAnimationFrame(() => { window.openPuterModels(); });
+                    });
                 });
             }
         } else {
@@ -5298,10 +5306,18 @@ window.toggleModelSelector = function (e) {
             dropdown.classList.add('open');
             btn.classList.add('open');
 
-            const moreModels = ['apep', 'gemma', 'gemma4', 'nivo', 'laguna', 'laguna_core', 'laguna_s', 'laguna_lite','nemotron','omni', 'cohere','glm','minimax_m3','glm52','ling','claude_puter','gpt5_puter','gemini_puter'];
+            const moreModels = ['apep', 'gemma', 'gemma4', 'nivo', 'laguna', 'laguna_core', 'laguna_s', 'laguna_lite','nemotron','omni', 'cohere','glm','minimax_m3','glm52','ling'];
+            const puterModelsList = ['claude_puter','gpt5_puter','gemini_puter'];
             if (moreModels.includes(selectedModel)) {
                 requestAnimationFrame(() => {
                     requestAnimationFrame(() => { window.openMoreModels(); });
+                });
+            } else if (puterModelsList.includes(selectedModel)) {
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        window.openMoreModels();
+                        requestAnimationFrame(() => { window.openPuterModels(); });
+                    });
                 });
             }
         }
@@ -5349,6 +5365,10 @@ function closeAllModelMenus() {
     const row   = document.getElementById('moreModelsRow');
     if (panel) panel.classList.remove('open');
     if (row)   row.classList.remove('open');
+    const puterPanel = document.getElementById('puterModelsPanel');
+    const puterRow    = document.getElementById('puterModelsRow');
+    if (puterPanel) puterPanel.classList.remove('open');
+    if (puterRow)   puterRow.classList.remove('open');
 }
 
 // ── EFFORT LEVEL row: desktop uses CSS hover + a small close-delay so the
@@ -5495,6 +5515,7 @@ window.closeMoreModels = function () {
     const row   = document.getElementById('moreModelsRow');
     if (panel) panel.classList.remove('open');
     if (row)   row.classList.remove('open');
+    if (window.closePuterModels) window.closePuterModels();
 };
 
 // Mobile still uses click/tap to open the "More models" sub-panel.
@@ -5510,6 +5531,142 @@ window.toggleMoreModels = function (e) {
         window.openMoreModels();
     }
 };
+
+// ============================================================
+// 🟣 PUTER MODELS — nested sub-panel inside "More models".
+// Desktop: click-to-open only (NOT hover), positioned beside the
+// "More models" panel. Mobile: opens as its own full bottom-sheet level,
+// with a back button that returns to the "More models" panel.
+// ============================================================
+window.openPuterModels = function () {
+    const panel = document.getElementById('puterModelsPanel');
+    const row   = document.getElementById('puterModelsRow');
+    if (!panel || !row) return;
+
+    const isOpen = panel.classList.contains('open');
+    if (isOpen) return;
+
+    const isMobile = window.innerWidth <= 768;
+
+    if (!isMobile) {
+        // Desktop: position panel to the side of the "More models" panel
+        const anchorEl = document.getElementById('moreModelsPanel');
+        if (!anchorEl) return;
+
+        const panelW   = 230;
+        const gap      = 8;
+        const margin   = 8;
+
+        const anchorRect = anchorEl.getBoundingClientRect();
+
+        const prevPos      = panel.style.position;
+        const prevVis      = panel.style.visibility;
+        const prevDisplay  = panel.style.display;
+        const prevTop      = panel.style.top;
+        const prevLeft     = panel.style.left;
+        const prevMaxH     = panel.style.maxHeight;
+        const prevOverflow = panel.style.overflowY;
+
+        panel.style.position   = 'fixed';
+        panel.style.visibility = 'hidden';
+        panel.style.display    = 'block';
+        panel.style.maxHeight  = '';
+        panel.style.overflowY  = '';
+        panel.style.top        = '-9999px';
+        panel.style.left       = '-9999px';
+
+        void panel.offsetHeight;
+        const rawH = panel.scrollHeight || panel.offsetHeight || 200;
+
+        panel.style.position   = prevPos  || '';
+        panel.style.visibility = prevVis  || '';
+        panel.style.display    = prevDisplay || '';
+
+        const PANEL_MAX_H = 300;
+        const panelH = Math.min(rawH, PANEL_MAX_H);
+
+        // Horizontal: prefer right of the "More models" panel, fall back to left
+        let left = anchorRect.right + gap;
+        if (left + panelW > window.innerWidth - margin) {
+            left = anchorRect.left - panelW - gap;
+        }
+        if (left < margin) left = margin;
+
+        // Vertical: anchor panel bottom to anchor panel's bottom (grows upward)
+        const anchoredTop = anchorRect.bottom - panelH;
+        const clampedTop  = Math.max(margin, anchoredTop);
+
+        let finalH;
+        if (anchoredTop < margin) {
+            const availableH = anchorRect.bottom - margin;
+            finalH = Math.max(Math.min(availableH, PANEL_MAX_H), 80);
+        } else {
+            finalH = panelH;
+        }
+        panel.style.maxHeight = finalH + 'px';
+        panel.style.overflowY = 'auto';
+
+        panel.style.left = left + 'px';
+        panel.style.top  = clampedTop + 'px';
+    } else {
+        // Mobile: close "More models" bottom-sheet, open this one instead
+        panel.style.left = '';
+        panel.style.top  = '';
+        const moreModelsPanel = document.getElementById('moreModelsPanel');
+        const moreModelsRow   = document.getElementById('moreModelsRow');
+        if (moreModelsPanel) moreModelsPanel.classList.remove('open');
+        if (moreModelsRow)   moreModelsRow.classList.remove('open');
+    }
+
+    panel.classList.add('open');
+    row.classList.add('open');
+};
+
+window.closePuterModels = function () {
+    const panel = document.getElementById('puterModelsPanel');
+    const row   = document.getElementById('puterModelsRow');
+    if (panel) panel.classList.remove('open');
+    if (row)   row.classList.remove('open');
+};
+
+// Click-to-open on BOTH desktop and mobile (no hover behavior for this row).
+window.togglePuterModels = function (e) {
+    if (e) { e.stopPropagation(); e.preventDefault(); }
+    const panel = document.getElementById('puterModelsPanel');
+    if (panel && panel.classList.contains('open')) {
+        window.closePuterModels();
+    } else {
+        window.openPuterModels();
+    }
+};
+
+// Back button inside the Puter models panel (mobile only) — returns to the
+// "More models" panel, NOT the main model dropdown.
+window.goBackToMoreModels = function (e) {
+    if (e) { e.stopPropagation(); e.preventDefault(); }
+    window.closePuterModels();
+
+    const moreModelsPanel = document.getElementById('moreModelsPanel');
+    const moreModelsRow   = document.getElementById('moreModelsRow');
+    if (moreModelsPanel) {
+        moreModelsPanel.style.left = '';
+        moreModelsPanel.style.top  = '';
+        moreModelsPanel.classList.add('open');
+    }
+    if (moreModelsRow) moreModelsRow.classList.add('open');
+};
+
+// Close the Puter models panel when clicking anywhere outside it (desktop),
+// but not when clicking the row that opens it (handled by togglePuterModels).
+document.addEventListener('click', function (e) {
+    const isDesktop = window.innerWidth > 768;
+    if (!isDesktop) return;
+    const panel = document.getElementById('puterModelsPanel');
+    const row   = document.getElementById('puterModelsRow');
+    if (!panel || !panel.classList.contains('open')) return;
+    if (panel.contains(e.target) || (row && row.contains(e.target))) return;
+    window.closePuterModels();
+});
 
 // ── DESKTOP: "More models" opens on hover (Claude-style), like Effort Level.
 // Stays open while pointer is over the row OR the panel (small close-delay so
@@ -5561,6 +5718,8 @@ window.toggleMoreModels = function (e) {
     document.addEventListener('click', (e) => {
         if (!isDesktop()) return;
         if (panel.contains(e.target)) return; // allow selecting a model inside the panel
+        const puterPanel = document.getElementById('puterModelsPanel');
+        if (puterPanel && puterPanel.contains(e.target)) return; // allow interacting with nested puter panel
         closeInstant();
     });
 })();
@@ -5623,13 +5782,15 @@ window.goBackToMainModels = function (e) {
 
 // Close dropdown when clicking outside
 document.addEventListener('click', function (e) {
-    const wrap     = document.getElementById('modelSelectorWrap');
-    const dropdown = document.getElementById('modelDropdown');
-    const panel    = document.getElementById('moreModelsPanel');
-    const insideWrap     = wrap     && wrap.contains(e.target);
-    const insideDropdown = dropdown && dropdown.contains(e.target);
-    const insidePanel    = panel    && panel.contains(e.target);
-    if (!insideWrap && !insideDropdown && !insidePanel) {
+    const wrap       = document.getElementById('modelSelectorWrap');
+    const dropdown   = document.getElementById('modelDropdown');
+    const panel      = document.getElementById('moreModelsPanel');
+    const puterPanel = document.getElementById('puterModelsPanel');
+    const insideWrap       = wrap       && wrap.contains(e.target);
+    const insideDropdown   = dropdown   && dropdown.contains(e.target);
+    const insidePanel      = panel      && panel.contains(e.target);
+    const insidePuterPanel = puterPanel && puterPanel.contains(e.target);
+    if (!insideWrap && !insideDropdown && !insidePanel && !insidePuterPanel) {
         closeAllModelMenus();
     }
 });

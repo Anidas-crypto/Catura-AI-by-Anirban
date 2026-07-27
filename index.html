@@ -144,7 +144,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
-    <link rel="stylesheet" href="static/style.css?v=0.0.409">   <!-- this is CSS linking section -->
+    <link rel="stylesheet" href="static/style.css?v=0.0.410">   <!-- this is CSS linking section -->
     
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#000000" />
@@ -532,27 +532,13 @@
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
                         Back to models
                     </button>
-                    <div class="model-option" data-model="claude_puter" data-name="Claude Sonnet" onclick="selectModel('claude_puter', 'Sonnet 5', event)">
-                        <div class="model-option-info">
-                            <div class="model-option-name">Sonnet 5</div>
-                            <div class="model-option-desc">Frontier reasoning & writing · Anthropic Claude Sonnet 5, via Puter</div>
-                        </div>
-                        <div class="model-option-check">✓</div>
+
+                    <!-- ── PUTER MODELS ROW (click-to-open sub-panel, at the very top) ── -->
+                    <div class="model-more-row" id="puterModelsRow" onclick="togglePuterModels(event)">
+                        <span class="model-more-label">Puter models</span>
+                        <svg class="model-more-arrow" id="puterModelsArrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
                     </div>
-                    <div class="model-option" data-model="gpt5_puter" data-name="GPT-5.4 Mini" onclick="selectModel('gpt5_puter', 'GPT-5.4 Mini', event)">
-                        <div class="model-option-info">
-                            <div class="model-option-name">GPT-5.4 Mini</div>
-                            <div class="model-option-desc">Fast, capable everyday model · OpenAI GPT-5.4 Mini, via Puter</div>
-                        </div>
-                        <div class="model-option-check">✓</div>
-                    </div>
-                    <div class="model-option" data-model="gemini_puter" data-name="Gemini 3.5 Flash Lite" onclick="selectModel('gemini_puter', 'Gemini 3.5 Flash Lite', event)">
-                        <div class="model-option-info">
-                            <div class="model-option-name">Gemini 3.5 Flash Lite</div>
-                            <div class="model-option-desc">Fast, lightweight multimodal model · Google Gemini 3.5 Flash Lite, via Puter</div>
-                        </div>
-                        <div class="model-option-check">✓</div>
-                    </div>
+
                     <div class="model-option" data-model="apep" data-name="Apep" onclick="selectModel('apep', 'Apep', event)">
                         <div class="model-option-info">
                             <div class="model-option-name">Apep</div>
@@ -688,6 +674,41 @@
                     </div>
                 </div>
 
+                <!-- ── PUTER MODELS FLOATING PANEL (nested inside "More models")
+                     Placed OUTSIDE moreModelsPanel so overflow:hidden never clips it.
+                     Desktop: click-to-open, positioned to the side of moreModelsPanel.
+                     Mobile: opens as its own bottom-sheet level, with a back button
+                     that returns to the "More models" panel (not the main dropdown). ── -->
+                <div class="model-more-panel" id="puterModelsPanel">
+                    <div class="model-more-panel-title">Puter models</div>
+                    <!-- Back button — mobile only — returns to More models panel -->
+                    <button class="model-more-back-btn" id="puterModelsBackBtn" onclick="goBackToMoreModels(event)">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                        Back to more models
+                    </button>
+                    <div class="model-option" data-model="claude_puter" data-name="Claude Sonnet" onclick="selectModel('claude_puter', 'Sonnet 5', event)">
+                        <div class="model-option-info">
+                            <div class="model-option-name">Sonnet 5</div>
+                            <div class="model-option-desc">Frontier reasoning & writing · Anthropic Claude Sonnet 5, via Puter</div>
+                        </div>
+                        <div class="model-option-check">✓</div>
+                    </div>
+                    <div class="model-option" data-model="gpt5_puter" data-name="GPT-5.4 Mini" onclick="selectModel('gpt5_puter', 'GPT-5.4 Mini', event)">
+                        <div class="model-option-info">
+                            <div class="model-option-name">GPT-5.4 Mini</div>
+                            <div class="model-option-desc">Fast, capable everyday model · OpenAI GPT-5.4 Mini, via Puter</div>
+                        </div>
+                        <div class="model-option-check">✓</div>
+                    </div>
+                    <div class="model-option" data-model="gemini_puter" data-name="Gemini 3.5 Flash Lite" onclick="selectModel('gemini_puter', 'Gemini 3.5 Flash Lite', event)">
+                        <div class="model-option-info">
+                            <div class="model-option-name">Gemini 3.5 Flash Lite</div>
+                            <div class="model-option-desc">Fast, lightweight multimodal model · Google Gemini 3.5 Flash Lite, via Puter</div>
+                        </div>
+                        <div class="model-option-check">✓</div>
+                    </div>
+                </div>
+
                 <button class="send-btn" onclick="handleSendOrStop()" id="sendBtn" title="Send message">
                     <!-- Send icon (default) -->
                     <svg class="send-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -812,18 +833,18 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
     
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <script src="static/firebase-config.js?v=0.0.409"></script>
-    <script src="static/live-sync.js?v=0.0.409"></script>
-    <script src="static/logic.js?v=0.0.409"></script>
-    <script src="static/feedback.js?v=0.0.409"></script>
-    <script src="static/file-upload.js?v=0.0.409"></script>
+    <script src="static/firebase-config.js?v=0.0.410"></script>
+    <script src="static/live-sync.js?v=0.0.410"></script>
+    <script src="static/logic.js?v=0.0.410"></script>
+    <script src="static/feedback.js?v=0.0.410"></script>
+    <script src="static/file-upload.js?v=0.0.410"></script>
 
     <script>
         console.log('🚀 Catura AI v27.0.5 loaded');
         
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js?v=0.0.409')
+                navigator.serviceWorker.register('/service-worker.js?v=0.0.410')
                     .then(() => console.log('✅ Catura AI PWA Ready - v27.0.5'))
                     .catch((err) => console.log('❌ SW Error:', err));
             });
