@@ -4236,9 +4236,9 @@ document.addEventListener("DOMContentLoaded", async function () {
         try {
             const model = getSelectedModel();
 
-            // ── 🟣 CLAUDE (via Puter.js) — frontend-only, skips /chat entirely ──
-            if (model === 'claude_puter') {
-                const fullReply = await sendViaPuterClaude(promptText, thinking, chatbox, filesToSend, detectedIntent, message);
+            // ── 🟣 PUTER-ROUTED MODELS (Claude, GPT-5.4 Mini, ...) — frontend-only, skips /chat entirely ──
+            if (isPuterRoutedModel(model)) {
+                const fullReply = await sendViaPuterModel(model, promptText, thinking, chatbox, filesToSend, detectedIntent, message);
 
                 activeAbortController = null;
                 setStreamingState(false);
@@ -5258,7 +5258,7 @@ window.toggleModelSelector = function (e) {
             dropdown.classList.add('open');
             btn.classList.add('open');
 
-            const moreModels = ['apep', 'gemma', 'gemma4', 'nivo', 'laguna', 'laguna_core', 'laguna_s', 'laguna_lite', 'nemotron','omni','glm','cohere','minimax_m3','glm52','ling','claude_puter'];
+            const moreModels = ['apep', 'gemma', 'gemma4', 'nivo', 'laguna', 'laguna_core', 'laguna_s', 'laguna_lite', 'nemotron','omni','glm','cohere','minimax_m3','glm52','ling','claude_puter','gpt5_puter','gemini_puter'];
             if (moreModels.includes(selectedModel)) {
                 requestAnimationFrame(() => {
                     requestAnimationFrame(() => { toggleMoreModels(null); });
@@ -5298,7 +5298,7 @@ window.toggleModelSelector = function (e) {
             dropdown.classList.add('open');
             btn.classList.add('open');
 
-            const moreModels = ['apep', 'gemma', 'gemma4', 'nivo', 'laguna', 'laguna_core', 'laguna_s', 'laguna_lite','nemotron','omni', 'cohere','glm','minimax_m3','glm52','ling','claude_puter'];
+            const moreModels = ['apep', 'gemma', 'gemma4', 'nivo', 'laguna', 'laguna_core', 'laguna_s', 'laguna_lite','nemotron','omni', 'cohere','glm','minimax_m3','glm52','ling','claude_puter','gpt5_puter','gemini_puter'];
             if (moreModels.includes(selectedModel)) {
                 requestAnimationFrame(() => {
                     requestAnimationFrame(() => { window.openMoreModels(); });
@@ -5319,21 +5319,21 @@ window.selectModel = function (modelId, modelName, e) {
     const activeOption = document.querySelector(`[data-model="${modelId}"]`);
     if (activeOption) activeOption.classList.add('active');
 
-    const isClaudePuter = selectedModel === 'claude_puter';
+    const isPuterModel = isPuterRoutedModel(selectedModel);
     const isMobile = window.innerWidth <= 768;
     if (isMobile) {
         setTimeout(() => {
             closeAllModelMenus();
-            if (isClaudePuter) {
-                showClaudePuterInfoModal();
+            if (isPuterModel) {
+                showPuterInfoModal(selectedModel, modelName);
             } else {
                 showToast(`✓ Switched to ${modelName}`, 1500);
             }
         }, 180);
     } else {
         closeAllModelMenus();
-        if (isClaudePuter) {
-            showClaudePuterInfoModal();
+        if (isPuterModel) {
+            showPuterInfoModal(selectedModel, modelName);
         } else {
             showToast(`✓ Switched to ${modelName}`, 1500);
         }
@@ -5699,7 +5699,7 @@ function renderToolBadgeAndSources(wrapper, botMsg, toolUsed, pendingSources) {
 // score candidates → fetch summary → format context). Uses only the free,
 // keyless Wikimedia REST API, so this runs entirely in the browser with
 // zero backend changes.
-async function lookupWikipediaForClaude(query) {
+async function lookupWikipediaForPuter(query) {
     const STOPWORDS = new Set(["the","a","an","of","in","on","for","to","and","or","is","are",
         "was","were","what","who","when","where","how","does","do","did","this","that","with","at","by","be","it","as","from"]);
 
@@ -5745,20 +5745,57 @@ async function lookupWikipediaForClaude(query) {
 const CLAUDE_SONNET_FALLBACK_MODEL = 'claude-sonnet-5';
 let _cachedClaudeSonnetModel = null;
 
-// Shown only when the user selects the Claude Sonnet (Puter) model — tells
-// them a one-time external Puter sign-in popup will appear when they send
-// their first message. Every other model is unaffected.
-window.showClaudePuterInfoModal = function () {
+// ── PUTER-ROUTED MODEL REGISTRY ─────────────────────────────────────────────
+// Every model selectable in the dropdown that runs via Puter.js instead of
+// the FastAPI backend gets one entry here: its display name (for the info
+// modal + toasts) and a resolver that returns the exact Puter model id to
+// call. Adding a new Puter model in future = one entry here + one dropdown
+// option in index.html — nothing else needs to change.
+const PUTER_MODEL_REGISTRY = {
+    claude_puter: {
+        displayName: 'Claude Sonnet',
+        icon: 'static/icons/claude.png',
+        resolve: getLatestClaudeSonnetModelId // defined below
+    },
+    gpt5_puter: {
+        displayName: 'GPT-5.4 Mini',
+        icon: 'static/icons/openai.png',
+        resolve: async () => 'openai/gpt-5.4-mini'
+    },
+    gemini_puter: {
+        displayName: 'Gemini 3.5 Flash Lite',
+        icon: 'static/icons/gemini.png',
+        resolve: async () => 'google/gemini-3.5-flash-lite'
+    }
+};
+function isPuterRoutedModel(modelId) {
+    return Object.prototype.hasOwnProperty.call(PUTER_MODEL_REGISTRY, modelId);
+}
+
+// Shown when the user selects ANY Puter-routed model (Claude, GPT-5.4 Mini,
+// etc.) — tells them a one-time external Puter sign-in popup will appear
+// when they send their first message. Every backend model is unaffected.
+window.showPuterInfoModal = function (modelId, displayName) {
+    const entry = PUTER_MODEL_REGISTRY[modelId];
+    const titleEl = document.getElementById('puterInfoModalTitle');
+    if (titleEl) titleEl.textContent = `${displayName || (entry && entry.displayName) || 'This model'} — External Model`;
+    const iconEl = document.getElementById('puterInfoModalIcon');
+    if (iconEl) {
+        iconEl.style.display = '';
+        iconEl.src = (entry && entry.icon) || 'static/icons/claude.png';
+    }
     const modal = document.getElementById('claudePuterInfoModal');
     if (modal) modal.classList.add('active');
 };
+// Kept as an alias so nothing else that may reference the old name breaks.
+window.showClaudePuterInfoModal = function () { window.showPuterInfoModal('claude_puter', 'Claude Sonnet'); };
 
 window.closeClaudePuterInfoModal = function () {
     const modal = document.getElementById('claudePuterInfoModal');
     if (modal) modal.classList.remove('active');
 };
 
-async function getLatestClaudeSonnetModel() {
+async function getLatestClaudeSonnetModelId() {
     if (_cachedClaudeSonnetModel) return _cachedClaudeSonnetModel;
     try {
         const models = await puter.ai.listModels();
@@ -5797,9 +5834,10 @@ async function ensurePuterAuth() {
 // Streams a Claude Sonnet reply into the SAME bot bubble UI every other
 // model uses, then returns the full text so the caller can save it to
 // chat history exactly like a normal bot message.
-async function sendViaPuterClaude(promptText, thinking, chatbox, filesToSend, detectedIntent, originalMessage) {
+async function sendViaPuterModel(modelKey, promptText, thinking, chatbox, filesToSend, detectedIntent, originalMessage) {
     await ensurePuterAuth();
-    const model = await getLatestClaudeSonnetModel();
+    const entry = PUTER_MODEL_REGISTRY[modelKey];
+    const model = entry ? await entry.resolve() : modelKey;
 
     filesToSend = filesToSend || [];
     // Only files that finished uploading successfully have a usable URL
@@ -5864,7 +5902,7 @@ async function sendViaPuterClaude(promptText, thinking, chatbox, filesToSend, de
             augmentedPrompt = `Web search results for "${originalMessage}":\n\n${context}\n\n---\nUsing the results above (cite with [1], [2] etc. where relevant), answer: ${augmentedPrompt}`;
         }
     } else if (originalMessage && detectedIntent === 'wikipedia') {
-        const wiki = await lookupWikipediaForClaude(originalMessage);
+        const wiki = await lookupWikipediaForPuter(originalMessage);
         if (wiki) {
             toolUsed = 'wikipedia';
             pendingSources = [wiki.source];

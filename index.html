@@ -144,7 +144,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
-    <link rel="stylesheet" href="static/style.css?v=0.0.407">   <!-- this is CSS linking section -->
+    <link rel="stylesheet" href="static/style.css?v=0.0.408">   <!-- this is CSS linking section -->
     
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#000000" />
@@ -539,6 +539,20 @@
                         </div>
                         <div class="model-option-check">✓</div>
                     </div>
+                    <div class="model-option" data-model="gpt5_puter" data-name="GPT-5.4 Mini" onclick="selectModel('gpt5_puter', 'GPT-5.4 Mini', event)">
+                        <div class="model-option-info">
+                            <div class="model-option-name">GPT-5.4 Mini</div>
+                            <div class="model-option-desc">Fast, capable everyday model · OpenAI GPT-5.4 Mini, via Puter</div>
+                        </div>
+                        <div class="model-option-check">✓</div>
+                    </div>
+                    <div class="model-option" data-model="gemini_puter" data-name="Gemini 3.5 Flash Lite" onclick="selectModel('gemini_puter', 'Gemini 3.5 Flash Lite', event)">
+                        <div class="model-option-info">
+                            <div class="model-option-name">Gemini 3.5 Flash Lite</div>
+                            <div class="model-option-desc">Fast, lightweight multimodal model · Google Gemini 3.5 Flash Lite, via Puter</div>
+                        </div>
+                        <div class="model-option-check">✓</div>
+                    </div>
                     <div class="model-option" data-model="apep" data-name="Apep" onclick="selectModel('apep', 'Apep', event)">
                         <div class="model-option-info">
                             <div class="model-option-name">Apep</div>
@@ -707,18 +721,18 @@
         </div>
     </div>
 
-    <!-- 🟣 CLAUDE (PUTER) EXTERNAL MODEL INFO MODAL -->
+    <!-- 🟣 PUTER EXTERNAL MODEL INFO MODAL (Claude, GPT-5.4 Mini, ...) -->
     <div id="claudePuterInfoModal" class="claude-puter-modal">
         <div class="claude-puter-modal-overlay" onclick="closeClaudePuterInfoModal()"></div>
         <div class="claude-puter-modal-content">
             <button class="claude-puter-close-btn" onclick="closeClaudePuterInfoModal()">✕</button>
 
             <div class="claude-puter-modal-icon">
-                <img src="static/icons/claude.png" alt="Claude Icon " width="48" height="48">
+                <img id="puterInfoModalIcon" src="static/icons/claude.png" alt="Model icon" width="48" height="48" onerror="this.style.display='none'">
             </div>
 
             <div class="claude-puter-modal-header">
-                <h2>Claude Sonnet — External Model</h2>
+                <h2 id="puterInfoModalTitle">Claude Sonnet — External Model</h2>
             </div>
 
             <p class="claude-puter-modal-text">
@@ -798,18 +812,18 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
     
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <script src="static/firebase-config.js?v=0.0.407"></script>
-    <script src="static/live-sync.js?v=0.0.407"></script>
-    <script src="static/logic.js?v=0.0.407"></script>
-    <script src="static/feedback.js?v=0.0.407"></script>
-    <script src="static/file-upload.js?v=0.0.407"></script>
+    <script src="static/firebase-config.js?v=0.0.408"></script>
+    <script src="static/live-sync.js?v=0.0.408"></script>
+    <script src="static/logic.js?v=0.0.408"></script>
+    <script src="static/feedback.js?v=0.0.408"></script>
+    <script src="static/file-upload.js?v=0.0.408"></script>
 
     <script>
         console.log('🚀 Catura AI v27.0.5 loaded');
         
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js?v=0.0.407')
+                navigator.serviceWorker.register('/service-worker.js?v=0.0.408')
                     .then(() => console.log('✅ Catura AI PWA Ready - v27.0.5'))
                     .catch((err) => console.log('❌ SW Error:', err));
             });
