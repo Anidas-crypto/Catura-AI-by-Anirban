@@ -5941,9 +5941,9 @@ const PUTER_MODEL_REGISTRY = {
         resolve: async () => 'google/gemini-3.5-flash-lite'
     },
     grok_puter: {
-        displayName: 'Grok Build 0.1',
+        displayName: 'Grok 4',
         icon: 'static/icons/grok.png',
-        resolve: async () => 'x-ai/grok-build-0.1'
+        resolve: async () => 'x-ai/grok-4-1-fast-non-reasoning'
     }
 };
 function isPuterRoutedModel(modelId) {
