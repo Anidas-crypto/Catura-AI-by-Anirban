@@ -5939,6 +5939,11 @@ const PUTER_MODEL_REGISTRY = {
         displayName: 'Gemini 3.5 Flash Lite',
         icon: 'static/icons/gemini.png',
         resolve: async () => 'google/gemini-3.5-flash-lite'
+    },
+    grok_puter: {
+        displayName: 'Grok Build 0.1',
+        icon: 'static/icons/grok.png',
+        resolve: async () => 'x-ai/grok-build-0.1'
     }
 };
 function isPuterRoutedModel(modelId) {
