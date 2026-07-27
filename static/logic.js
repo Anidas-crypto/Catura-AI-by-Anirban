@@ -4238,7 +4238,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
             // ── 🟣 CLAUDE (via Puter.js) — frontend-only, skips /chat entirely ──
             if (model === 'claude_puter') {
-                const fullReply = await sendViaPuterClaude(promptText, thinking, chatbox);
+                const fullReply = await sendViaPuterClaude(promptText, thinking, chatbox, filesToSend, detectedIntent, message);
 
                 activeAbortController = null;
                 setStreamingState(false);
@@ -4353,49 +4353,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             activeAbortController = null;
             setStreamingState(false);
 
-            // ── Show tool badge above message ────────────────────────────────
-            if (toolUsed && wrapper) {
-                const toolBadges = {
-                    clock:      { icon: "🕐", label: "Live Clock" },
-                    weather:    { icon: "🌤️", label: "Live Weather" },
-                    finance:    { icon: "💹", label: "Market Data" },
-                    sports:     { icon: "🏏", label: "Live Scores" },
-                    news:       { icon: "📰", label: "Latest News" },
-                    web_search: { icon: "🔍", label: "Web Search" },
-                    wikipedia:  { icon: "📖", label: "Wikipedia" },
-                };
-                const badge = toolBadges[toolUsed] || { icon: "🔧", label: toolUsed };
-                const badgeDiv = document.createElement("div");
-                badgeDiv.className = "tool-badge";
-                badgeDiv.setAttribute("data-tool", toolUsed);
-                badgeDiv.innerHTML = `<span class="tool-badge-icon">${badge.icon}</span><span class="tool-badge-label">${badge.label} used</span>`;
-                wrapper.insertBefore(badgeDiv, botMsg);
-            }
-
-            // ── Show sources section below answer (with citation numbers) ─────
-            if (pendingSources && pendingSources.length > 0 && wrapper) {
-                const sourcesDiv = document.createElement("div");
-                sourcesDiv.className = "sources-section";
-                const chips = pendingSources.map(s => {
-                    if (!s.url) return '';
-                    const favicon = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(s.domain)}&sz=16`;
-                    const numBadge = s.num ? `<span class="source-num">[${s.num}]</span>` : '';
-                    const trustClass = s.trust >= 80 ? 'trust-high' : s.trust >= 60 ? 'trust-med' : 'trust-low';
-                    return `<a class="source-chip ${trustClass}" href="${s.url}" target="_blank" rel="noopener noreferrer" title="${s.title || s.domain}">
-                        ${numBadge}
-                        <img class="source-favicon" src="${favicon}" onerror="this.style.display='none'" alt="">
-                        <span class="source-domain">${s.domain}</span>
-                    </a>`;
-                }).filter(Boolean).join("");
-                const count = pendingSources.filter(s => s.url).length;
-                sourcesDiv.innerHTML = `
-                    <div class="sources-label">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                        ${count} Source${count !== 1 ? 's' : ''}
-                    </div>
-                    <div class="sources-chips">${chips}</div>`;
-                wrapper.appendChild(sourcesDiv);
-            }
+            renderToolBadgeAndSources(wrapper, botMsg, toolUsed, pendingSources);
 
             if (fullReply) {
                 if (ghostChatEnabled) {
@@ -5688,6 +5646,102 @@ function getSelectedModel() {
 // hardcoding a model id, we ask Puter for its live catalog and pick the
 // newest "sonnet" entry. If that lookup ever fails, we fall back to the
 // latest known id rather than breaking the feature.
+// ── Shared tool-badge + sources-chip renderer — used by every model,
+// including Claude, so the UI is identical no matter which model ran
+// the search/wiki/etc. lookup.
+function renderToolBadgeAndSources(wrapper, botMsg, toolUsed, pendingSources) {
+    if (!wrapper) return;
+
+    if (toolUsed) {
+        const toolBadges = {
+            clock:      { icon: "🕐", label: "Live Clock" },
+            weather:    { icon: "🌤️", label: "Live Weather" },
+            finance:    { icon: "💹", label: "Market Data" },
+            sports:     { icon: "🏏", label: "Live Scores" },
+            news:       { icon: "📰", label: "Latest News" },
+            web_search: { icon: "🔍", label: "Web Search" },
+            wikipedia:  { icon: "📖", label: "Wikipedia" },
+        };
+        const badge = toolBadges[toolUsed] || { icon: "🔧", label: toolUsed };
+        const badgeDiv = document.createElement("div");
+        badgeDiv.className = "tool-badge";
+        badgeDiv.setAttribute("data-tool", toolUsed);
+        badgeDiv.innerHTML = `<span class="tool-badge-icon">${badge.icon}</span><span class="tool-badge-label">${badge.label} used</span>`;
+        wrapper.insertBefore(badgeDiv, botMsg);
+    }
+
+    if (pendingSources && pendingSources.length > 0) {
+        const sourcesDiv = document.createElement("div");
+        sourcesDiv.className = "sources-section";
+        const chips = pendingSources.map(s => {
+            if (!s.url) return '';
+            const favicon = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(s.domain)}&sz=16`;
+            const numBadge = s.num ? `<span class="source-num">[${s.num}]</span>` : '';
+            const trustClass = s.trust >= 80 ? 'trust-high' : s.trust >= 60 ? 'trust-med' : 'trust-low';
+            return `<a class="source-chip ${trustClass}" href="${s.url}" target="_blank" rel="noopener noreferrer" title="${s.title || s.domain}">
+                ${numBadge}
+                <img class="source-favicon" src="${favicon}" onerror="this.style.display='none'" alt="">
+                <span class="source-domain">${s.domain}</span>
+            </a>`;
+        }).filter(Boolean).join("");
+        const count = pendingSources.filter(s => s.url).length;
+        sourcesDiv.innerHTML = `
+            <div class="sources-label">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                ${count} Source${count !== 1 ? 's' : ''}
+            </div>
+            <div class="sources-chips">${chips}</div>`;
+        wrapper.appendChild(sourcesDiv);
+    }
+}
+
+// ── Client-side Wikipedia lookup — mirrors wiki.py's pipeline (search →
+// score candidates → fetch summary → format context). Uses only the free,
+// keyless Wikimedia REST API, so this runs entirely in the browser with
+// zero backend changes.
+async function lookupWikipediaForClaude(query) {
+    const STOPWORDS = new Set(["the","a","an","of","in","on","for","to","and","or","is","are",
+        "was","were","what","who","when","where","how","does","do","did","this","that","with","at","by","be","it","as","from"]);
+
+    function scoreCandidate(candidate, q) {
+        const qWords = q.toLowerCase().split(/\s+/).filter(w => w && !STOPWORDS.has(w));
+        const text = `${candidate.title} ${candidate.description || ''}`.toLowerCase();
+        let score = 0;
+        qWords.forEach(w => { if (text.includes(w)) score += 1; });
+        return score;
+    }
+
+    try {
+        const searchRes = await fetch(`https://en.wikipedia.org/w/rest.php/v1/search/page?q=${encodeURIComponent(query)}&limit=5`);
+        const searchData = await searchRes.json();
+        const candidates = searchData.pages || [];
+        if (candidates.length === 0) return null;
+
+        candidates.sort((a, b) => scoreCandidate(b, query) - scoreCandidate(a, query));
+
+        for (const candidate of candidates) {
+            const title = candidate.title;
+            const summaryRes = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`);
+            if (!summaryRes.ok) continue;
+            const data = await summaryRes.json();
+            if (data.type === 'disambiguation') continue;
+
+            const extract = (data.extract || '').trim();
+            if (extract.length < 80) continue;
+
+            const url = (data.content_urls && data.content_urls.desktop && data.content_urls.desktop.page) || data.canonical_page_url || '';
+            return {
+                context: `Wikipedia — ${data.title}:\n${extract}${data.timestamp ? `\n(Wikipedia article last updated: ${data.timestamp})` : ''}`,
+                source: { url, title: data.title, domain: 'en.wikipedia.org', trust: 90, num: 1 }
+            };
+        }
+        return null;
+    } catch (err) {
+        console.warn("⚠️ Wikipedia lookup failed:", err);
+        return null;
+    }
+}
+
 const CLAUDE_SONNET_FALLBACK_MODEL = 'claude-sonnet-5';
 let _cachedClaudeSonnetModel = null;
 
@@ -5743,11 +5797,85 @@ async function ensurePuterAuth() {
 // Streams a Claude Sonnet reply into the SAME bot bubble UI every other
 // model uses, then returns the full text so the caller can save it to
 // chat history exactly like a normal bot message.
-async function sendViaPuterClaude(promptText, thinking, chatbox) {
+async function sendViaPuterClaude(promptText, thinking, chatbox, filesToSend, detectedIntent, originalMessage) {
     await ensurePuterAuth();
     const model = await getLatestClaudeSonnetModel();
 
-    const response = await puter.ai.chat(promptText, { model: model, stream: true });
+    filesToSend = filesToSend || [];
+    // Only files that finished uploading successfully have a usable URL
+    const readyFiles = filesToSend.filter(f => f.url && !f.uploading && !f.failed);
+
+    // ── Images — Claude/Puter's native vision support (documented) ──────────
+    const imageUrls = readyFiles
+        .filter(f => (f.type || '').startsWith('image/'))
+        .map(f => f.url);
+
+    const isDocLike = f => (f.type || '') === 'application/pdf' ||
+                            (f.type || '').includes('word') ||
+                            (f.type || '').includes('document');
+
+    // ── Plain text / code files — read their content client-side and inline
+    // it as context. Puter's chat API doesn't document reading arbitrary
+    // external URLs as "documents", so this is the reliable path for these.
+    const textFiles = readyFiles.filter(f => !(f.type || '').startsWith('image/') && !isDocLike(f));
+
+    let augmentedPrompt = promptText || '';
+    for (const f of textFiles) {
+        try {
+            const res  = await fetch(f.url);
+            const text = await res.text();
+            augmentedPrompt += `\n\n--- Attached file: ${f.name} ---\n${text.slice(0, 20000)}`;
+        } catch (err) {
+            console.warn("⚠️ Couldn't read attached file for Claude:", f.name, err);
+            augmentedPrompt += `\n\n[Attached file "${f.name}" could not be read.]`;
+        }
+    }
+
+    // ── PDFs / Word docs — Puter doesn't document full-content reading for
+    // arbitrary external URLs, so we only pass along the filename + link
+    // rather than claim we handed over the real contents.
+    const docFiles = readyFiles.filter(isDocLike);
+    for (const f of docFiles) {
+        augmentedPrompt += `\n\n[User attached a document "${f.name}" (${f.url}). Full document contents may not be readable through this integration — let the user know if you can't access it.]`;
+    }
+
+    // ── 🔍 Web search / 📖 Wikipedia — same tools the other models use,
+    // wired up for Claude too. Web search reuses the existing /search
+    // endpoint (backend keys stay server-side); Wikipedia runs entirely
+    // client-side since Wikimedia's REST API needs no key.
+    let toolUsed = null;
+    let pendingSources = null;
+
+    const WEB_SEARCH_INTENTS = new Set(['web_search', 'news', 'finance', 'sports']);
+    if (originalMessage && WEB_SEARCH_INTENTS.has(detectedIntent)) {
+        const results = await performWebSearch(originalMessage);
+        if (results && results.length > 0) {
+            toolUsed = 'web_search';
+            pendingSources = results.map((r, i) => ({
+                url   : r.url,
+                title : r.title,
+                domain: r.domain || (r.url ? (() => { try { return new URL(r.url).hostname.replace(/^www\./, ''); } catch (_) { return r.url; } })() : ''),
+                trust : r.trust ?? 80,
+                num   : r.num ?? (i + 1)
+            }));
+            const context = results.map((r, i) =>
+                `[${i + 1}] ${r.title || r.domain || r.url}\n${r.snippet || r.content || ''}\nSource: ${r.url}`
+            ).join('\n\n');
+            augmentedPrompt = `Web search results for "${originalMessage}":\n\n${context}\n\n---\nUsing the results above (cite with [1], [2] etc. where relevant), answer: ${augmentedPrompt}`;
+        }
+    } else if (originalMessage && detectedIntent === 'wikipedia') {
+        const wiki = await lookupWikipediaForClaude(originalMessage);
+        if (wiki) {
+            toolUsed = 'wikipedia';
+            pendingSources = [wiki.source];
+            augmentedPrompt = `${wiki.context}\n\n---\nUsing the Wikipedia context above, answer: ${augmentedPrompt}`;
+        }
+    }
+
+    const chatOptions = { model: model, stream: true };
+    const response = imageUrls.length
+        ? await puter.ai.chat(augmentedPrompt, imageUrls.length === 1 ? imageUrls[0] : imageUrls, chatOptions)
+        : await puter.ai.chat(augmentedPrompt, chatOptions);
 
     let wrapper = null, botMsg = null, fullReply = "";
     for await (const part of response) {
@@ -5775,6 +5903,7 @@ async function sendViaPuterClaude(promptText, thinking, chatbox) {
     }
 
     renderBotContent(wrapper, botMsg, fullReply.trimEnd());
+    renderToolBadgeAndSources(wrapper, botMsg, toolUsed, pendingSources);
     return fullReply.trimEnd();
 }
 
