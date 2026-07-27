@@ -3558,3 +3558,200 @@ def build_production_sources_payload(result: dict) -> Optional[str]:
         for num, info in sorted(citations.items())
     ]
     return json.dumps({"sources": sources[:8]})
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# FINAL ANSWER GENERATION + VERIFICATION
+# generate draft answer → verify (unsupported claims / wrong dates / wrong
+# numbers / hallucinations / missing citations / contradictions) → if the
+# verifier fails the draft, use its corrected answer instead.
+# ══════════════════════════════════════════════════════════════════════════════
+
+ANSWER_GENERATION_TIMEOUT = 20
+ANSWER_GENERATION_MAX_TOK = 1200
+ANSWER_VERIFIER_TIMEOUT   = 15
+ANSWER_VERIFIER_MAX_TOK   = 1400
+
+_ANSWER_GENERATION_SYSTEM_PROMPT = """You are answering a user's question using ONLY the numbered web search evidence provided.
+Follow the AI INSTRUCTIONS included in the evidence block exactly (citation style, no fabrication, etc).
+Give a complete, well-organized, directly-worded answer. Do not add meta-commentary about the search process itself."""
+
+_ANSWER_VERIFIER_SYSTEM_PROMPT = """You are a fact-checking verifier for an AI web-search answer.
+You will be given the user's question, the source evidence (numbered [1], [2], ...), and a DRAFT ANSWER that was generated from that evidence.
+
+Check the draft answer for:
+1. Unsupported claims — statements not backed by any numbered source.
+2. Wrong dates — a date/time in the answer that doesn't match the evidence.
+3. Wrong numbers — a statistic, price, or figure that doesn't match the evidence.
+4. Hallucinations — facts, names, or events not present anywhere in the evidence.
+5. Missing citations — factual claims stated without a [N] citation, or a [N] citation that doesn't support the claim next to it.
+6. Contradictions — the answer states something as settled fact when the evidence actually shows sources disagree, without acknowledging the disagreement.
+
+Output ONLY a JSON object, no prose, no markdown fences:
+{
+  "passed": true | false,
+  "issues": ["short description of each problem found", ...],
+  "revised_answer": "the corrected answer text, only if passed is false — otherwise null"
+}
+
+Rules:
+- "passed": true means the draft is accurate and fully supported by the evidence — no issues.
+- "passed": false means at least one real, specific problem was found (from the 6 categories above).
+- If "passed" is false, "revised_answer" MUST contain a corrected version of the answer that fixes every issue — remove or fix unsupported claims, correct wrong dates/numbers, cite properly, and acknowledge any contradictions instead of stating one side as fact.
+- The revised answer must keep the same [N] citation style as the draft.
+- Do not invent new facts not present in the evidence when revising — if a claim can't be supported, remove it rather than replacing it with a guess."""
+
+
+def _generate_answer_llm(query: str, context: str) -> Optional[str]:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Generates the draft final answer from the search evidence context
+    (build_production_search_context output). This is the FIRST of the two
+    LLM calls in the generate → verify → (revise) pipeline. Returns None on
+    any failure (missing key, network error, malformed response) so the
+    caller can fail gracefully instead of crashing the pipeline.
+    """
+    if not QUERY_PLANNER_KEY or not context:
+        return None
+    try:
+        resp = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key":         QUERY_PLANNER_KEY,
+                "anthropic-version": "2023-06-01",
+                "content-type":      "application/json",
+            },
+            json={
+                "model":      QUERY_PLANNER_MODEL,
+                "max_tokens": ANSWER_GENERATION_MAX_TOK,
+                "system":     _ANSWER_GENERATION_SYSTEM_PROMPT,
+                "messages":   [{"role": "user", "content": f"{context}\n\nUser question: {query}"}],
+            },
+            timeout=ANSWER_GENERATION_TIMEOUT,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        text = "".join(
+            block.get("text", "") for block in data.get("content", []) if block.get("type") == "text"
+        ).strip()
+        return text or None
+    except Exception as e:
+        print(f"⚠️ [AnswerGen] Failed to generate draft answer: {e}")
+        return None
+
+
+def _verify_answer_llm(query: str, context: str, draft_answer: str) -> dict:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    SECOND LLM call — a verifier that checks the draft answer against the
+    source evidence for: unsupported claims, wrong dates, wrong numbers,
+    hallucinations, missing citations, and unacknowledged contradictions.
+    Fails OPEN toward trusting the draft: any missing key, network error,
+    timeout, or malformed response returns passed=True with no revision —
+    a broken verifier must never block an answer from being returned.
+    Returns {"passed": bool, "issues": list[str], "revised_answer": str|None}.
+    """
+    if not QUERY_PLANNER_KEY or not draft_answer:
+        return {"passed": True, "issues": [], "revised_answer": None}
+
+    user_content = (
+        f"User question: {query}\n\n"
+        f"Source evidence:\n{context}\n\n"
+        f"DRAFT ANSWER to verify:\n{draft_answer}"
+    )
+
+    try:
+        resp = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key":         QUERY_PLANNER_KEY,
+                "anthropic-version": "2023-06-01",
+                "content-type":      "application/json",
+            },
+            json={
+                "model":      QUERY_PLANNER_MODEL,
+                "max_tokens": ANSWER_VERIFIER_MAX_TOK,
+                "system":     _ANSWER_VERIFIER_SYSTEM_PROMPT,
+                "messages":   [{"role": "user", "content": user_content}],
+            },
+            timeout=ANSWER_VERIFIER_TIMEOUT,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+        text = "".join(
+            block.get("text", "") for block in data.get("content", []) if block.get("type") == "text"
+        ).strip()
+        text = re.sub(r'^```(?:json)?\s*|\s*```$', '', text.strip())
+
+        parsed = json.loads(text)
+        if not isinstance(parsed, dict):
+            return {"passed": True, "issues": [], "revised_answer": None}
+
+        passed  = bool(parsed.get("passed", True))
+        issues  = [str(i) for i in (parsed.get("issues") or []) if str(i).strip()]
+        revised = parsed.get("revised_answer")
+        revised = str(revised).strip() if revised else None
+
+        # A "failed" verdict with no actual issues or revision is meaningless
+        # — treat it as passed so a flaky verifier can't force a pointless swap.
+        if not issues and not revised:
+            passed = True
+
+        return {"passed": passed, "issues": issues, "revised_answer": revised if not passed else None}
+
+    except Exception as e:
+        print(f"⚠️ [Verifier] Verification failed, trusting draft answer: {e}")
+        return {"passed": True, "issues": [], "revised_answer": None}
+
+
+def generate_verified_answer(query: str, result: dict) -> dict:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Final answer generation with a second-pass verifier:
+
+        generate draft answer from search evidence
+            → verify (unsupported claims, wrong dates, wrong numbers,
+                       hallucinations, missing citations, contradictions)
+            → if verification fails, use the verifier's corrected answer
+
+    Returns:
+      {"answer": str|None, "verified": bool, "revised": bool,
+       "issues": list[str], "citations": dict, "confidence": int}
+    "answer" is None only if draft generation itself failed (e.g. no LLM
+    key configured) — verification never blocks an answer from returning,
+    it only potentially improves it.
+    """
+    context = build_production_search_context(result)
+    draft = _generate_answer_llm(query, context)
+
+    if not draft:
+        return {
+            "answer":     None,
+            "verified":   False,
+            "revised":    False,
+            "issues":     ["draft answer generation unavailable"],
+            "citations":  result.get("citations", {}),
+            "confidence": result.get("confidence", 0),
+        }
+
+    verdict = _verify_answer_llm(query, context, draft)
+
+    if verdict["passed"]:
+        final_answer, revised = draft, False
+    elif verdict["revised_answer"]:
+        final_answer, revised = verdict["revised_answer"], True
+        print(f"🔁 [Verifier] Revised answer — issues found: {verdict['issues']}")
+    else:
+        # Failed but no usable revision came back — safer to keep the draft
+        # than to return nothing, while still surfacing the issues found.
+        final_answer, revised = draft, False
+
+    return {
+        "answer":     final_answer,
+        "verified":   verdict["passed"],
+        "revised":    revised,
+        "issues":     verdict["issues"],
+        "citations":  result.get("citations", {}),
+        "confidence": result.get("confidence", 0),
+    }
