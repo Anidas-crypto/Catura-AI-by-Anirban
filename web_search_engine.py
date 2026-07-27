@@ -3264,6 +3264,83 @@ def build_citations(results: list[dict]) -> tuple[list[dict], dict]:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# CONFIDENCE SCORING — overall answer confidence (0-100)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def compute_answer_confidence(query: str, results: list[dict], cross_ref: dict) -> int:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Overall confidence (0-100) for the final answer, combining:
+      - Agreement            — multi-source corroboration + cross-ref consensus
+      - Source count         — how many distinct domains contribute
+      - Trust                — average trust_score of the results used
+      - Freshness            — fraction with a verified, reasonably recent date
+      - Official confirmation — is at least one official/primary source present
+      - Semantic similarity  — average relevance of results to the query
+      - Contradictions       — penalizes unresolved conflicts between sources
+    Returns an int clamped to 0-100.
+    """
+    if not results:
+        return 0
+
+    top = results[:10]  # confidence reflects the results actually surfaced
+    n = len(top)
+
+    # ── Agreement — multi-source corroboration + cross-ref consensus ───────
+    multi_source_frac = sum(1 for r in top if r.get("multi_source")) / n
+    consensus_bonus   = min(cross_ref.get("consensus_count", 0) * 2, 10)
+    agreement_score   = (multi_source_frac * 10) + consensus_bonus  # 0..20
+
+    # ── Source count — distinct domains among top results ──────────────────
+    distinct_domains   = len({_get_domain(r.get("url", "")) for r in top if r.get("url")})
+    source_count_score = min(distinct_domains * 2.5, 15)  # 0..15
+
+    # ── Trust — average trust_score of top results ──────────────────────────
+    avg_trust    = sum(r.get("trust_score", 50) for r in top) / n
+    trust_score_ = (avg_trust / 100) * 25  # 0..25
+
+    # ── Freshness — fraction with a verified, reasonably recent date ───────
+    fresh_hits = 0
+    for r in top:
+        verification = _verify_publication_date(r, r.get("url", ""))
+        if verification["verified"] and verification["days_old"] is not None \
+                and verification["days_old"] <= 365:
+            fresh_hits += 1
+    freshness_score = (fresh_hits / n) * 15  # 0..15
+
+    # ── Official confirmation — bonus if ANY top result is official ────────
+    has_official   = any(_official_source_boost(_get_domain(r.get("url", ""))) > 0 for r in top)
+    official_score = 10.0 if has_official else 0.0
+
+    # ── Semantic similarity — average relevance of results to the query ────
+    avg_relevance  = sum(_semantic_relevance_score(query, r) for r in top) / n
+    semantic_score = avg_relevance * 15  # 0..15
+
+    base = (
+        agreement_score + source_count_score + trust_score_
+        + freshness_score + official_score + semantic_score
+    )
+
+    # ── Contradictions — penalize unresolved conflicts between sources ──────
+    contradiction_count = cross_ref.get("contradiction_count", 0)
+    contradictions       = cross_ref.get("contradictions", [])
+    if contradiction_count:
+        avg_conflict_confidence = (
+            sum(c.get("confidence_score", 50) for c in contradictions) / len(contradictions)
+            if contradictions else 50
+        )
+        # More unresolved conflicts, and lower confidence in how they resolved,
+        # both push the penalty up — capped so a couple of minor conflicts
+        # can't tank an otherwise well-supported answer.
+        penalty = min(contradiction_count * 5 + (100 - avg_conflict_confidence) * 0.2, 30)
+    else:
+        penalty = 0.0
+
+    final = base - penalty
+    return int(max(0, min(round(final), 100)))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # MAIN PIPELINE — Full production web search
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -3293,6 +3370,7 @@ def run_production_search(query: str) -> dict:
             "results":       [],
             "citations":     {},
             "cross_ref":     {},
+            "confidence":    0,
             "search_engine": "production",
         }
 
@@ -3326,8 +3404,10 @@ def run_production_search(query: str) -> dict:
     # Step 8: Citation assignment
     cited, citation_map = build_citations(reranked)
 
+    # Step 9: Overall answer confidence (0-100)
+    confidence = compute_answer_confidence(query, reranked, cross_ref)
     print(f"✅ [Pipeline] Complete. Final results: {len(cited)}, "
-          f"Citations: {len(citation_map)}\n")
+          f"Citations: {len(citation_map)}, Confidence: {confidence}\n")
 
     return {
         "tool":          "web_search",
@@ -3337,6 +3417,7 @@ def run_production_search(query: str) -> dict:
         "results":       cited,
         "citations":     citation_map,
         "cross_ref":     cross_ref,
+        "confidence":    confidence,
         "search_engine": "production",
     }
 
