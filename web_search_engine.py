@@ -1103,6 +1103,100 @@ def _should_crawl(url: str) -> bool:
         return False
 
 
+_TABLE_ROW_RE       = re.compile(r'^\s*\|.+\|\s*$', re.MULTILINE)
+_TABLE_SEPARATOR_RE = re.compile(r'^\s*\|?[\s:|-]+\|[\s:|-]+\|?\s*$', re.MULTILINE)
+
+# ── Discard: boilerplate that adds no answer value ──────────────────────────
+_NAVIGATION_PATTERNS = [
+    r'^\s*(home|menu|navigation|skip to (main )?content|main menu)\s*$',
+    r'(\[[^\]]+\]\([^)]+\)\s*[|>»/]\s*){2,}\[[^\]]+\]\([^)]+\)',  # link | link | link chains
+    r'^\s*(breadcrumb|you may also like|related articles?|read (also|more)|'
+    r'trending now|more from|share this|follow us on)\b',
+]
+_ADVERTISEMENT_PATTERNS = [
+    r'\b(advertisement|sponsored( content)?|promoted content|paid partnership)\b',
+    r'\b(subscribe now|sign up for our newsletter|download our app|click here to subscribe)\b',
+]
+_COMMENT_PATTERNS = [
+    r'^\s*\d+\s*comments?\b',
+    r'\b(leave a reply|leave a comment|post your comment|add a comment|view all comments)\b',
+    r'^\s*reply\s*$',
+]
+_DISCARD_CONTENT_TYPES = {"navigation", "advertisement", "comment"}
+
+# ── Preserve: high-value content worth keeping even when short ─────────────
+_DEFINITION_PATTERNS = [
+    r'\b[\w\s]{2,40}\s+(is defined as|refers to|is a term (used )?for|denotes)\b',
+    r'^\*\*[^*]{2,60}\*\*\s*[:\u2013\u2014-]\s',   # **Term**: definition
+]
+_STATISTIC_PATTERNS = [
+    r'\d+(\.\d+)?\s?%',
+    r'[$₹€£]\s?\d[\d,.]*',
+    r'\b(grew|increased|decreased|declined|rose|fell)\s+by\s+\d',
+    r'\baccording to (a|the) (study|survey|report|data)\b',
+]
+_TIMELINE_PATTERNS = [
+    r'\b(19|20)\d{2}\b.{0,80}\b(19|20)\d{2}\b',   # two+ years mentioned = likely a timeline
+    r'^\s*[-*]\s*(19|20)\d{2}\b',                  # bullet starting with a year
+    r'\btimeline\b',
+]
+_PRESERVE_CONTENT_TYPES = {"table", "definition", "statistic", "timeline"}
+
+
+def _classify_chunk_content_type(heading: str, text: str) -> str:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Classifies a paragraph/section so extraction can DISCARD boilerplate
+    (navigation, advertisements, comments) and PRESERVE high-value content
+    (tables, definitions, statistics, timelines) instead of treating every
+    paragraph the same way. Discard signals are checked first — they're
+    unambiguous (a comment count, an "Advertisement" label) even inside an
+    otherwise plausible-looking block. Falls back to "paragraph" for
+    ordinary prose that isn't any of the above.
+    """
+    lower = f"{heading}\n{text}".strip().lower()
+
+    if any(re.search(p, lower, re.MULTILINE) for p in _COMMENT_PATTERNS):
+        return "comment"
+    if any(re.search(p, lower) for p in _ADVERTISEMENT_PATTERNS):
+        return "advertisement"
+    if any(re.search(p, lower, re.MULTILINE) for p in _NAVIGATION_PATTERNS):
+        return "navigation"
+
+    if _TABLE_ROW_RE.search(text) and _TABLE_SEPARATOR_RE.search(text):
+        return "table"
+    if any(re.search(p, lower, re.MULTILINE) for p in _DEFINITION_PATTERNS):
+        return "definition"
+    if any(re.search(p, lower, re.MULTILINE) for p in _TIMELINE_PATTERNS):
+        return "timeline"
+    if any(re.search(p, lower, re.MULTILINE) for p in _STATISTIC_PATTERNS):
+        return "statistic"
+
+    return "paragraph"
+
+
+def _filter_unrelated_paragraphs(body: str, heading: str = "") -> list[tuple[str, str]]:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Splits a section's body into paragraphs, classifies each one, and drops
+    navigation/advertisement/comment paragraphs — "remove unrelated
+    sections" / "discard navigation" / "discard advertisements" / "discard
+    comments" — while keeping every other paragraph (including short
+    tables/definitions/statistics/timelines that a plain length filter
+    would otherwise throw away).
+    Returns [(paragraph_text, content_type), ...] for the KEPT paragraphs,
+    in original order.
+    """
+    paragraphs = [p.strip() for p in re.split(r'\n\s*\n', body) if p.strip()]
+    kept: list[tuple[str, str]] = []
+    for p in paragraphs:
+        ctype = _classify_chunk_content_type(heading, p)
+        if ctype in _DISCARD_CONTENT_TYPES:
+            continue
+        kept.append((p, ctype))
+    return kept
+
+
 def _split_long_text(text: str, max_chars: int) -> list[str]:
     """
     ── NEW ──────────────────────────────────────────────────────────────────
@@ -1128,15 +1222,19 @@ def _split_long_text(text: str, max_chars: int) -> list[str]:
 
 def _chunk_page_markdown(markdown: str, page_title: str) -> list[dict]:
     """
-    ── NEW ──────────────────────────────────────────────────────────────────
-    STEP 1 of page processing: split page markdown into semantic sections
-    along heading boundaries (#, ##, ### ...). Falls back to paragraph
-    grouping when the page has no headings at all (common on news/blog
-    pages that render as one unbroken block).
+    ── CHANGED ──────────────────────────────────────────────────────────────
+    STEP 1 of Firecrawl extraction: split page markdown into semantic
+    sections along heading boundaries (#, ##, ### ...), falling back to
+    paragraph grouping when the page has no headings. Within each section,
+    paragraphs are now filtered (_filter_unrelated_paragraphs) to remove
+    unrelated/boilerplate content — navigation, advertisements, comments —
+    and each surviving chunk is tagged with a content_type so tables,
+    definitions, statistics, and timelines can be preserved and prioritized
+    downstream even when short, instead of being cut by a flat length rule.
 
-    Each chunk: {"heading": str, "text": str}. `heading` is always populated
-    — the nearest markdown heading above the chunk, or the page title for
-    lede text / headerless pages — so titles are preserved, never dropped.
+    Each chunk: {"heading": str, "text": str, "content_type": str}.
+    `heading` is always populated — the nearest markdown heading above the
+    chunk, or the page title for lede text / headerless pages.
     """
     markdown = markdown.strip()
     if not markdown:
@@ -1145,38 +1243,54 @@ def _chunk_page_markdown(markdown: str, page_title: str) -> list[dict]:
     headers = list(_HEADER_RE.finditer(markdown))
     chunks: list[dict] = []
 
+    def _emit(heading_text: str, body: str) -> None:
+        kept = _filter_unrelated_paragraphs(body, heading_text)
+        if not kept:
+            return  # entire section was boilerplate (nav/ads/comments)
+
+        filtered_body = "\n\n".join(p for p, _ in kept)
+        preserve_types = [t for _, t in kept if t in _PRESERVE_CONTENT_TYPES]
+        has_preserve   = bool(preserve_types)
+
+        # Only enforce the min-length floor on ordinary prose — a short
+        # table/definition/statistic/timeline is still worth keeping.
+        if len(filtered_body) < _CHUNK_MIN_CHARS and not has_preserve:
+            return
+
+        dominant_type = preserve_types[0] if has_preserve else "paragraph"
+        for piece in _split_long_text(filtered_body, _CHUNK_MAX_CHARS):
+            chunks.append({"heading": heading_text, "text": piece, "content_type": dominant_type})
+
     if headers:
         # Lede text before the first heading still belongs to the page title
         if headers[0].start() > 0:
-            lead = markdown[:headers[0].start()].strip()
-            if len(lead) >= _CHUNK_MIN_CHARS:
-                chunks.append({"heading": page_title or "Introduction", "text": lead})
+            _emit(page_title or "Introduction", markdown[:headers[0].start()])
 
         for i, h in enumerate(headers):
             heading_text = h.group(2).strip()
             body_start   = h.end()
             body_end     = headers[i + 1].start() if i + 1 < len(headers) else len(markdown)
-            body         = markdown[body_start:body_end].strip()
-            if len(body) < _CHUNK_MIN_CHARS:
-                continue
-            # Long sections under one heading get split further so no single
-            # chunk balloons past the per-chunk cap — still the same section.
-            for piece in _split_long_text(body, _CHUNK_MAX_CHARS):
-                chunks.append({"heading": heading_text, "text": piece})
+            _emit(heading_text, markdown[body_start:body_end])
     else:
-        # No headings — fall back to paragraph boundaries, grouping
-        # consecutive paragraphs up to the per-chunk cap.
-        paragraphs = [p.strip() for p in re.split(r'\n\s*\n', markdown) if p.strip()]
-        buf = ""
-        for p in paragraphs:
+        # No headings — filter paragraphs first, then group survivors up to
+        # the per-chunk cap (same grouping logic as before, just fed
+        # cleaned input instead of the raw, unfiltered paragraph list).
+        kept = _filter_unrelated_paragraphs(markdown, page_title)
+        buf, buf_types = "", []
+        for p, ctype in kept:
             candidate = f"{buf}\n\n{p}".strip() if buf else p
             if len(candidate) > _CHUNK_MAX_CHARS and buf:
-                chunks.append({"heading": page_title or "", "text": buf})
-                buf = p
+                dominant = next((t for t in buf_types if t in _PRESERVE_CONTENT_TYPES), "paragraph")
+                chunks.append({"heading": page_title or "", "text": buf, "content_type": dominant})
+                buf, buf_types = p, [ctype]
             else:
                 buf = candidate
-        if len(buf) >= _CHUNK_MIN_CHARS:
-            chunks.append({"heading": page_title or "", "text": buf})
+                buf_types.append(ctype)
+        has_preserve = any(t in _PRESERVE_CONTENT_TYPES for t in buf_types)
+        if len(buf) >= _CHUNK_MIN_CHARS or has_preserve:
+            dominant = next((t for t in buf_types if t in _PRESERVE_CONTENT_TYPES), "paragraph")
+            if buf:
+                chunks.append({"heading": page_title or "", "text": buf, "content_type": dominant})
 
     return chunks
 
@@ -1200,18 +1314,26 @@ def _dedupe_chunks(chunks: list[dict]) -> list[dict]:
     return unique
 
 
+_CONTENT_TYPE_SCORE_BONUS = {
+    "table": 3.0, "definition": 2.5, "statistic": 2.0, "timeline": 2.0, "paragraph": 0.0,
+}
+
+
 def _score_chunk(chunk: dict, query_terms: set[str]) -> float:
     """
-    ── NEW ──────────────────────────────────────────────────────────────────
+    ── CHANGED ──────────────────────────────────────────────────────────────
     STEP 3: cheap, dependency-free relevance score — keyword overlap between
     the chunk and the query terms, with heading matches weighted heavier
     than body matches (a chunk whose *heading* is on-topic is usually more
     relevant than one that just happens to mention a query word once), plus
     a small bonus for well-sized chunks so tiny fragments and giant blocks
-    both rank behind well-formed, on-topic sections.
+    both rank behind well-formed, on-topic sections. Now also adds a bonus
+    for high-value content types (table/definition/statistic/timeline) so
+    they're prioritized to survive top-N selection even when their keyword
+    overlap alone wouldn't have ranked them highly.
     """
     if not query_terms:
-        return 1.0
+        return 1.0 + _CONTENT_TYPE_SCORE_BONUS.get(chunk.get("content_type", "paragraph"), 0.0)
 
     text_words    = set(re.findall(r'[a-z0-9]+', chunk["text"].lower()))
     heading_words = set(re.findall(r'[a-z0-9]+', chunk.get("heading", "").lower()))
@@ -1224,6 +1346,8 @@ def _score_chunk(chunk: dict, query_terms: set[str]) -> float:
     length = len(chunk["text"])
     if 150 <= length <= _CHUNK_MAX_CHARS:
         score += 0.5
+
+    score += _CONTENT_TYPE_SCORE_BONUS.get(chunk.get("content_type", "paragraph"), 0.0)
 
     return score
 
@@ -1460,11 +1584,14 @@ def _assemble_chunks(chunks: list[dict], page_title: str) -> str:
 
 def _firecrawl_extract(url: str, query: str = "") -> Optional[str]:
     """
+    ── CHANGED ──────────────────────────────────────────────────────────────
     Call Firecrawl API to extract clean markdown from a URL, then run it
-    through the page-processing pipeline instead of a blind char truncate:
+    through the extraction pipeline instead of sending the entire page:
 
-        Page → chunk into semantic sections → store chunks → score chunks
-             → return only the best chunks
+        Extract headings → identify relevant paragraphs → remove unrelated
+        sections (discard navigation/advertisements/comments, keep tables/
+        definitions/statistics/timelines) → score → return only the best
+        chunks
 
     Returns the assembled best-chunks text, or None on failure.
     Hard timeout: 5 seconds (skip slow pages rather than block the pipeline).
