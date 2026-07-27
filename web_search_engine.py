@@ -952,17 +952,131 @@ def _assess_evidence_and_plan_more(
         return {"confident": True, "additional_queries": []}
 
 
-def plan_and_execute_search(query: str) -> tuple[list[str], list[dict]]:
+# ══════════════════════════════════════════════════════════════════════════════
+# ANSWER-GRAPH HOP PLANNING (entity completion) ──────────────────────────────
+# Deterministic, non-LLM multi-hop retrieval for entity-style questions
+# (e.g. "Tell me about Acme Corp"): after each round, checks whether the
+# evidence gathered so far already answers a fixed set of standard slots —
+# founder → acquisition → timeline — in that order, and issues ONE targeted
+# hop query for the first missing slot. Stops once every slot is covered
+# ("answer graph complete") or MAX_SEARCH_ROUNDS is hit (max 3 hops total,
+# same hard cap as the rest of the planner). Runs ahead of the generic
+# LLM-based gap check below and needs no LLM/API key to work.
+# ══════════════════════════════════════════════════════════════════════════════
+
+_ANSWER_GRAPH_SLOTS = [
+    {
+        "slot": "founder",
+        "covered_patterns": [
+            r'\bfound(ed|er|ers)\b', r'\bco-?founder\b', r'\bstarted by\b', r'\bcreated by\b',
+        ],
+        "query_template": "{entity} founder",
+    },
+    {
+        "slot": "acquisition",
+        "covered_patterns": [
+            r'\bacqui(re|red|sition)\b', r'\bmerger\b', r'\bbought (by|out)\b', r'\btakeover\b',
+        ],
+        "query_template": "{entity} acquisition history",
+    },
+    {
+        "slot": "timeline",
+        "covered_patterns": [
+            r'\btimeline\b', r'\bhistory\b',
+            r'\b(19|20)\d{2}\b.{0,80}\b(19|20)\d{2}\b',  # 2+ distinct years mentioned
+        ],
+        "query_template": "{entity} company timeline history",
+    },
+]
+
+_ENTITY_NAME_RE = re.compile(r'\b([A-Z][a-zA-Z0-9&]*(?:\s+[A-Z][a-zA-Z0-9&]*){0,3})\b')
+
+# Words indicating the query is about an organization/company/product-style
+# entity (where founder/acquisition/timeline hops make sense) rather than a
+# narrow factual, how-to, or definitional question.
+_ENTITY_QUERY_HINTS = re.compile(
+    r'\b(company|startup|corporation|organi[sz]ation|firm|business|app|platform|'
+    r'product|brand|founder|ceo|acqui(re|red|sition)|about)\b', re.IGNORECASE,
+)
+
+
+def _extract_entity_name(query: str) -> Optional[str]:
     """
     ── NEW ──────────────────────────────────────────────────────────────────
+    Best-effort extraction of the entity (company/product/org) a query is
+    about, using a capitalized-phrase heuristic — picks the longest
+    capitalized run as the more likely full entity name. Returns None when
+    nothing looks like a proper noun (e.g. a lowercase how-to/definitional
+    question), since those have no entity graph to hop.
+    """
+    candidates = [c.strip() for c in _ENTITY_NAME_RE.findall(query) if len(c.strip()) > 1]
+    if not candidates:
+        return None
+    return max(candidates, key=len)
+
+
+def _build_answer_graph(query: str, raw_results: list[dict]) -> dict:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Inspects evidence gathered so far and reports which standard slots
+    (founder, acquisition, timeline) are already covered for an entity-style
+    question. "applicable" is False for queries that don't look like they're
+    about a company/organization/product entity — those get no graph hops.
+    Returns {"applicable": bool, "entity": str|None,
+             "covered": {"founder": bool, "acquisition": bool, "timeline": bool}}.
+    """
+    entity = _extract_entity_name(query)
+    applicable = bool(entity) and bool(_ENTITY_QUERY_HINTS.search(query))
+
+    combined_text = " ".join(
+        (r.get("title", "") or "") + " " + (r.get("body", "") or "")
+        for r in raw_results
+    ).lower()
+
+    covered = {
+        slot["slot"]: any(re.search(p, combined_text) for p in slot["covered_patterns"])
+        for slot in _ANSWER_GRAPH_SLOTS
+    }
+    return {"applicable": applicable, "entity": entity, "covered": covered}
+
+
+def _next_hop_query(query: str, raw_results: list[dict]) -> Optional[str]:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Walks the answer-graph slots in fixed order — founder → acquisition →
+    timeline — and returns ONE targeted search query for the first slot not
+    yet covered, or None if the question isn't entity-style, no entity name
+    could be extracted, or every slot is already covered (the answer graph
+    is complete).
+    """
+    graph = _build_answer_graph(query, raw_results)
+    if not graph["applicable"] or not graph["entity"]:
+        return None
+
+    for slot in _ANSWER_GRAPH_SLOTS:
+        if not graph["covered"][slot["slot"]]:
+            return slot["query_template"].format(entity=graph["entity"])
+
+    return None  # every slot covered — answer graph is complete
+
+
+def plan_and_execute_search(query: str) -> tuple[list[str], list[dict]]:
+    """
+    ── CHANGED ──────────────────────────────────────────────────────────────
     Iterative multi-step search planner:
 
       Round 1: rewrite_queries() → search
-      Analyze: is the evidence sufficient?
-        - yes, or LLM unavailable/fails  → stop
-        - no  → LLM proposes targeted follow-up queries → search again
-      Repeat until confident, no new queries are proposed, or
-      MAX_SEARCH_ROUNDS is reached (hard cap — no infinite loops possible).
+      Analyze:
+        - deterministic answer-graph hop check first (founder → acquisition
+          → timeline for entity-style questions — see _next_hop_query); if a
+          slot is missing, hop straight to a targeted query for it, no LLM
+          needed
+        - otherwise, ask the LLM whether the evidence is sufficient
+          - yes, or LLM unavailable/fails → stop
+          - no → LLM proposes targeted follow-up queries → search again
+      Repeat until the answer graph is complete, confident, no new queries
+      are proposed, or MAX_SEARCH_ROUNDS is reached (max 3 hops total —
+      hard cap, no infinite loops possible).
 
     Returns (queries_run, all_raw) with the same shapes the old inline
     steps 1+2 in run_production_search() produced, so downstream dedup/
@@ -991,6 +1105,18 @@ def plan_and_execute_search(query: str) -> tuple[list[str], list[dict]]:
 
     # ── Rounds 2..MAX_SEARCH_ROUNDS — analyze, fill gaps, repeat ─────────
     while round_num < MAX_SEARCH_ROUNDS:
+        # Deterministic answer-graph hop: founder → acquisition → timeline.
+        # Checked first since it's free (no LLM call) and covers the exact
+        # "need founder? / need acquisition? / need timeline?" hop chain.
+        hop_query = _next_hop_query(query, all_raw)
+        already_run = {q.strip().lower() for q in queries_run}
+        if hop_query and hop_query.strip().lower() not in already_run:
+            round_num += 1
+            print(f"🔗 [Hop {round_num}/{MAX_SEARCH_ROUNDS}] Answer-graph gap → '{hop_query}'")
+            queries_run.append(hop_query)
+            all_raw.extend(_execute_search_queries([hop_query], preferred_domains))
+            continue
+
         assessment = _assess_evidence_and_plan_more(query, all_raw, queries_run)
 
         if assessment["confident"] or not assessment["additional_queries"]:
