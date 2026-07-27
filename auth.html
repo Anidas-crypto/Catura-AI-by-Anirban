@@ -464,11 +464,42 @@
             animation: modal-in 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
             max-height: calc(100dvh - 2rem); overflow-y: auto;
             -webkit-overflow-scrolling: touch;
+            transition: max-width 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
+        .modal-card.compact { max-width: 340px; }
         @keyframes modal-in {
             from { opacity: 0; transform: scale(0.92) translateY(10px); }
             to   { opacity: 1; transform: scale(1) translateY(0); }
         }
+        /* ── Check-email screen ── */
+        #checkEmailScreen { animation: check-email-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+        @keyframes check-email-in {
+            from { opacity: 0; transform: scale(0.96); }
+            to   { opacity: 1; transform: scale(1); }
+        }
+        .mail-icon {
+            width: 48px; height: 48px; margin: 0 auto 1rem; display: flex;
+            align-items: center; justify-content: center; border-radius: 12px;
+            background: rgba(74, 144, 226, 0.12); color: #4a90e2;
+        }
+        .check-email-title {
+            text-align: center; font-size: 14px; color: var(--text-muted, #999);
+            margin: 0 0 4px;
+        }
+        .check-email-address {
+            text-align: center; font-size: 15px; font-weight: 600; color: var(--text, #fff);
+            margin: 0 0 1.5rem; word-break: break-all;
+        }
+        .check-email-links {
+            display: flex; flex-direction: column; align-items: center; gap: 12px; margin-top: 4px;
+        }
+        .link-btn {
+            background: none; border: none; padding: 4px; cursor: pointer;
+            font-size: 13px; color: #4a90e2; text-decoration: underline;
+            text-underline-offset: 2px; transition: color 0.2s; min-height: 30px;
+        }
+        .link-btn:hover { color: #6ba7ec; }
+        #otpBlock { margin-top: 1rem; }
         .modal-close {
             position: absolute; top: 14px; right: 14px;
             width: 32px; height: 32px; border-radius: 8px; border: none;
@@ -1207,6 +1238,32 @@
                 </div>
             </section>
 
+            <section id="checkEmailScreen" aria-label="Check your email" hidden>
+                <div class="logo-area">
+                    <div class="mail-icon" aria-hidden="true">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                    </div>
+                    <p class="check-email-title">To continue, click the link sent to</p>
+                    <p class="check-email-address" id="checkEmailAddress"></p>
+                </div>
+
+                <div id="otpBlock" hidden>
+                    <div class="field">
+                        <label for="otpCode">Verification code</label>
+                        <input type="text" id="otpCode" name="otpCode" placeholder="123456" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
+                    </div>
+                    <button class="submit" id="otpSubmitBtn" type="button" onclick="doVerifyOtp()">Verify code</button>
+                    <div class="msg" id="otpMsg" role="alert" aria-live="assertive" aria-atomic="true"></div>
+                </div>
+
+                <div class="check-email-links">
+                    <button type="button" class="link-btn" id="otpToggleBtn" onclick="toggleOtpBlock()">Enter verification code</button>
+                    <button type="button" class="link-btn" onclick="resendConfirmation()">Resend email</button>
+                    <button type="button" class="link-btn" onclick="useDifferentEmail()">Use a different email</button>
+                </div>
+                <div class="msg" id="checkEmailMsg" role="status" aria-live="polite"></div>
+            </section>
+
             <section id="resetScreen" aria-label="Set new password" hidden>
                 <div class="logo-area">
                     <div class="reset-icon" aria-hidden="true">
@@ -1311,7 +1368,11 @@
             switchTab(tab || 'login');
             setTimeout(() => { if (turnstileReady) initTurnstile(); }, 50);
         }
-        function closeModal() { document.getElementById('authModal').classList.remove('open'); document.body.style.overflow = ''; }
+        function closeModal() {
+            document.getElementById('authModal').classList.remove('open');
+            document.body.style.overflow = '';
+            resetCheckEmailScreen();
+        }
         function handleOverlayClick(e) { if (e.target === document.getElementById('authModal')) closeModal(); }
         document.addEventListener('keydown', e => {
             if (e.key === 'Escape') { closeModal(); return; }
@@ -1389,7 +1450,7 @@
                 turnstileToken = null; if (turnstileWidgetId !== null) window.turnstile.reset(turnstileWidgetId);
                 btn.disabled = false; btn.textContent = 'Create account';
                 if (error) showMsg('msg', error.message, 'error');
-                else showMsg('msg', '✅ Account created! Check your email to confirm, then log in.', 'success');
+                else showCheckEmail(email);
             } else {
                 btn.disabled = true; btn.textContent = 'Logging in…';
                 const { error } = await sb.auth.signInWithPassword({ email, password, options: { captchaToken: turnstileToken } });
@@ -1415,6 +1476,61 @@
         async function doGoogle() { await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } }); }
 
         /* ── Forgot ── */
+        /* ── Check-email screen ── */
+        function showCheckEmail(email) {
+            document.getElementById('checkEmailAddress').textContent = email;
+            document.getElementById('authScreen').hidden = true;
+            document.getElementById('checkEmailScreen').hidden = false;
+            document.getElementById('authModalCard').classList.add('compact');
+            document.getElementById('otpBlock').hidden = true;
+            document.getElementById('otpToggleBtn').textContent = 'Enter verification code';
+            document.getElementById('otpCode').value = '';
+            clearMsg('otpMsg');
+            clearMsg('checkEmailMsg');
+        }
+        function resetCheckEmailScreen() {
+            document.getElementById('authModalCard').classList.remove('compact');
+            document.getElementById('checkEmailScreen').hidden = true;
+            document.getElementById('authScreen').hidden = false;
+            document.getElementById('otpBlock').hidden = true;
+            document.getElementById('otpToggleBtn').textContent = 'Enter verification code';
+        }
+        function useDifferentEmail() {
+            const prevEmail = document.getElementById('checkEmailAddress').textContent;
+            resetCheckEmailScreen();
+            switchTab('signup');
+            document.getElementById('email').value = prevEmail || '';
+            document.getElementById('email').focus();
+        }
+        function toggleOtpBlock() {
+            const block = document.getElementById('otpBlock');
+            const btn = document.getElementById('otpToggleBtn');
+            block.hidden = !block.hidden;
+            btn.textContent = block.hidden ? 'Enter verification code' : 'Hide verification code';
+            clearMsg('otpMsg');
+            if (!block.hidden) document.getElementById('otpCode').focus();
+        }
+        async function resendConfirmation() {
+            const email = document.getElementById('checkEmailAddress').textContent;
+            const m = document.getElementById('checkEmailMsg');
+            m.textContent = 'Sending…'; m.className = 'msg';
+            const { error } = await sb.auth.resend({ type: 'signup', email });
+            if (error) { m.textContent = error.message; m.className = 'msg error'; }
+            else { m.textContent = 'Email resent — check your inbox.'; m.className = 'msg success'; }
+        }
+        async function doVerifyOtp() {
+            const email = document.getElementById('checkEmailAddress').textContent;
+            const token = document.getElementById('otpCode').value.trim();
+            const m = document.getElementById('otpMsg');
+            const btn = document.getElementById('otpSubmitBtn');
+            if (!token) { m.textContent = 'Enter the code from your email.'; m.className = 'msg error'; return; }
+            btn.disabled = true; btn.textContent = 'Verifying…';
+            const { error } = await sb.auth.verifyOtp({ email, token, type: 'signup' });
+            btn.disabled = false; btn.textContent = 'Verify code';
+            if (error) { m.textContent = error.message; m.className = 'msg error'; }
+            else { m.textContent = 'Verified! Redirecting…'; m.className = 'msg success'; setTimeout(() => window.location.href = '/', 800); }
+        }
+
         async function doForgot() {
             const email = document.getElementById('email').value.trim();
             if (!email) return showMsg('msg', 'Enter your email above first.', 'error');
