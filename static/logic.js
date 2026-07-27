@@ -5704,6 +5704,18 @@ document.addEventListener('click', function (e) {
     panel.addEventListener('mouseenter', () => { if (isDesktop()) open(); });
     panel.addEventListener('mouseleave', () => { if (isDesktop()) scheduleClose(); });
 
+    // The Puter models panel is a nested flyout that lives OUTSIDE
+    // moreModelsPanel in the DOM (so its own overflow never clips it).
+    // Because of that, moving the mouse from moreModelsPanel into it fires
+    // a mouseleave on moreModelsPanel — without this, the hover close-timer
+    // would fire mid-hover and yank the whole panel away before a model
+    // could be clicked. Treat hovering it as still "hovering more models".
+    const puterPanel = document.getElementById('puterModelsPanel');
+    if (puterPanel) {
+        puterPanel.addEventListener('mouseenter', () => { if (isDesktop()) open(); });
+        puterPanel.addEventListener('mouseleave', () => { if (isDesktop()) scheduleClose(); });
+    }
+
     // Instantly close if the pointer hovers any other item in the main
     // dropdown (model options, effort level row, etc.) — Claude-style
     // "only one flyout open at a time".
