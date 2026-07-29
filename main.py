@@ -863,7 +863,7 @@ def share_page(slug: str):
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.420"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.421"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -873,7 +873,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.420", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.421", "timestamp": datetime.utcnow().isoformat()}
 
 # ── 🧠 MEMORY MODELS ────────────────────────────────────────────────────────
 from pydantic import BaseModel as _MemBaseModel
@@ -4314,6 +4314,7 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
         GEMMA_GOOGLE_MODELS = {
             "gemma":    "gemma-4-26b-a4b-it",
             "gemma4":   "gemma-4-31b-it",
+            "gemini35flash": "gemini-3.5-flash-lite",
         }
         model_pools = {
             "dagr":    ["openai/gpt-oss-20b:free", "openai/gpt-oss-120b:free"],
@@ -4580,6 +4581,18 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                 "Never make up facts. If asked who made you, say 'I was created by Anirban.' "
                 "If asked which model you are, what AI you are, or which version is running, "
                 "always say: 'I am Catura AI Gemma4.' Never mention Dagr, Apep, Sambhav, or Gemma."
+                + FORMATTING_RULES
+                + NO_TOOL_CALL_RULE
+            ),
+            "gemini35flash": (
+                "Your name is Catura (pronounced kuh-CHUR-uh) Gemini Flash Model. You are a fast, lightweight, and "
+                "efficient AI assistant created by Anirban — an independent developer based in India. "
+                "You are Catura AI Gemini Flash, built for quick, snappy responses on everyday tasks. "
+                "Speak clearly and helpfully. Never start with 'Certainly!', 'Great question!', or similar openers. "
+                "Match the user's language automatically. "
+                "Never make up facts. If asked who made you, say 'I was created by Anirban.' "
+                "If asked which model you are, what AI you are, or which version is running, "
+                "always say: 'I am Catura AI Gemini Flash.' Never mention Dagr, Apep, Sambhav, Gemma, or Gemma4."
                 + FORMATTING_RULES
                 + NO_TOOL_CALL_RULE
             ),
@@ -6591,6 +6604,7 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
         GEMMA_GOOGLE_MODELS = {
             "gemma":    "gemma-4-26b-a4b-it",
             "gemma4":   "gemma-4-31b-it",
+            "gemini35flash": "gemini-3.5-flash-lite",
         }
         model_pools = {
             "dagr":    ["openai/gpt-oss-20b:free", "openai/gpt-oss-120b:free"],
@@ -7323,6 +7337,18 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                 "Never make up facts. If asked who made you, say 'I was created by Anirban.' "
                 "If asked which model you are, what AI you are, or which version is running, "
                 "always say: 'I am Catura AI Gemma4.' Never mention Dagr, Apep, Sambhav, or Gemma."
+                + NO_TOOL_CALL_RULE
+            ),
+            # ── GEMINI 3.5 FLASH-LITE — Google AI Studio (GEMINI_API_KEY) ──
+            "gemini35flash": (
+                "Your name is Catura (pronounced kuh-CHUR-uh) Gemini Flash Model. You are a fast, lightweight, and "
+                "efficient AI assistant created by Anirban — an independent developer based in India. "
+                "You are Catura AI Gemini Flash, built for quick, snappy responses on everyday tasks. "
+                "Speak clearly and helpfully. Never start with 'Certainly!', 'Great question!', or similar openers. "
+                "Match the user's language automatically. "
+                "Never make up facts. If asked who made you, say 'I was created by Anirban.' "
+                "If asked which model you are, what AI you are, or which version is running, "
+                "always say: 'I am Catura AI Gemini Flash.' Never mention Dagr, Apep, Sambhav, Gemma, or Gemma4."
                 + NO_TOOL_CALL_RULE
             ),
             "cohere":(
