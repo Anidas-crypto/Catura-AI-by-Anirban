@@ -18,8 +18,10 @@ import os
 import re
 import json
 import math
+import time
 import asyncio
 import hashlib
+import threading
 import requests
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
@@ -31,6 +33,90 @@ TAVILY_KEY    = os.getenv("TAVILY_API_KEY", "")
 SERPER_KEY    = os.getenv("SERPER_API_KEY", "")
 FIRECRAWL_KEY = os.getenv("FIRECRAWL_API_KEY", "")
 COHERE_KEY    = os.getenv("COHERE_API_KEY", "")
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SEARCH CACHING — store & reuse previous searches with TTL expiration
+# Stores and reuses: Firecrawl pages, embeddings/vectors, and raw search
+# results, so an identical (or recently-seen) query/URL/text doesn't trigger
+# a duplicate network call. Plain in-memory TTL cache — no external cache
+# service required; entries expire automatically after their TTL, and a
+# simple FIFO cap evicts the oldest entry once a cache is full.
+# ══════════════════════════════════════════════════════════════════════════════
+
+CACHE_TTL_SEARCH_RESULTS = int(os.getenv("CACHE_TTL_SEARCH_RESULTS", 900))    # 15 min — search results
+CACHE_TTL_FIRECRAWL      = int(os.getenv("CACHE_TTL_FIRECRAWL", 3600))       # 1 hour — Firecrawl pages
+CACHE_TTL_EMBEDDINGS     = int(os.getenv("CACHE_TTL_EMBEDDINGS", 86400))     # 24 hours — embeddings/vectors
+CACHE_MAX_ENTRIES        = int(os.getenv("CACHE_MAX_ENTRIES", 2000))         # per-cache entry cap
+
+
+class _TTLCache:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Minimal thread-safe in-memory TTL cache. get() returns None for a
+    missing OR expired key (expired entries are evicted lazily on read, so
+    there's no background sweep thread to manage). set() stores a value
+    with its own TTL (falling back to the cache's default), and evicts the
+    oldest entry (FIFO) if the cache is at capacity — bounds memory use
+    without needing an external cache service.
+    """
+
+    def __init__(self, default_ttl: int, max_entries: int = CACHE_MAX_ENTRIES):
+        self._store: dict[str, tuple[float, object]] = {}   # key -> (expires_at, value)
+        self._order: list[str] = []                          # insertion order, for FIFO eviction
+        self._lock = threading.Lock()
+        self._default_ttl = default_ttl
+        self._max_entries = max_entries
+        self.hits = 0
+        self.misses = 0
+
+    def get(self, key: str):
+        with self._lock:
+            entry = self._store.get(key)
+            if entry is None:
+                self.misses += 1
+                return None
+            expires_at, value = entry
+            if time.time() >= expires_at:
+                self._store.pop(key, None)
+                if key in self._order:
+                    self._order.remove(key)
+                self.misses += 1
+                return None
+            self.hits += 1
+            return value
+
+    def set(self, key: str, value, ttl: Optional[int] = None) -> None:
+        with self._lock:
+            if key not in self._store and len(self._store) >= self._max_entries:
+                oldest = self._order.pop(0)
+                self._store.pop(oldest, None)
+            self._store[key] = (time.time() + (ttl if ttl is not None else self._default_ttl), value)
+            if key not in self._order:
+                self._order.append(key)
+
+    def stats(self) -> dict:
+        with self._lock:
+            total = self.hits + self.misses
+            return {
+                "entries":  len(self._store),
+                "hits":     self.hits,
+                "misses":   self.misses,
+                "hit_rate": round(self.hits / total, 3) if total else 0.0,
+            }
+
+
+def _cache_key(*parts) -> str:
+    """Deterministic cache key from any number of parts (order-sensitive)."""
+    raw = "||".join(str(p) for p in parts)
+    return hashlib.md5(raw.encode("utf-8", "ignore")).hexdigest()
+
+
+# One cache per content type — separate TTLs and separate eviction pools so
+# a burst of embedding lookups can't push out cached search results (or
+# vice versa).
+_search_results_cache = _TTLCache(CACHE_TTL_SEARCH_RESULTS)
+_firecrawl_cache       = _TTLCache(CACHE_TTL_FIRECRAWL)
+_embedding_cache       = _TTLCache(CACHE_TTL_EMBEDDINGS)
 
 # ── NEW: LLM Query Planner config ─────────────────────────────────────────────
 # Reuses the Anthropic API (same account already used elsewhere). A small,
@@ -614,6 +700,17 @@ def _tavily_search_sync(
     """Synchronous Tavily search — called from thread pool."""
     if not TAVILY_KEY:
         return []
+
+    # ── Search caching — avoid duplicate searches ───────────────────────────
+    # Key includes everything that affects the actual request (query, engine
+    # limit, domain routing) so a cache hit only fires for a truly identical
+    # search, not just a similar-looking one.
+    cache_key = _cache_key("tavily", query, max_results, tuple(sorted(preferred_domains or [])))
+    cached = _search_results_cache.get(cache_key)
+    if cached is not None:
+        print(f"♻️ [Cache] Tavily hit for '{query[:60]}'")
+        return cached
+
     try:
         recency = detect_recency_window(query)
 
@@ -682,6 +779,7 @@ def _tavily_search_sync(
             })
 
         print(f"✅ [Tavily] '{query[:60]}' → {len(results)} results")
+        _search_results_cache.set(cache_key, results)
         return results
 
     except (requests.exceptions.RequestException, KeyError, ValueError, TypeError) as e:
@@ -700,6 +798,14 @@ def _serper_search_sync(
     """Synchronous Serper (Google Search API) — called from thread pool."""
     if not SERPER_KEY:
         return []
+
+    # ── Search caching — avoid duplicate searches ───────────────────────────
+    cache_key = _cache_key("serper", query, max_results, tuple(sorted(preferred_domains or [])))
+    cached = _search_results_cache.get(cache_key)
+    if cached is not None:
+        print(f"♻️ [Cache] Serper hit for '{query[:60]}'")
+        return cached
+
     try:
         # ── Domain-aware routing ─────────────────────────────────────────────
         # Serper/Google has no native "preferred domains" parameter, so route
@@ -775,6 +881,7 @@ def _serper_search_sync(
             })
 
         print(f"✅ [Serper] '{query[:60]}' → {len(results)} results")
+        _search_results_cache.set(cache_key, results)
         return results
 
     except (requests.exceptions.RequestException, KeyError, ValueError, TypeError) as e:
@@ -1539,21 +1646,53 @@ def _embed_voyage(texts: list[str], input_type: str = "document") -> Optional[li
 
 def _get_embeddings(texts: list[str], is_query: bool = False) -> Optional[list[list[float]]]:
     """
-    ── NEW ──────────────────────────────────────────────────────────────────
+    ── CHANGED ──────────────────────────────────────────────────────────────
     Provider-independent embedding call. Dispatches on EMBEDDING_PROVIDER
     (openai | cohere | voyage) so swapping providers is a config change, not
     a code change. Returns None — never raises — if the selected provider
     has no key configured or the call fails; callers fall back to the
     keyword scorer, so a missing/broken embedding provider degrades
     retrieval quality instead of breaking the pipeline.
+
+    Reuses cached embeddings/vectors per (provider, model, is_query, text)
+    — identical chunks/queries seen before don't re-hit the embedding API.
+    Only the texts that are actually cache misses get sent to the provider;
+    results are then reassembled in the original input order.
     """
     if not texts:
         return None
+
+    model = {"cohere": EMBEDDING_MODEL_COHERE, "voyage": EMBEDDING_MODEL_VOYAGE}.get(
+        EMBEDDING_PROVIDER, EMBEDDING_MODEL_OPENAI
+    )
+
+    cache_keys = [_cache_key("embedding", EMBEDDING_PROVIDER, model, is_query, t) for t in texts]
+    cached_vectors: list[Optional[list[float]]] = [_embedding_cache.get(k) for k in cache_keys]
+
+    miss_indices = [i for i, v in enumerate(cached_vectors) if v is None]
+    if not miss_indices:
+        print(f"♻️ [Cache] Embeddings hit for all {len(texts)} text(s)")
+        return cached_vectors
+
+    miss_texts = [texts[i] for i in miss_indices]
     if EMBEDDING_PROVIDER == "cohere":
-        return _embed_cohere(texts, "search_query" if is_query else "search_document")
-    if EMBEDDING_PROVIDER == "voyage":
-        return _embed_voyage(texts, "query" if is_query else "document")
-    return _embed_openai(texts)  # default provider
+        fresh = _embed_cohere(miss_texts, "search_query" if is_query else "search_document")
+    elif EMBEDDING_PROVIDER == "voyage":
+        fresh = _embed_voyage(miss_texts, "query" if is_query else "document")
+    else:
+        fresh = _embed_openai(miss_texts)
+
+    if fresh is None or len(fresh) != len(miss_texts):
+        return None  # provider call failed — caller falls back to keyword scoring
+
+    if len(miss_indices) < len(texts):
+        print(f"♻️ [Cache] Embeddings: {len(texts) - len(miss_indices)} hit, {len(miss_indices)} miss")
+
+    for i, vector in zip(miss_indices, fresh):
+        cached_vectors[i] = vector
+        _embedding_cache.set(cache_keys[i], vector)
+
+    return cached_vectors
 
 
 def _normalize_vec(v: list[float]) -> list[float]:
@@ -1719,41 +1858,61 @@ def _firecrawl_extract(url: str, query: str = "") -> Optional[str]:
         definitions/statistics/timelines) → score → return only the best
         chunks
 
+    The raw Firecrawl page fetch (markdown + title) is cached per URL —
+    reused across different queries hitting the same page, since the page
+    content itself doesn't depend on the query. Only the chunk SELECTION
+    below runs fresh every time, since that's what needs to stay
+    query-aware.
+
     Returns the assembled best-chunks text, or None on failure.
     Hard timeout: 5 seconds (skip slow pages rather than block the pipeline).
     """
     if not FIRECRAWL_KEY:
         return None
+
+    firecrawl_cache_key = _cache_key("firecrawl_page", url)
+    cached_page = _firecrawl_cache.get(firecrawl_cache_key)
+
+    if cached_page is not None:
+        print(f"♻️ [Cache] Firecrawl page hit for {url[:60]}")
+        content, page_title = cached_page
+    else:
+        try:
+            resp = requests.post(
+                "https://api.firecrawl.dev/v1/scrape",
+                headers={
+                    "Authorization": f"Bearer {FIRECRAWL_KEY}",
+                    "Content-Type":  "application/json",
+                },
+                json={
+                    "url":     url,
+                    "formats": ["markdown"],
+                    "onlyMainContent": True,
+                    "timeout": 4000,   # tell Firecrawl server to cap at 4s too
+                },
+                timeout=5,             # hard client-side timeout — skip if slow
+            )
+            if resp.status_code != 200:
+                print(f"⚠️ [Firecrawl] HTTP {resp.status_code} for {url[:60]}")
+                return None
+
+            data = resp.json()
+            if not data.get("success"):
+                return None
+
+            page_data = data.get("data", {}) or {}
+            content   = page_data.get("markdown", "")
+            if not content:
+                return None
+
+            page_title = (page_data.get("metadata") or {}).get("title", "") or ""
+            _firecrawl_cache.set(firecrawl_cache_key, (content, page_title))
+
+        except Exception as e:
+            print(f"⚠️ [Firecrawl] timeout/skip for {url[:60]}: {e}")
+            return None
+
     try:
-        resp = requests.post(
-            "https://api.firecrawl.dev/v1/scrape",
-            headers={
-                "Authorization": f"Bearer {FIRECRAWL_KEY}",
-                "Content-Type":  "application/json",
-            },
-            json={
-                "url":     url,
-                "formats": ["markdown"],
-                "onlyMainContent": True,
-                "timeout": 4000,   # tell Firecrawl server to cap at 4s too
-            },
-            timeout=5,             # hard client-side timeout — skip if slow
-        )
-        if resp.status_code != 200:
-            print(f"⚠️ [Firecrawl] HTTP {resp.status_code} for {url[:60]}")
-            return None
-
-        data = resp.json()
-        if not data.get("success"):
-            return None
-
-        page_data = data.get("data", {}) or {}
-        content   = page_data.get("markdown", "")
-        if not content:
-            return None
-
-        page_title = (page_data.get("metadata") or {}).get("title", "") or ""
-
         # ── Page processing pipeline (replaces old content[:3000] truncate) ──
         chunks = _chunk_page_markdown(content, page_title)
         chunks = _dedupe_chunks(chunks)
@@ -1773,7 +1932,7 @@ def _firecrawl_extract(url: str, query: str = "") -> Optional[str]:
         return clean
 
     except Exception as e:
-        print(f"⚠️ [Firecrawl] timeout/skip for {url[:60]}: {e}")
+        print(f"⚠️ [Firecrawl] chunk processing failed for {url[:60]}: {e}")
         return None
 
 
