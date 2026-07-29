@@ -863,7 +863,7 @@ def share_page(slug: str):
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.421"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.423"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -873,7 +873,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.421", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.423", "timestamp": datetime.utcnow().isoformat()}
 
 # ── 🧠 MEMORY MODELS ────────────────────────────────────────────────────────
 from pydantic import BaseModel as _MemBaseModel
@@ -3658,14 +3658,29 @@ def call_gemma_google_stream(messages, system_prompt, model_id):
         # Sending thinkingConfig to Gemma 4 is a known trigger for constant
         # "500 Internal error encountered" responses from Google's API
         # (see: discuss.ai.google.dev "Constant 500s with Gemma" / "Constant
-        # 500s on Gemma 4") — so it is intentionally omitted here.
+        # 500s on Gemma 4") — so it is intentionally omitted for Gemma models.
+        #
+        # Genuine Gemini models (e.g. gemini-3.5-flash-lite) DO support
+        # thinkingConfig, so we enable it there — the streaming loop below
+        # already branches on part["thought"] to surface reasoning tokens
+        # via the 'thinking_token' SSE event, it just needed the request
+        # to actually ask for thoughts.
+        is_gemma_model = "gemma" in model_id.lower()
+
+        generation_config = {
+            "temperature": 1.0,
+            "maxOutputTokens": 16000,
+        }
+        if not is_gemma_model:
+            generation_config["thinkingConfig"] = {
+                "includeThoughts": True,
+                "thinkingBudget": -1,  # -1 = dynamic/auto thinking budget
+            }
+
         payload = {
             "system_instruction": {"parts": [{"text": system_prompt}]},
             "contents": contents,
-            "generationConfig": {
-                "temperature": 1.0,
-                "maxOutputTokens": 16000,
-            }
+            "generationConfig": generation_config,
         }
         url = (
             f"https://generativelanguage.googleapis.com/v1beta/models/"
