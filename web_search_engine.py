@@ -3399,14 +3399,131 @@ def _apply_diversity_balance(
     return selected
 
 
+def _normalize(value: float, lo: float, hi: float) -> float:
+    """Clamp-and-scale value into 0-1 given an expected [lo, hi] range."""
+    if hi == lo:
+        return 0.0
+    return max(0.0, min((value - lo) / (hi - lo), 1.0))
+
+
+def _recency_confidence(result: dict, url: str) -> float:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Simple 0-1 recency confidence, distinct from the broader category-aware
+    freshness score: how strongly can we say "this is genuinely recent"
+    based on a VERIFIED publish date alone, decaying smoothly with age.
+    Returns 0 for unverified/undated content — recency credit requires an
+    actual verified date, not a guess.
+    """
+    verification = _verify_publication_date(result, url)
+    if not verification["verified"] or verification["days_old"] is None:
+        return 0.0
+    days = max(verification["days_old"], 0)
+    if days <= 7:
+        return 1.0
+    if days >= 365:
+        return 0.0
+    return round(1.0 - (days - 7) / (365 - 7), 3)
+
+
+def _domain_frequency_map(results: list[dict]) -> dict[str, int]:
+    """How many times each domain appears in this candidate batch — used
+    as the source-diversity signal below (rarer domain = more diverse)."""
+    freq: dict[str, int] = {}
+    for r in results:
+        d = _get_domain(r.get("url", ""))
+        if d:
+            freq[d] = freq.get(d, 0) + 1
+    return freq
+
+
+_RERANK_WEIGHTS = {
+    "semantic_relevance":     0.25,
+    "trust":                  0.20,
+    "freshness":              0.12,
+    "source_diversity":       0.08,
+    "cross_source_agreement": 0.10,
+    "officiality":            0.08,
+    "recency":                0.07,
+    "evidence_quality":       0.10,
+}
+
+
+def compute_blended_rerank_score(
+    query: str,
+    result: dict,
+    domain_freq: dict[str, int],
+    cohere_score: Optional[float] = None,
+) -> float:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Blends eight signals into one 0-100 reranking score:
+      - Semantic relevance     — Cohere's relevance score when available,
+        otherwise the keyword-overlap fallback (_semantic_relevance_score)
+      - Trust                  — the result's existing trust_score
+      - Freshness               — category-aware freshness pipeline (_freshness_score)
+      - Source diversity        — how rare this result's domain is within
+        the current candidate batch (1 / times the domain appears)
+      - Cross-source agreement  — how many distinct engines corroborated
+        this exact URL (_cross_source_agreement_boost)
+      - Officiality             — is this a government/regulator/Tier-1
+        official source (_official_source_boost)
+      - Recency                 — verified-date-only recency confidence,
+        decaying smoothly with age (distinct from the broader, category-
+        aware freshness signal above)
+      - Evidence quality         — content-quality heuristic
+        (_content_quality_score): substantive length, concrete facts, real
+        sentence structure
+
+    Each component is normalized to 0-1 before weighting so no single raw
+    scale (e.g. trust_score's 0-100 vs freshness's -6..+18) can dominate the
+    blend by accident.
+    """
+    url    = result.get("url", "")
+    domain = _get_domain(url)
+
+    semantic = cohere_score if cohere_score is not None else _semantic_relevance_score(query, result)
+    semantic = max(0.0, min(semantic, 1.0))
+
+    trust = result.get("trust_score", 50) / 100.0
+
+    freshness = _normalize(_freshness_score(result, url, query), -6, 18)
+
+    domain_count = domain_freq.get(domain, 1) if domain else 1
+    diversity    = 1.0 / domain_count
+
+    agreement = _normalize(_cross_source_agreement_boost(result), 0, 12)
+
+    officiality = 1.0 if _official_source_boost(domain) > 0 else 0.0
+
+    recency = _recency_confidence(result, url)
+
+    evidence_quality = _normalize(_content_quality_score(result), -5, 8)
+
+    blended = (
+        _RERANK_WEIGHTS["semantic_relevance"]     * semantic
+        + _RERANK_WEIGHTS["trust"]                  * trust
+        + _RERANK_WEIGHTS["freshness"]              * freshness
+        + _RERANK_WEIGHTS["source_diversity"]       * diversity
+        + _RERANK_WEIGHTS["cross_source_agreement"] * agreement
+        + _RERANK_WEIGHTS["officiality"]            * officiality
+        + _RERANK_WEIGHTS["recency"]                * recency
+        + _RERANK_WEIGHTS["evidence_quality"]       * evidence_quality
+    )
+
+    return round(blended * 100, 2)
+
+
 def rerank_with_cohere(query: str, results: list[dict], top_n: int = RERANK_TOP_N) -> list[dict]:
     """
     ── CHANGED ──────────────────────────────────────────────────────────────
-    Use Cohere Rerank API to semantically re-order search results, then
-    apply diversity balancing (max 2 pages per domain, source types mixed
-    in preferred order — see _apply_diversity_balance) before returning.
-    Falls back to trust-score sorting (also diversity-balanced) if Cohere
-    is unavailable.
+    Use Cohere Rerank API for semantic relevance, then blend it with trust,
+    freshness, source diversity, cross-source agreement, officiality,
+    recency, and evidence quality (see compute_blended_rerank_score) before
+    applying diversity balancing (max 2 pages per domain, source types mixed
+    in preferred order — see _apply_diversity_balance).
+    Falls back to trust-score sorting (also blended + diversity-balanced) if
+    Cohere is unavailable.
 
     Cohere free tier: 1000 reranks/month at cohere.com
     """
@@ -3449,16 +3566,18 @@ def rerank_with_cohere(query: str, results: list[dict], top_n: int = RERANK_TOP_
         data    = resp.json()
         results_reranked = data.get("results", [])
 
+        domain_freq = _domain_frequency_map(candidates)
+
         reordered = []
         for item in results_reranked:
             idx   = item["index"]
             score = item.get("relevance_score", 0.5)
             candidate = candidates[idx].copy()
-            candidate["cohere_score"]  = round(score, 4)
-            # Blend Cohere score with trust score for final ranking
-            candidate["final_score"] = (
-                0.65 * score * 100 +
-                0.35 * candidate.get("trust_score", 50)
+            candidate["cohere_score"] = round(score, 4)
+            # Blend Cohere's semantic score with trust/freshness/diversity/
+            # agreement/officiality/recency/evidence-quality for final ranking.
+            candidate["final_score"] = compute_blended_rerank_score(
+                query, candidate, domain_freq, cohere_score=score
             )
             reordered.append(candidate)
 
@@ -3476,16 +3595,27 @@ def rerank_with_cohere(query: str, results: list[dict], top_n: int = RERANK_TOP_
 
 
 def _trust_sort(results: list[dict], top_n: int) -> list[dict]:
-    ranked = sorted(
-        results,
-        key=lambda r: (
-            r.get("is_direct_answer", False),
-            r.get("trust_score", 50),
-            r.get("multi_source", False),
-        ),
+    """
+    ── CHANGED ──────────────────────────────────────────────────────────────
+    Fallback path when Cohere is unavailable — now uses the same blended
+    score as rerank_with_cohere (minus the Cohere semantic component, which
+    falls back to the keyword-overlap relevance signal instead) rather than
+    a flat trust_score sort, so freshness/diversity/agreement/officiality/
+    recency/evidence-quality still factor into ranking even without Cohere.
+    """
+    if not results:
+        return []
+    domain_freq = _domain_frequency_map(results)
+    scored = []
+    for r in results:
+        candidate = r.copy()
+        candidate["final_score"] = compute_blended_rerank_score("", candidate, domain_freq)
+        scored.append(candidate)
+    scored.sort(
+        key=lambda r: (r.get("is_direct_answer", False), r.get("final_score", 0)),
         reverse=True,
     )
-    return _apply_diversity_balance(ranked, top_n)
+    return _apply_diversity_balance(scored, top_n)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
