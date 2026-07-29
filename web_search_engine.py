@@ -3341,6 +3341,288 @@ def compute_answer_confidence(query: str, results: list[dict], cross_ref: dict) 
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# ENTITY PROCESSING — internal knowledge graph
+# Extracts people, companies, products, organizations, dates, and locations
+# from search result text, along with relationships between them, then
+# connects related entities into a lightweight knowledge graph so the AI can
+# reason over entity relationships instead of just raw prose snippets.
+# ══════════════════════════════════════════════════════════════════════════════
+
+_TITLE_PREFIXES = (
+    r'(?:Mr|Mrs|Ms|Dr|Prof|Sir|Justice|President|PM|Prime Minister|CEO|'
+    r'Chairman|Governor|Minister|Senator|Judge)\.?'
+)
+_PERSON_RE            = re.compile(r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2})\b')
+_PERSON_TITLE_HINT_RE = re.compile(
+    rf'\b{_TITLE_PREFIXES}\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){{0,2}})\b'
+)
+
+_COMPANY_SUFFIXES = (
+    "Inc.", "Inc", "Corp.", "Corp", "Corporation", "Ltd.", "Ltd", "LLC", "LLP",
+    "Co.", "Co", "Company", "Group", "Holdings", "Industries", "Technologies",
+    "Labs", "Ventures", "Partners", "Enterprises",
+)
+_COMPANY_RE = re.compile(
+    r'\b([A-Z][a-zA-Z0-9&]*(?:\s+[A-Z][a-zA-Z0-9&]*){0,3})\s+('
+    + "|".join(re.escape(s) for s in _COMPANY_SUFFIXES) + r')\b'
+)
+
+_ORGANIZATION_HINTS = (
+    "Ministry", "Department", "Commission", "Authority", "Agency", "Bureau",
+    "Council", "Committee", "Organization", "Organisation", "Foundation",
+    "Institute", "University", "Association", "Federation", "Union", "Court",
+)
+_ORGANIZATION_RE = re.compile(
+    r'\b((?:[A-Z][a-zA-Z]*\s+){0,3}(?:' + "|".join(_ORGANIZATION_HINTS)
+    + r')(?:\s+of\s+[A-Z][a-zA-Z]+)?)\b'
+)
+
+_PRODUCT_CUE_RE = re.compile(
+    r'\b(?:launched|released|unveiled|announced|introduces?|debuts?)\s+(?:its|the|a|an)?\s*'
+    r'([A-Z][a-zA-Z0-9]*(?:\s+[A-Z0-9][a-zA-Z0-9]*){0,3})\b'
+)
+
+_DATE_RE = re.compile(
+    r'\b(?:'
+    r'\d{4}-\d{2}-\d{2}'
+    r'|(?:January|February|March|April|May|June|July|August|September|October|November|December)'
+    r'\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4}'
+    r'|\d{1,2}\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}'
+    r'|\b(?:19|20)\d{2}\b'
+    r')\b'
+)
+
+_LOCATION_HINTS = {
+    # Countries
+    "india", "united states", "usa", "uk", "united kingdom", "china", "japan",
+    "germany", "france", "canada", "australia", "brazil", "russia", "italy",
+    "spain", "netherlands", "sweden", "switzerland", "south korea", "mexico",
+    "singapore", "uae",
+    # US cities
+    "washington", "new york", "san francisco", "los angeles", "chicago",
+    "boston", "seattle", "austin", "houston", "miami", "atlanta", "dallas",
+    "san jose", "denver", "philadelphia",
+    # Other global cities
+    "london", "paris", "tokyo", "beijing", "shanghai", "dubai", "berlin",
+    "toronto", "sydney", "hong kong", "amsterdam", "zurich", "seoul",
+    # Indian cities/states
+    "delhi", "mumbai", "bengaluru", "bangalore", "kolkata", "chennai",
+    "hyderabad", "pune", "california", "texas", "west bengal", "maharashtra",
+    "karnataka", "tamil nadu", "gujarat", "punjab", "kerala", "rajasthan",
+}
+_LOCATION_PREP_RE = re.compile(r'\b(?:in|at|near|from|to)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+){0,2})\b')
+
+# Words that indicate a nearby capitalized phrase is likely a PERSON being
+# quoted/described, used to gate the generic capitalized-phrase fallback
+# below — without this, any capitalized 2-3 word phrase (a company name
+# without a corporate suffix, a product, a place) gets misclassified as a
+# person.
+_PERSON_CONTEXT_CUE_RE = re.compile(
+    r'\b(said|told|stated|according to|explained|noted|added|announced|'
+    r'claims?|argues?|wrote|tweeted|posted)\b', re.IGNORECASE
+)
+
+_RELATIONSHIP_RE = re.compile(
+    r'\b([A-Z][a-zA-Z0-9 ]{2,40}?)\s+'
+    r'(is|was|are|were|founded|co-founded|acquired|merged with|partnered with|'
+    r'owns|leads|heads|joined|appointed as|works for|based in|headquartered in)\s+'
+    r'([A-Z][a-zA-Z0-9 &]{2,50})\b'
+)
+
+
+def _clean_entity_name(name: str) -> str:
+    return re.sub(r'\s+', ' ', name).strip().strip('.,;:')
+
+
+def extract_entities_from_text(text: str) -> dict:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Regex-based entity extraction for one piece of text. Returns a dict of
+    category → set of entity names: people, companies, products,
+    organizations, dates, locations. Deliberately dependency-free (no NER
+    model) — cheap enough to run on every result in the pipeline.
+    """
+    empty = {"people": set(), "companies": set(), "products": set(),
+             "organizations": set(), "dates": set(), "locations": set()}
+    if not text:
+        return empty
+
+    companies     = {_clean_entity_name(f"{m.group(1)} {m.group(2)}") for m in _COMPANY_RE.finditer(text)}
+    organizations = {_clean_entity_name(m.group(1)) for m in _ORGANIZATION_RE.finditer(text)}
+    products      = {_clean_entity_name(m.group(1)) for m in _PRODUCT_CUE_RE.finditer(text)}
+    dates         = {m.group(0).strip() for m in _DATE_RE.finditer(text)}
+
+    locations = set()
+    for m in _LOCATION_PREP_RE.finditer(text):
+        candidate = _clean_entity_name(m.group(1))
+        if candidate.lower() in _LOCATION_HINTS:
+            locations.add(candidate)
+
+    # People: title-prefixed names ("Dr. Jane Doe") are high-confidence and
+    # always kept. Other capitalized name-shaped phrases are only kept as
+    # people when (a) they don't overlap with something already classified
+    # as a company/org/product/location, AND (b) the text contains a
+    # person-context cue (said/told/announced/...) — without that gate, any
+    # bare capitalized phrase (a suffix-less company or product name) would
+    # get misclassified as a person.
+    people = {_clean_entity_name(m.group(1)) for m in _PERSON_TITLE_HINT_RE.finditer(text)}
+    exclude = companies | organizations | products | locations
+    if _PERSON_CONTEXT_CUE_RE.search(text):
+        for m in _PERSON_RE.finditer(text):
+            name = _clean_entity_name(m.group(1))
+            if name and name not in exclude and not any(name in c for c in exclude):
+                people.add(name)
+
+    return {
+        "people": people, "companies": companies, "products": products,
+        "organizations": organizations, "dates": dates, "locations": locations,
+    }
+
+
+def extract_relationships_from_text(text: str) -> list[dict]:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Extracts explicit subject-relation-object triples from text — e.g.
+    "Sam Altman is CEO of OpenAI", "OpenAI acquired Global Illumination" —
+    used to connect entities in the knowledge graph beyond simple
+    co-occurrence.
+    """
+    if not text:
+        return []
+    triples = []
+    for m in _RELATIONSHIP_RE.finditer(text):
+        subject  = _clean_entity_name(m.group(1))
+        relation = m.group(2).strip().lower()
+        obj      = _clean_entity_name(m.group(3))
+        if subject and obj and subject.lower() != obj.lower():
+            triples.append({"subject": subject, "relation": relation, "object": obj})
+    return triples
+
+
+def build_knowledge_graph(results: list[dict]) -> dict:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Builds an internal knowledge graph from all search results: extracts
+    people, companies, products, organizations, dates, and locations from
+    each result, merges same-name entities across sources into single
+    nodes, and connects related entities via two kinds of edges:
+      - explicit relationships (subject-relation-object triples)
+      - co-occurrence links ("related_to") when two entities are mentioned
+        in the same result but no explicit relationship was extracted —
+        keeps the graph connected even without a clean "X is Y" sentence.
+
+    Returns:
+      {"nodes": {name: {"type": str, "mentions": int, "sources": [domain,...]}},
+       "edges": [{"subject":str,"relation":str,"object":str,"sources":[domain,...]}]}
+    Edges are sorted by source count (most-corroborated relationships first)
+    so a consumer can take just the top of a potentially large graph.
+    """
+    nodes: dict[str, dict] = {}
+    edge_map: dict[tuple, dict] = {}
+
+    def _add_node(name: str, etype: str, domain: str) -> None:
+        key = name.strip()
+        if not key:
+            return
+        node = nodes.setdefault(key, {"type": etype, "mentions": 0, "sources": set()})
+        node["mentions"] += 1
+        if domain:
+            node["sources"].add(domain)
+
+    def _add_edge(subject: str, relation: str, obj: str, domain: str) -> None:
+        key = (subject.lower(), relation, obj.lower())
+        edge = edge_map.setdefault(
+            key, {"subject": subject, "relation": relation, "object": obj, "sources": set()}
+        )
+        if domain:
+            edge["sources"].add(domain)
+
+    for r in results:
+        title  = (r.get("title") or "").strip()
+        body   = (r.get("body") or "").strip()
+        domain = _get_domain(r.get("url", ""))
+        if not title and not body:
+            continue
+
+        # Join title + body as separate "sentences" (title rarely ends in
+        # punctuation) so extraction is done PER SENTENCE — this keeps every
+        # regex match bounded to one grammatical unit instead of bleeding
+        # across the title/body boundary or between unrelated sentences,
+        # and makes co-occurrence ("related_to") edges reflect entities
+        # actually mentioned together locally, not just anywhere in the page.
+        combined  = f"{title}. {body}" if title and body else (title or body)
+        sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', combined) if s.strip()]
+
+        for sentence in sentences:
+            entities = extract_entities_from_text(sentence)
+            for etype, names in entities.items():
+                singular_type = "person" if etype == "people" else etype[:-1]
+                for name in names:
+                    _add_node(name, singular_type, domain)
+
+            triples = extract_relationships_from_text(sentence)
+            for triple in triples:
+                _add_edge(triple["subject"], triple["relation"], triple["object"], domain)
+                nodes.setdefault(triple["subject"], {"type": "unknown", "mentions": 0, "sources": set()})
+                nodes.setdefault(triple["object"], {"type": "unknown", "mentions": 0, "sources": set()})
+
+            # ── Connect related entities via co-occurrence (same sentence) ──
+            explicit_pairs = {frozenset([t["subject"].lower(), t["object"].lower()]) for t in triples}
+            all_names = [n for names in entities.values() for n in names]
+            for i in range(len(all_names)):
+                for j in range(i + 1, len(all_names)):
+                    a, b = all_names[i], all_names[j]
+                    if frozenset([a.lower(), b.lower()]) in explicit_pairs:
+                        continue  # already linked explicitly — skip the weaker duplicate
+                    _add_edge(a, "related_to", b, domain)
+
+    for node in nodes.values():
+        node["sources"] = sorted(node["sources"])
+    edges = list(edge_map.values())
+    for edge in edges:
+        edge["sources"] = sorted(edge["sources"])
+    edges.sort(key=lambda e: len(e["sources"]), reverse=True)
+
+    return {"nodes": nodes, "edges": edges}
+
+
+def format_knowledge_graph_for_context(graph: dict, max_per_type: int = 5, max_edges: int = 10) -> str:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Renders the knowledge graph as plain text so it can be injected into the
+    AI's reasoning context — "use this graph during reasoning". Surfaces the
+    most-mentioned entities per type and the most-corroborated relationships
+    (by distinct source count), not the whole graph, so it stays compact.
+    """
+    nodes, edges = graph.get("nodes", {}), graph.get("edges", [])
+    if not nodes and not edges:
+        return ""
+
+    by_type: dict[str, list[tuple[str, dict]]] = {}
+    for name, info in nodes.items():
+        by_type.setdefault(info.get("type", "unknown"), []).append((name, info))
+
+    lines = ["=== KNOWLEDGE GRAPH (entities & relationships extracted from sources) ==="]
+    type_labels = {
+        "person": "People", "company": "Companies", "product": "Products",
+        "organization": "Organizations", "date": "Dates", "location": "Locations",
+    }
+    for etype, label in type_labels.items():
+        entries = sorted(by_type.get(etype, []), key=lambda t: t[1]["mentions"], reverse=True)
+        if entries:
+            names = ", ".join(name for name, _ in entries[:max_per_type])
+            lines.append(f"{label}: {names}")
+
+    real_edges = [e for e in edges if e["relation"] != "related_to"][:max_edges]
+    if real_edges:
+        lines.append("\nRelationships:")
+        for e in real_edges:
+            lines.append(f"  • {e['subject']} — {e['relation']} — {e['object']}")
+
+    return "\n".join(lines)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # MAIN PIPELINE — Full production web search
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -3363,15 +3645,16 @@ def run_production_search(query: str) -> dict:
     if not all_raw:
         print("⚠️ [Pipeline] No results from any engine")
         return {
-            "tool":          "web_search",
-            "query":         query,
-            "queries_run":   queries,
-            "result_count":  0,
-            "results":       [],
-            "citations":     {},
-            "cross_ref":     {},
-            "confidence":    0,
-            "search_engine": "production",
+            "tool":            "web_search",
+            "query":           query,
+            "queries_run":     queries,
+            "result_count":    0,
+            "results":         [],
+            "citations":       {},
+            "cross_ref":       {},
+            "confidence":      0,
+            "knowledge_graph": {"nodes": {}, "edges": []},
+            "search_engine":   "production",
         }
 
     # Step 3: Deduplication
@@ -3393,32 +3676,38 @@ def run_production_search(query: str) -> dict:
     # Step 5: Trust scoring
     scored = score_all_results(enriched, query)
 
-    # Step 6: Cross-reference analysis
+    # Step 6: Entity processing — build the internal knowledge graph
+    knowledge_graph = build_knowledge_graph(scored)
+    print(f"🕸️ [EntityGraph] {len(knowledge_graph['nodes'])} entities, "
+          f"{len(knowledge_graph['edges'])} relationships")
+
+    # Step 7: Cross-reference analysis
     cross_ref = cross_reference_results(scored)
     print(f"🔬 [CrossRef] {cross_ref['consensus_count']} consensus signals, "
           f"{cross_ref['contradiction_count']} contradictions")
 
-    # Step 7: Cohere reranking (blends semantic relevance + trust)
+    # Step 8: Cohere reranking (blends semantic relevance + trust)
     reranked = rerank_with_cohere(query, scored, top_n=RERANK_TOP_N)
 
-    # Step 8: Citation assignment
+    # Step 9: Citation assignment
     cited, citation_map = build_citations(reranked)
 
-    # Step 9: Overall answer confidence (0-100)
+    # Step 10: Overall answer confidence (0-100)
     confidence = compute_answer_confidence(query, reranked, cross_ref)
     print(f"✅ [Pipeline] Complete. Final results: {len(cited)}, "
           f"Citations: {len(citation_map)}, Confidence: {confidence}\n")
 
     return {
-        "tool":          "web_search",
-        "query":         query,
-        "queries_run":   queries,
-        "result_count":  len(cited),
-        "results":       cited,
-        "citations":     citation_map,
-        "cross_ref":     cross_ref,
-        "confidence":    confidence,
-        "search_engine": "production",
+        "tool":            "web_search",
+        "query":           query,
+        "queries_run":     queries,
+        "result_count":    len(cited),
+        "results":         cited,
+        "citations":       citation_map,
+        "cross_ref":       cross_ref,
+        "confidence":      confidence,
+        "knowledge_graph": knowledge_graph,
+        "search_engine":   "production",
     }
 
 
@@ -3455,6 +3744,13 @@ def build_production_search_context(result: dict) -> str:
 
     if cross_ref.get("consensus_count", 0) > 0:
         lines.append(f"✅ Consensus: {cross_ref['consensus_count']} facts confirmed by multiple sources\n")
+
+    # Knowledge graph — entities & relationships extracted from all sources,
+    # surfaced so the AI can reason over connections (e.g. "who founded X",
+    # "what did Y acquire") instead of only raw prose snippets.
+    graph_text = format_knowledge_graph_for_context(result.get("knowledge_graph", {}))
+    if graph_text:
+        lines.append(graph_text + "\n")
 
     # Results — numbered with citations
     lines.append("=== SEARCH RESULTS (use [N] to cite inline in your answer) ===\n")
