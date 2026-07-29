@@ -130,6 +130,63 @@ QUERY_PLANNER_MAX_TOK = 500        # small JSON payload, keep cost/latency low
 MIN_PLANNED_QUERIES   = 5
 MAX_PLANNED_QUERIES   = 10
 
+# ══════════════════════════════════════════════════════════════════════════════
+# SEARCH EXECUTION — automatically balance latency vs. quality by question
+# complexity:
+#   simple          → 2-3 searches, single round (fastest path)
+#   complex         → 10-20 searches, a few analysis rounds
+#   very_difficult  → 10-20 searches AND extended iterative retrieval
+# ══════════════════════════════════════════════════════════════════════════════
+
+_COMPLEXITY_QUERY_RANGE: dict[str, tuple[int, int]] = {
+    "simple":         (2, 3),
+    "complex":        (10, 20),
+    "very_difficult": (10, 20),
+}
+_COMPLEXITY_ROUND_BUDGET: dict[str, int] = {
+    "simple":         1,   # one shot — no follow-up rounds needed
+    "complex":        3,   # a few gap-filling rounds
+    "very_difficult": 6,   # extended iterative retrieval
+}
+
+_COMPLEXITY_SIGNAL_PATTERNS = [
+    r'\b(compare|comparison|vs\.?|versus|difference between)\b',
+    r'\b(pros and cons|advantages and disadvantages)\b',
+    r'\b(comprehensive|in-depth|in depth|detailed|thorough|step by step|step-by-step)\b',
+    r'\b(analy[sz]e|analysis|evaluate|assessment|implications?)\b',
+    r'\band\b.{0,40}\band\b',                          # multiple "and" clauses — multi-part question
+    r'\bwhy\b.{0,60}\bhow\b|\bhow\b.{0,60}\bwhy\b',    # combined why+how reasoning
+    r'[;]|\?.*\?',                                      # multiple clauses/questions in one
+]
+
+
+def classify_query_complexity(query: str) -> str:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Classifies a question's complexity so search execution can automatically
+    balance latency and quality instead of running every query the same way:
+      - "simple"          → short, single-fact questions (2-3 searches, one
+                             round — no follow-up needed for e.g. "capital
+                             of France")
+      - "complex"         → multi-part, comparative, or analytical questions
+                             (10-20 searches, a few gap-filling rounds)
+      - "very_difficult"  → the above AND multiple complexity signals or a
+                             long/heavily-qualified question — gets extended
+                             iterative retrieval (more rounds to close
+                             evidence gaps) on top of the wider search set
+    Heuristic (word count + presence of multi-part/comparison/analysis-style
+    language), not exact — good enough to route latency budget sensibly.
+    """
+    word_count  = len(re.findall(r'\w+', query))
+    lower       = query.lower()
+    signal_hits = sum(1 for p in _COMPLEXITY_SIGNAL_PATTERNS if re.search(p, lower))
+
+    if signal_hits >= 2 or word_count > 25:
+        return "very_difficult"
+    if signal_hits >= 1 or word_count > 8:
+        return "complex"
+    return "simple"
+
 # ── How many raw results to fetch per engine ─────────────────────────────────
 RESULTS_PER_ENGINE = 5
 # ── How many results to deep-crawl with Firecrawl ─────────────────────────────
@@ -515,13 +572,16 @@ def classify_query_domain(query: str) -> dict:
     return {"category": "general", "domains": []}
 
 
-def _rewrite_queries_regex_fallback(original: str) -> list[str]:
+def _rewrite_queries_regex_fallback(original: str, max_queries: int = 3) -> list[str]:
     """
-    ── RENAMED from the old rewrite_queries() ──────────────────────────────
-    This is the ORIGINAL pattern-based logic, kept byte-for-byte, just moved
-    under a new name. It is now the FALLBACK path — used only when the LLM
-    planner below is unavailable (no API key) or fails/times out/returns
-    something unusable. Nothing about its behavior changed.
+    ── CHANGED ──────────────────────────────────────────────────────────────
+    The original pattern-based logic, now accepting a `max_queries` cap so
+    it respects the complexity-driven search-execution budget (simple: 2-3,
+    complex/very_difficult: 10-20) instead of always hard-capping at 3.
+    This regex path can't synthesize genuinely new angles the way the LLM
+    planner can, so for higher tiers it just returns everything it can
+    generate (naturally fewer than the LLM path) rather than pretending to
+    hit 10-20 queries with no real content behind them.
     """
     lower    = original.lower().strip().rstrip("?.,!")
     queries  = [original]
@@ -555,6 +615,15 @@ def _rewrite_queries_regex_fallback(original: str) -> list[str]:
         queries.append(f"{lower} tutorial")
         queries.append(f"{lower} stackoverflow OR github")
 
+    # ── Extra angles for complex/very_difficult tiers — still generic
+    # pattern-based (no LLM), just a few more useful variants to search
+    # when the budget allows for more than 3.
+    if max_queries > 3:
+        queries.append(f"{lower} comparison")
+        queries.append(f"{lower} data OR statistics")
+        queries.append(f"{lower} history OR background")
+        queries.append(f"{lower} pros and cons")
+
     # Deduplicate preserving order
     seen, unique = set(), []
     for q in queries:
@@ -563,13 +632,15 @@ def _rewrite_queries_regex_fallback(original: str) -> list[str]:
             seen.add(key)
             unique.append(q.strip())
 
-    return unique[:3]
+    return unique[:max_queries]
 
 
 # ── NEW: prompt template for the LLM query planner ───────────────────────────
-# Kept as a module-level constant (not re-built per call) so it's easy to
-# tune/version without touching the calling code.
-_QUERY_PLANNER_SYSTEM_PROMPT = """You are a search query planning engine for a production web search pipeline.
+# Built per-call (not a fixed constant) so the requested query count matches
+# the complexity-driven search-execution budget — simple questions ask for
+# 2-3, complex/very_difficult ask for 10-20.
+def _build_query_planner_system_prompt(min_queries: int, max_queries: int) -> str:
+    return f"""You are a search query planning engine for a production web search pipeline.
 Given a user's question, produce a diverse set of search engine queries (NOT answers) that together will surface the best possible sources.
 
 Cover as many of these angles as are genuinely relevant to the question (skip angles that don't apply — do not force irrelevant ones):
@@ -584,19 +655,26 @@ Cover as many of these angles as are genuinely relevant to the question (skip an
 
 Rules:
 - Output ONLY a JSON array of strings. No prose, no markdown fences, no explanation.
-- 5 to 10 queries. Prefer fewer, sharper queries over padding to hit 10.
+- {min_queries} to {max_queries} queries. Prefer fewer, sharper queries over padding to hit the max — but if the question is genuinely broad or multi-part, use the full range.
 - Each query must be a short, realistic search-engine query (not a sentence, not a question addressed to an AI).
 - No duplicate or near-duplicate queries.
 - Do not include the literal current year unless recency clearly matters.
 - Match the language of the user's question."""
 
 
-def _llm_plan_queries(original: str) -> Optional[list[str]]:
+def _llm_plan_queries(
+    original: str,
+    min_queries: int = MIN_PLANNED_QUERIES,
+    max_queries: int = MAX_PLANNED_QUERIES,
+) -> Optional[list[str]]:
     """
-    ── NEW ──────────────────────────────────────────────────────────────────
-    Calls the Anthropic API with a small/fast model to plan 5-10 diverse
-    search queries covering docs/news/history/comparisons/benchmarks/FAQs/
-    alternative wording, per the system prompt above.
+    ── CHANGED ──────────────────────────────────────────────────────────────
+    Calls the Anthropic API with a small/fast model to plan `min_queries` to
+    `max_queries` diverse search queries covering docs/news/history/
+    comparisons/benchmarks/FAQs/alternative wording, per the system prompt
+    above. The range now comes from the caller (search-execution complexity
+    budget) instead of being fixed at 5-10 — a simple question asks for
+    2-3, a complex/very-difficult one asks for 10-20.
 
     Returns a cleaned list[str] on success, or None on ANY failure (missing
     key, network error, bad JSON, empty result) so the caller can fall back
@@ -615,8 +693,10 @@ def _llm_plan_queries(original: str) -> Optional[list[str]]:
             },
             json={
                 "model":      QUERY_PLANNER_MODEL,
-                "max_tokens": QUERY_PLANNER_MAX_TOK,
-                "system":     _QUERY_PLANNER_SYSTEM_PROMPT,
+                # Scale the token budget with how many queries were asked for —
+                # a 20-query JSON array needs more room than a 3-query one.
+                "max_tokens": max(QUERY_PLANNER_MAX_TOK, 60 * max_queries),
+                "system":     _build_query_planner_system_prompt(min_queries, max_queries),
                 "messages":   [{"role": "user", "content": original}],
             },
             timeout=QUERY_PLANNER_TIMEOUT,
@@ -651,10 +731,10 @@ def _llm_plan_queries(original: str) -> Optional[list[str]]:
                 seen.add(key)
                 cleaned.append(q)
 
-        if len(cleaned) < MIN_PLANNED_QUERIES:
+        if len(cleaned) < min_queries:
             return None  # too thin — not worth it over the regex fallback
 
-        return cleaned[:MAX_PLANNED_QUERIES]
+        return cleaned[:max_queries]
 
     except Exception as e:
         # Any failure (timeout, bad key, malformed JSON, rate limit, etc.)
@@ -666,25 +746,31 @@ def _llm_plan_queries(original: str) -> Optional[list[str]]:
 
 def rewrite_queries(original: str) -> list[str]:
     """
-    Generate 5-10 diverse search queries from a user question using an
-    LLM-powered planner (Claude/ChatGPT-style intent understanding: official
-    docs, news, history, comparisons, benchmarks, technical docs, FAQs,
-    alternative wording).
+    ── CHANGED ──────────────────────────────────────────────────────────────
+    Generates a diverse set of search queries from a user question, sized to
+    the question's complexity instead of a fixed 5-10 every time:
+      - simple          → 2-3 searches
+      - complex         → 10-20 searches
+      - very_difficult  → 10-20 searches (plus extended iterative retrieval,
+                           handled by plan_and_execute_search's round budget)
 
-    ── CHANGED ────────────────────────────────────────────────────────────
-    Previously this WAS the regex logic (2-3 queries, pattern-based).
-    Now it tries the LLM planner first and falls back to the original
-    regex-based logic (renamed to _rewrite_queries_regex_fallback) if the
-    LLM is unavailable or fails for any reason. Function signature and
-    return type are unchanged, so every caller downstream (run_production_search)
-    keeps working without modification.
+    Tries the LLM planner first (with that complexity's min/max) and falls
+    back to the regex-based planner if the LLM is unavailable or fails for
+    any reason. Function signature and return type are unchanged, so every
+    caller downstream (run_production_search) keeps working without
+    modification.
     """
-    planned = _llm_plan_queries(original)
+    complexity = classify_query_complexity(original)
+    min_q, max_q = _COMPLEXITY_QUERY_RANGE[complexity]
+    print(f"🎚️ [Complexity] '{original[:60]}' → {complexity} ({min_q}-{max_q} searches)")
+
+    planned = _llm_plan_queries(original, min_q, max_q)
     if planned:
         return planned
 
-    # Fallback — same fast, dependency-free behavior as before
-    return _rewrite_queries_regex_fallback(original)
+    # Fallback — same fast, dependency-free behavior as before, capped to
+    # this complexity tier's max instead of always 3.
+    return _rewrite_queries_regex_fallback(original, max_q)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -935,7 +1021,9 @@ def _execute_search_queries(queries: list[str], preferred_domains: Optional[list
 #   are untouched.
 # ══════════════════════════════════════════════════════════════════════════════
 
-MAX_SEARCH_ROUNDS       = 3   # hard cap — guarantees no infinite loop
+MAX_SEARCH_ROUNDS       = 8   # absolute hard safety ceiling — never exceeded
+                                # regardless of complexity (per-query round
+                                # budget below is clamped to this)
 CONFIDENCE_TIMEOUT      = 4   # seconds — same fail-fast philosophy as the planner
 CONFIDENCE_MAX_TOK      = 300
 MAX_ADDITIONAL_QUERIES  = 4   # per follow-up round
@@ -1172,7 +1260,8 @@ def plan_and_execute_search(query: str) -> tuple[list[str], list[dict]]:
     ── CHANGED ──────────────────────────────────────────────────────────────
     Iterative multi-step search planner:
 
-      Round 1: rewrite_queries() → search
+      Round 1: rewrite_queries() → search (query count sized to complexity —
+               simple: 2-3, complex/very_difficult: 10-20)
       Analyze:
         - deterministic answer-graph hop check first (founder → acquisition
           → timeline for entity-style questions — see _next_hop_query); if a
@@ -1182,8 +1271,11 @@ def plan_and_execute_search(query: str) -> tuple[list[str], list[dict]]:
           - yes, or LLM unavailable/fails → stop
           - no → LLM proposes targeted follow-up queries → search again
       Repeat until the answer graph is complete, confident, no new queries
-      are proposed, or MAX_SEARCH_ROUNDS is reached (max 3 hops total —
-      hard cap, no infinite loops possible).
+      are proposed, or this question's round budget is reached — simple
+      questions get 1 round (no follow-up), complex questions get up to 3,
+      very_difficult questions get up to 6 (extended iterative retrieval),
+      all clamped to the absolute MAX_SEARCH_ROUNDS safety ceiling so no
+      question can ever loop indefinitely.
 
     Returns (queries_run, all_raw) with the same shapes the old inline
     steps 1+2 in run_production_search() produced, so downstream dedup/
@@ -1191,6 +1283,11 @@ def plan_and_execute_search(query: str) -> tuple[list[str], list[dict]]:
     """
     queries_run: list[str] = []
     all_raw: list[dict] = []
+
+    # ── Search execution: balance latency vs. quality by complexity ────────
+    complexity   = classify_query_complexity(query)
+    round_budget = min(_COMPLEXITY_ROUND_BUDGET[complexity], MAX_SEARCH_ROUNDS)
+    print(f"⚖️  [SearchExec] complexity='{complexity}' → round budget {round_budget}")
 
     # ── Domain-aware routing ─────────────────────────────────────────────
     # Classify the ORIGINAL question once (category is a property of user
@@ -1206,12 +1303,12 @@ def plan_and_execute_search(query: str) -> tuple[list[str], list[dict]]:
     # ── Round 1 — initial plan + search ──────────────────────────────────
     round_num = 1
     queries = rewrite_queries(query)
-    print(f"📝 [Planner] Round {round_num}/{MAX_SEARCH_ROUNDS} queries: {queries}")
+    print(f"📝 [Planner] Round {round_num}/{round_budget} queries: {queries}")
     queries_run.extend(queries)
     all_raw.extend(_execute_search_queries(queries, preferred_domains))
 
-    # ── Rounds 2..MAX_SEARCH_ROUNDS — analyze, fill gaps, repeat ─────────
-    while round_num < MAX_SEARCH_ROUNDS:
+    # ── Rounds 2..round_budget — analyze, fill gaps, repeat ──────────────
+    while round_num < round_budget:
         # Deterministic answer-graph hop: founder → acquisition → timeline.
         # Checked first since it's free (no LLM call) and covers the exact
         # "need founder? / need acquisition? / need timeline?" hop chain.
@@ -1219,7 +1316,7 @@ def plan_and_execute_search(query: str) -> tuple[list[str], list[dict]]:
         already_run = {q.strip().lower() for q in queries_run}
         if hop_query and hop_query.strip().lower() not in already_run:
             round_num += 1
-            print(f"🔗 [Hop {round_num}/{MAX_SEARCH_ROUNDS}] Answer-graph gap → '{hop_query}'")
+            print(f"🔗 [Hop {round_num}/{round_budget}] Answer-graph gap → '{hop_query}'")
             queries_run.append(hop_query)
             all_raw.extend(_execute_search_queries([hop_query], preferred_domains))
             continue
@@ -1232,12 +1329,12 @@ def plan_and_execute_search(query: str) -> tuple[list[str], list[dict]]:
 
         round_num += 1
         follow_up = assessment["additional_queries"]
-        print(f"📝 [Planner] Round {round_num}/{MAX_SEARCH_ROUNDS} follow-up queries: {follow_up}")
+        print(f"📝 [Planner] Round {round_num}/{round_budget} follow-up queries: {follow_up}")
         queries_run.extend(follow_up)
         all_raw.extend(_execute_search_queries(follow_up, preferred_domains))
 
-    if round_num >= MAX_SEARCH_ROUNDS:
-        print(f"🛑 [Planner] Reached MAX_SEARCH_ROUNDS ({MAX_SEARCH_ROUNDS}) — stopping")
+    if round_num >= round_budget:
+        print(f"🛑 [Planner] Reached round budget ({round_budget} for '{complexity}') — stopping")
 
     return queries_run, all_raw
 
