@@ -863,7 +863,7 @@ def share_page(slug: str):
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.423"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.424"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -873,7 +873,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.423", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.424", "timestamp": datetime.utcnow().isoformat()}
 
 # ── 🧠 MEMORY MODELS ────────────────────────────────────────────────────────
 from pydantic import BaseModel as _MemBaseModel
@@ -3790,56 +3790,119 @@ def call_groq_stream(messages, api_key):
 # ✅ HELPER: Call Poolside API for Laguna — uses POOLSIDE_API_KEY
 # Laguna M.1 via Poolside's OpenAI-compatible endpoint
 # ============================================================
-def call_poolside_stream(messages, api_key):
+def _call_poolside_with_fallback(messages, api_key, model_candidates, label):
     """
-    Calls Poolside API with streaming using Laguna M.1 model.
+    Calls Poolside's OpenAI-compatible /v1/chat/completions endpoint,
+    trying each model id in `model_candidates` (in order) until one is
+    accepted. This protects us against Poolside renaming/re-casing a
+    model id (e.g. "poolside/laguna-s-2.1" vs "poolside/Laguna-S-2.1")
+    without us having to guess which one is currently live.
+
+    Only retries the next candidate on 400/404 (i.e. "that model id
+    doesn't exist/isn't recognized") — a 401/403/5xx means the id was
+    fine but something else is wrong (bad key, no entitlement, server
+    error), so we stop immediately and surface that real error instead
+    of masking it behind repeated attempts.
+
     Uses POOLSIDE_API_KEY set on Render. Completely isolated from all
     other models — does NOT touch any other API key.
 
     Thinking mode: Poolside's hosted API enables `enable_thinking` by
     default, but we set it explicitly so behavior doesn't silently depend
     on server-side defaults changing later. Poolside's own recommended
-    sampling for this model is temperature=1.0, top_k=20 (not 0.3) — a low
-    temperature suppresses/degenerates the reasoning trace, which is a
-    likely reason the model "worked without thinking" before.
+    sampling for these models is temperature=1.0, top_k=20 (not 0.3) — a
+    low temperature suppresses/degenerates the reasoning trace.
     """
     if not api_key:
-        return None, "POOLSIDE_API_KEY not set in environment variables"
-    try:
-        resp = _http.post(
-            "https://inference.poolside.ai/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": "poolside/laguna-m.1",
-                "messages": messages,
-                "stream": True,
-                "temperature": 1.0,
-                "top_k": 20,
-                "max_tokens": 16000,
-                "chat_template_kwargs": {"enable_thinking": True},
-            },
-            stream=True,
-            timeout=(15, None),  # no read timeout — let long thinking runs finish
-        )
-        if resp.status_code != 200:
-            try:
-                err_body = resp.json()
-                err_msg = err_body.get("error", {}).get("message", f"HTTP {resp.status_code}")
-            except (ValueError, KeyError, AttributeError):
-                err_msg = f"HTTP {resp.status_code}"
-            return None, err_msg
-        return resp, None
-    except requests.exceptions.Timeout:
-        return None, "Request timed out"
-    except requests.exceptions.RequestException as e:
-        logger.warning(f"⚠️ [call_poolside_stream] network error: {e}")
-        return None, _client_safe_error(e, "call_poolside_stream")
-    except Exception as e:
-        _log_unexpected("call_poolside_stream", e)
-        return None, _client_safe_error(e, "call_poolside_stream")
+        return None, f"{label}: POOLSIDE_API_KEY not set in environment variables"
+
+    last_err = None
+    for i, model_id in enumerate(model_candidates):
+        try:
+            resp = _http.post(
+                "https://inference.poolside.ai/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": model_id,
+                    "messages": messages,
+                    "stream": True,
+                    "temperature": 1.0,
+                    "top_k": 20,
+                    "max_tokens": 16000,
+                    "chat_template_kwargs": {"enable_thinking": True},
+                },
+                stream=True,
+                timeout=(15, None),  # no read timeout — let long thinking runs finish
+            )
+        except requests.exceptions.Timeout:
+            last_err = f"{label} request timed out (model id tried: {model_id})"
+            continue
+        except requests.exceptions.RequestException as e:
+            logger.warning(f"⚠️ [{label}] network error on model id '{model_id}': {e}")
+            last_err = _client_safe_error(e, f"{label} stream")
+            continue
+        except Exception as e:
+            _log_unexpected(f"{label} stream setup", e)
+            last_err = _client_safe_error(e, f"{label} stream")
+            continue
+
+        if resp.status_code == 200:
+            if i > 0:
+                logger.info(f"✅ [{label}] connected using fallback model id '{model_id}' "
+                            f"(candidate #{i + 1}/{len(model_candidates)}) — "
+                            f"consider updating the primary model id in code.")
+            return resp, None
+
+        # Pull Poolside's real error body so failures are diagnosable, not just "HTTP 404"
+        try:
+            err_body = resp.json()
+            err_msg = (
+                err_body.get("error", {}).get("message")
+                if isinstance(err_body.get("error"), dict)
+                else err_body.get("error")
+            ) or err_body.get("message") or f"HTTP {resp.status_code}"
+        except (ValueError, KeyError, AttributeError):
+            err_msg = f"HTTP {resp.status_code}"
+
+        logger.warning(f"⚠️ [{label}] model id '{model_id}' rejected ({resp.status_code}): {err_msg}")
+        last_err = f"HTTP {resp.status_code} — {err_msg} (model id tried: {model_id})"
+
+        if resp.status_code not in (400, 404):
+            # Not a "model id not recognized" style error — retrying other
+            # id spellings won't help (bad key / no entitlement / outage).
+            return None, last_err
+
+    return None, last_err or f"{label} unavailable: all model id candidates failed"
+
+
+def call_poolside_stream(messages, api_key):
+    """Laguna M.1 via Poolside. Tries known model-id spellings in order."""
+    return _call_poolside_with_fallback(
+        messages, api_key,
+        ["poolside/laguna-m.1", "poolside/Laguna-M.1"],
+        "Laguna",
+    )
+
+
+def call_poolside_laguna_core_stream(messages, api_key):
+    """Laguna XS 2.1 via Poolside. Tries known model-id spellings in order."""
+    return _call_poolside_with_fallback(
+        messages, api_key,
+        ["poolside/laguna-xs-2.1", "poolside/Laguna-XS-2.1"],
+        "Laguna Core",
+    )
+
+
+def call_poolside_laguna_s_stream(messages, api_key):
+    """Laguna S 2.1 via Poolside. Tries known model-id spellings in order."""
+    return _call_poolside_with_fallback(
+        messages, api_key,
+        ["poolside/laguna-s-2.1", "poolside/Laguna-S-2.1"],
+        "Laguna S",
+    )
 
 
 # ============================================================
@@ -5229,44 +5292,10 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                     + active_memory[-20:]
                 )
 
-                # Call Poolside with Laguna XS.2.1
-                if not poolside_key_core:
-                    yield f"data: {json.dumps({'error': 'Laguna Core unavailable: POOLSIDE_API_KEY not set'})}\n\n"
-                    yield "data: [DONE]\n\n"
-                    return
-                try:
-                    resp_lc = _http.post(
-                        "https://inference.poolside.ai/v1/chat/completions",
-                        headers={
-                            "Authorization": f"Bearer {poolside_key_core}",
-                            "Content-Type": "application/json",
-                        },
-                        json={
-                            "model": "poolside/laguna-xs-2.1",
-                            "messages": laguna_core_messages,
-                            "stream": True,
-                            "temperature": 1.0,
-                            "top_k": 20,
-                            "max_tokens": 16000,
-                            "chat_template_kwargs": {"enable_thinking": True},
-                        },
-                        stream=True,
-                        timeout=(15, None),  # no read timeout — let long thinking runs finish
-                    )
-                    if resp_lc.status_code != 200:
-                        yield f"data: {json.dumps({'error': f'Laguna Core unavailable: HTTP {resp_lc.status_code}'})}\n\n"
-                        yield "data: [DONE]\n\n"
-                        return
-                except requests.exceptions.RequestException as e:
-                    _safe_msg = _client_safe_error(e, "Laguna Core stream")
-                    logger.warning(f"⚠️ [Laguna Core] network error: {e}")
-                    yield f"data: {json.dumps({'error': f'Laguna Core unavailable: {_safe_msg}'})}\n\n"
-                    yield "data: [DONE]\n\n"
-                    return
-                except Exception as e:
-                    _log_unexpected("Laguna Core stream setup", e)
-                    _safe_msg = _client_safe_error(e, "Laguna Core stream")
-                    yield f"data: {json.dumps({'error': f'Laguna Core unavailable: {_safe_msg}'})}\n\n"
+                # Call Poolside with Laguna XS.2.1 (tries known model-id spellings)
+                resp_lc, err_lc = call_poolside_laguna_core_stream(laguna_core_messages, poolside_key_core)
+                if resp_lc is None:
+                    yield f"data: {json.dumps({'error': f'Laguna Core unavailable: {err_lc}'})}\n\n"
                     yield "data: [DONE]\n\n"
                     return
 
@@ -5394,44 +5423,10 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                     + active_memory[-20:]
                 )
 
-                # Call Poolside with Laguna S.2.1
-                if not poolside_key_s:
-                    yield f"data: {json.dumps({'error': 'Laguna S unavailable: POOLSIDE_API_KEY not set'})}\n\n"
-                    yield "data: [DONE]\n\n"
-                    return
-                try:
-                    resp_ls = _http.post(
-                        "https://inference.poolside.ai/v1/chat/completions",
-                        headers={
-                            "Authorization": f"Bearer {poolside_key_s}",
-                            "Content-Type": "application/json",
-                        },
-                        json={
-                            "model": "poolside/laguna-s-2.1",
-                            "messages": laguna_s_messages,
-                            "stream": True,
-                            "temperature": 1.0,
-                            "top_k": 20,
-                            "max_tokens": 16000,
-                            "chat_template_kwargs": {"enable_thinking": True},
-                        },
-                        stream=True,
-                        timeout=(15, None),  # no read timeout — let long thinking runs finish
-                    )
-                    if resp_ls.status_code != 200:
-                        yield f"data: {json.dumps({'error': f'Laguna S unavailable: HTTP {resp_ls.status_code}'})}\n\n"
-                        yield "data: [DONE]\n\n"
-                        return
-                except requests.exceptions.RequestException as e:
-                    _safe_msg = _client_safe_error(e, "Laguna S stream")
-                    logger.warning(f"⚠️ [Laguna S] network error: {e}")
-                    yield f"data: {json.dumps({'error': f'Laguna S unavailable: {_safe_msg}'})}\n\n"
-                    yield "data: [DONE]\n\n"
-                    return
-                except Exception as e:
-                    _log_unexpected("Laguna S stream setup", e)
-                    _safe_msg = _client_safe_error(e, "Laguna S stream")
-                    yield f"data: {json.dumps({'error': f'Laguna S unavailable: {_safe_msg}'})}\n\n"
+                # Call Poolside with Laguna S.2.1 (tries known model-id spellings)
+                resp_ls, err_ls = call_poolside_laguna_s_stream(laguna_s_messages, poolside_key_s)
+                if resp_ls is None:
+                    yield f"data: {json.dumps({'error': f'Laguna S unavailable: {err_ls}'})}\n\n"
                     yield "data: [DONE]\n\n"
                     return
 
@@ -7536,43 +7531,9 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                     if sp:
                         yield f"data: {sp}\n\n"
 
-                if not poolside_key_core_get:
-                    yield f"data: {json.dumps({'error': 'Laguna Core unavailable: POOLSIDE_API_KEY not set'})}\n\n"
-                    yield "data: [DONE]\n\n"
-                    return
-                try:
-                    resp_lc_get = _http.post(
-                        "https://inference.poolside.ai/v1/chat/completions",
-                        headers={
-                            "Authorization": f"Bearer {poolside_key_core_get}",
-                            "Content-Type": "application/json",
-                        },
-                        json={
-                            "model": "poolside/laguna-xs-2.1",
-                            "messages": laguna_core_messages_get,
-                            "stream": True,
-                            "temperature": 1.0,
-                            "top_k": 20,
-                            "max_tokens": 16000,
-                            "chat_template_kwargs": {"enable_thinking": True},
-                        },
-                        stream=True,
-                        timeout=(15, None),  # no read timeout — let long thinking runs finish
-                    )
-                    if resp_lc_get.status_code != 200:
-                        yield f"data: {json.dumps({'error': f'Laguna Core unavailable: HTTP {resp_lc_get.status_code}'})}\n\n"
-                        yield "data: [DONE]\n\n"
-                        return
-                except requests.exceptions.RequestException as e:
-                    _safe_msg = _client_safe_error(e, "Laguna Core stream")
-                    logger.warning(f"⚠️ [Laguna Core] network error: {e}")
-                    yield f"data: {json.dumps({'error': f'Laguna Core unavailable: {_safe_msg}'})}\n\n"
-                    yield "data: [DONE]\n\n"
-                    return
-                except Exception as e:
-                    _log_unexpected("Laguna Core stream setup (GET)", e)
-                    _safe_msg = _client_safe_error(e, "Laguna Core stream")
-                    yield f"data: {json.dumps({'error': f'Laguna Core unavailable: {_safe_msg}'})}\n\n"
+                resp_lc_get, err_lc_get = call_poolside_laguna_core_stream(laguna_core_messages_get, poolside_key_core_get)
+                if resp_lc_get is None:
+                    yield f"data: {json.dumps({'error': f'Laguna Core unavailable: {err_lc_get}'})}\n\n"
                     yield "data: [DONE]\n\n"
                     return
 
@@ -7675,43 +7636,9 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                     if sp:
                         yield f"data: {sp}\n\n"
 
-                if not poolside_key_s_get:
-                    yield f"data: {json.dumps({'error': 'Laguna S unavailable: POOLSIDE_API_KEY not set'})}\n\n"
-                    yield "data: [DONE]\n\n"
-                    return
-                try:
-                    resp_ls_get = _http.post(
-                        "https://inference.poolside.ai/v1/chat/completions",
-                        headers={
-                            "Authorization": f"Bearer {poolside_key_s_get}",
-                            "Content-Type": "application/json",
-                        },
-                        json={
-                            "model": "poolside/laguna-s-2.1",
-                            "messages": laguna_s_messages_get,
-                            "stream": True,
-                            "temperature": 1.0,
-                            "top_k": 20,
-                            "max_tokens": 16000,
-                            "chat_template_kwargs": {"enable_thinking": True},
-                        },
-                        stream=True,
-                        timeout=(15, None),  # no read timeout — let long thinking runs finish
-                    )
-                    if resp_ls_get.status_code != 200:
-                        yield f"data: {json.dumps({'error': f'Laguna S unavailable: HTTP {resp_ls_get.status_code}'})}\n\n"
-                        yield "data: [DONE]\n\n"
-                        return
-                except requests.exceptions.RequestException as e:
-                    _safe_msg = _client_safe_error(e, "Laguna S stream")
-                    logger.warning(f"⚠️ [Laguna S] network error: {e}")
-                    yield f"data: {json.dumps({'error': f'Laguna S unavailable: {_safe_msg}'})}\n\n"
-                    yield "data: [DONE]\n\n"
-                    return
-                except Exception as e:
-                    _log_unexpected("Laguna S stream setup (GET)", e)
-                    _safe_msg = _client_safe_error(e, "Laguna S stream")
-                    yield f"data: {json.dumps({'error': f'Laguna S unavailable: {_safe_msg}'})}\n\n"
+                resp_ls_get, err_ls_get = call_poolside_laguna_s_stream(laguna_s_messages_get, poolside_key_s_get)
+                if resp_ls_get is None:
+                    yield f"data: {json.dumps({'error': f'Laguna S unavailable: {err_ls_get}'})}\n\n"
                     yield "data: [DONE]\n\n"
                     return
 
