@@ -144,7 +144,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
-    <link rel="stylesheet" href="static/style.css?v=0.0.424">   <!-- this is CSS linking section -->
+    <link rel="stylesheet" href="static/style.css?v=0.0.425">   <!-- this is CSS linking section -->
     
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#000000" />
@@ -595,6 +595,20 @@
                         </div>
                         <div class="model-option-check">✓</div>
                     </div>
+                    <div class="model-option" data-model="agnes" data-name="Agnes" onclick="selectModel('agnes', 'Agnes', event)">
+                        <div class="model-option-info">
+                            <div class="model-option-name">Agnes</div>
+                            <div class="model-option-desc">Fast & capable · Agnes 2.5 Flash via NaraRouter</div>
+                        </div>
+                        <div class="model-option-check">✓</div>
+                    </div>
+                    <div class="model-option" data-model="stepfun3" data-name="Stepfun 3.7" onclick="selectModel('stepfun3', 'Stepfun 3.7', event)">
+                        <div class="model-option-info">
+                            <div class="model-option-name">Stepfun 3.7</div>
+                            <div class="model-option-desc">Fast & capable · Stepfun 3.7 Flash via NaraRouter</div>
+                        </div>
+                        <div class="model-option-check">✓</div>
+                    </div>
                     <div class="model-option" data-model="mistral_large" data-name="Mistral Large" onclick="selectModel('mistral_large', 'Mistral Large', event)">
                         <div class="model-option-info">
                             <div class="model-option-name">Mistral Large</div>
@@ -847,18 +861,18 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
     
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <script src="static/firebase-config.js?v=0.0.424"></script>
-    <script src="static/live-sync.js?v=0.0.424"></script>
-    <script src="static/logic.js?v=0.0.424"></script>
-    <script src="static/feedback.js?v=0.0.424"></script>
-    <script src="static/file-upload.js?v=0.0.424"></script>
+    <script src="static/firebase-config.js?v=0.0.425"></script>
+    <script src="static/live-sync.js?v=0.0.425"></script>
+    <script src="static/logic.js?v=0.0.425"></script>
+    <script src="static/feedback.js?v=0.0.425"></script>
+    <script src="static/file-upload.js?v=0.0.425"></script>
 
     <script>
         console.log('🚀 Catura AI v27.0.5 loaded');
         
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js?v=0.0.424')
+                navigator.serviceWorker.register('/service-worker.js?v=0.0.425')
                     .then(() => console.log('✅ Catura AI PWA Ready - v27.0.5'))
                     .catch((err) => console.log('❌ SW Error:', err));
             });

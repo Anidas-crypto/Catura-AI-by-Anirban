@@ -796,6 +796,7 @@ GEMINI_API_KEY      = os.getenv("GEMINI_API_KEY", "")               # https://ai
 TAVILY_API_KEY      = os.getenv("TAVILY_API_KEY", "")               # https://tavily.com (free — 1000 searches/month)
 GROQ_API_KEY        = os.getenv("GROQ_API_KEY", "")                 # https://console.groq.com (free tier)
 ZAI_API_KEY         = os.getenv("ZAI_API_KEY", "")                  # https://z.ai (GLM-4.7-Flash — free tier)
+NARAROUTER_API_KEY  = os.getenv("NARAROUTER_API_KEY", "")           # https://router.bynara.id (Agnes 2.5 Flash, Stepfun 3.7 Flash — free tier)
 SERPER_API_KEY      = os.getenv("SERPER_API_KEY", "")               # https://serper.dev (2500 free searches)
 FIRECRAWL_API_KEY   = os.getenv("FIRECRAWL_API_KEY", "")            # https://firecrawl.dev (free tier)
 COHERE_API_KEY      = os.getenv("COHERE_API_KEY", "")               # https://cohere.com (1000 free reranks/month)
@@ -863,7 +864,7 @@ def share_page(slug: str):
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.424"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.425"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -873,7 +874,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.424", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.425", "timestamp": datetime.utcnow().isoformat()}
 
 # ── 🧠 MEMORY MODELS ────────────────────────────────────────────────────────
 from pydantic import BaseModel as _MemBaseModel
@@ -3999,6 +4000,53 @@ def call_zai_stream(messages, api_key):
 
 
 # ============================================================
+# ✅ HELPER: Call NaraRouter — agnes-2.5-flash, stepfun-3.7-flash
+# OpenAI-compatible endpoint at router.bynara.id (NARAROUTER_API_KEY)
+# ============================================================
+def call_nararouter_stream(messages, api_key, model_id, max_tokens=16000):
+    """
+    Dedicated NaraRouter streaming function.
+    Shared by all NaraRouter-hosted models (Agnes 2.5 Flash, Stepfun 3.7 Flash,
+    etc.) via model_id param. OpenAI-compatible chat completions endpoint.
+    """
+    if not api_key:
+        return None, "NARAROUTER_API_KEY not set in environment variables"
+    try:
+        resp = _http.post(
+            "https://router.bynara.id/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": model_id,
+                "messages": messages,
+                "stream": True,
+                "temperature": 0.7,
+                "max_tokens": max_tokens,
+            },
+            stream=True,
+            timeout=(10, 120),
+        )
+        if resp.status_code != 200:
+            try:
+                err_body = resp.json()
+                err_msg = err_body.get("error", {}).get("message", f"HTTP {resp.status_code}")
+            except (ValueError, KeyError, AttributeError):
+                err_msg = f"HTTP {resp.status_code}"
+            return None, err_msg
+        return resp, None
+    except requests.exceptions.Timeout:
+        return None, "Request timed out"
+    except requests.exceptions.RequestException as e:
+        logger.warning(f"⚠️ [call_nararouter_stream] network error: {e}")
+        return None, _client_safe_error(e, "call_nararouter_stream")
+    except Exception as e:
+        _log_unexpected("call_nararouter_stream", e)
+        return None, _client_safe_error(e, "call_nararouter_stream")
+
+
+# ============================================================
 # ✅ HELPER: Call NVIDIA NIM API — z-ai/glm-5.2, minimaxai/minimax-m3
 # OpenAI-compatible endpoint at integrate.api.nvidia.com (NVIDIA_API_KEY)
 # ============================================================
@@ -4402,6 +4450,8 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
             "glm":     [],  # Routed via Z.ai API (ZAI_API_KEY) — glm-4.7-flash (free)
             "minimax_m3": [],  # Routed via NVIDIA NIM API (NVIDIA_API_KEY) — minimaxai/minimax-m3
             "glm52":      [],  # Routed via NVIDIA NIM API (NVIDIA_API_KEY) — z-ai/glm-5.2
+            "agnes":      [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — agnes-2.5-flash
+            "stepfun3":   [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — stepfun-3.7-flash
             "mistral_large":  [],  # Routed via Mistral API (MISTRAL_API_KEY) — mistral-large-latest
             "mistral_medium": [],  # Routed via Mistral API (MISTRAL_API_KEY) — mistral-medium-latest
             "mistral_small":  [],  # Routed via Mistral API (MISTRAL_API_KEY) — mistral-small-latest
@@ -4763,6 +4813,46 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                 "You are knowledgeable about technology, science, finance, history, culture, and everyday topics. "
                 "For coding questions, write clean, well-commented code. "
                 "If asked what model or AI you are, say you are Catura AI MiniMax and cannot share "
+                "details about the underlying technology. "
+                "If asked who made you, say 'I was created by Anirban.' "
+                "Never make up facts. If you don't know something, say so honestly."
+                + NO_TOOL_CALL_RULE
+            ),
+            "agnes": (
+                "Your name is Catura (pronounced kuh-CHUR-uh) Agnes Model. You are a highly capable "
+                "AI assistant created by Anirban — an independent developer based in India. "
+                "You are Catura AI Agnes, built for fast, efficient, and high-quality responses. "
+                "You are clear, direct, and helpful. You speak like a knowledgeable friend — "
+                "never robotic, never sycophantic. "
+                "Never start a response with 'Certainly!', 'Of course!', 'Great question!', "
+                "'Absolutely!', or similar hollow openers. Just answer directly. "
+                "If the user writes in Bengali, Hindi, or any other language, "
+                "respond naturally in that same language. Match the user's language automatically. "
+                "Keep answers concise unless the user explicitly asks for detail. "
+                "Use bullet points or headers only when they genuinely improve clarity. "
+                "You are knowledgeable about technology, science, finance, history, culture, and everyday topics. "
+                "For coding questions, write clean, well-commented code. "
+                "If asked what model or AI you are, say you are Catura AI Agnes and cannot share "
+                "details about the underlying technology. "
+                "If asked who made you, say 'I was created by Anirban.' "
+                "Never make up facts. If you don't know something, say so honestly."
+                + NO_TOOL_CALL_RULE
+            ),
+            "stepfun3": (
+                "Your name is Catura (pronounced kuh-CHUR-uh) Stepfun Model. You are a highly capable "
+                "AI assistant created by Anirban — an independent developer based in India. "
+                "You are Catura AI Stepfun, built for fast, efficient, and high-quality responses. "
+                "You are clear, direct, and helpful. You speak like a knowledgeable friend — "
+                "never robotic, never sycophantic. "
+                "Never start a response with 'Certainly!', 'Of course!', 'Great question!', "
+                "'Absolutely!', or similar hollow openers. Just answer directly. "
+                "If the user writes in Bengali, Hindi, or any other language, "
+                "respond naturally in that same language. Match the user's language automatically. "
+                "Keep answers concise unless the user explicitly asks for detail. "
+                "Use bullet points or headers only when they genuinely improve clarity. "
+                "You are knowledgeable about technology, science, finance, history, culture, and everyday topics. "
+                "For coding questions, write clean, well-commented code. "
+                "If asked what model or AI you are, say you are Catura AI Stepfun and cannot share "
                 "details about the underlying technology. "
                 "If asked who made you, say 'I was created by Anirban.' "
                 "Never make up facts. If you don't know something, say so honestly."
@@ -5742,6 +5832,198 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                 })
             )
 
+        # ── AGNES: NaraRouter API (NARAROUTER_API_KEY) — agnes-2.5-flash ──
+        if model_key == "agnes":
+            nara_key_agnes   = os.getenv("NARAROUTER_API_KEY", "")
+            agnes_system     = system_prompts.get("agnes", system_prompts["dagr"])
+
+            def generate_agnes():
+                full_reply = ""
+                thinking_open_agnes = False  # tracks whether <think> has been opened in full_reply
+
+                tool_result_agnes = None
+                if intent != "general" and not file_urls:
+                    yield f"data: {json.dumps({'status': 'tool_running', 'intent': intent})}\n\n"
+                    tool_result_agnes = run_tool(intent, prompt)
+
+                final_system_agnes = agnes_system
+                tool_context_agnes = build_tool_context(tool_result_agnes)
+                if tool_context_agnes:
+                    final_system_agnes += "\n\n" + tool_context_agnes
+
+                if tool_result_agnes:
+                    badge_payload = json.dumps({"tool_used": tool_result_agnes.get("tool", ""), "intent": intent})
+                    yield f"data: {badge_payload}\n\n"
+                    sp = build_sources_payload(tool_result_agnes)
+                    if sp:
+                        yield f"data: {sp}\n\n"
+
+                agnes_messages = (
+                    [{"role": "system", "content": final_system_agnes}]
+                    + active_memory[-20:]
+                )
+                resp, err = call_nararouter_stream(agnes_messages, nara_key_agnes, "agnes-2.5-flash", max_tokens=16000)
+
+                if resp is None:
+                    yield f"data: {json.dumps({'error': f'Agnes unavailable: {err}'})}\n\n"
+                    yield "data: [DONE]\n\n"
+                    return
+
+                try:
+                    for line in resp.iter_lines():
+                        if not line:
+                            continue
+                        decoded = line.decode("utf-8")
+                        if not decoded.startswith("data: "):
+                            continue
+                        payload = decoded[6:]
+                        if payload.strip() == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(payload)
+                            if "error" in chunk:
+                                logger.warning(f"⚠️ [AGNES] mid-stream error: {chunk['error']}")
+                                break
+                            choices = chunk.get("choices")
+                            if not choices:
+                                continue
+                            delta_agnes = choices[0].get("delta") or {}
+                            reasoning_token_agnes = delta_agnes.get("reasoning_content") or ""
+                            token = delta_agnes.get("content") or ""
+                            if reasoning_token_agnes:
+                                if not thinking_open_agnes:
+                                    full_reply += "<think>"
+                                    thinking_open_agnes = True
+                                full_reply += reasoning_token_agnes
+                                yield f"data: {json.dumps({'thinking_token': reasoning_token_agnes}, ensure_ascii=False)}\n\n"
+                            if token:
+                                if thinking_open_agnes:
+                                    full_reply += "</think>"
+                                    thinking_open_agnes = False
+                                full_reply += token
+                                yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
+                        except (json.JSONDecodeError, KeyError, TypeError, IndexError) as parse_err:
+                            logger.debug(f"⚠️ [AGNES] skipped unparsable stream chunk: {parse_err}")
+                            continue
+                except (requests.exceptions.RequestException, ConnectionError, OSError) as e:
+                    logger.warning(f"⚠️ [AGNES] stream network error: {e}")
+                except Exception as e:
+                    _log_unexpected("AGNES stream", e)
+
+                if thinking_open_agnes:
+                    full_reply += "</think>"
+
+                if full_reply.strip():
+                    active_memory.append({"role": "assistant", "content": full_reply})
+                    if not ghost_mode and len(user_memory[session_id]) > 40:
+                        user_memory[session_id] = user_memory[session_id][-40:]
+                yield "data: [DONE]\n\n"
+
+            return StreamingResponse(
+                generate_agnes(),
+                media_type="text/event-stream",
+                headers=_rl({
+                    "Cache-Control": "no-cache",
+                    "Set-Cookie": build_session_cookie(session_id),
+                })
+            )
+
+        # ── STEPFUN 3.7: NaraRouter API (NARAROUTER_API_KEY) — stepfun-3.7-flash ──
+        if model_key == "stepfun3":
+            nara_key_stepfun3   = os.getenv("NARAROUTER_API_KEY", "")
+            stepfun3_system     = system_prompts.get("stepfun3", system_prompts["dagr"])
+
+            def generate_stepfun3():
+                full_reply = ""
+                thinking_open_stepfun3 = False  # tracks whether <think> has been opened in full_reply
+
+                tool_result_stepfun3 = None
+                if intent != "general" and not file_urls:
+                    yield f"data: {json.dumps({'status': 'tool_running', 'intent': intent})}\n\n"
+                    tool_result_stepfun3 = run_tool(intent, prompt)
+
+                final_system_stepfun3 = stepfun3_system
+                tool_context_stepfun3 = build_tool_context(tool_result_stepfun3)
+                if tool_context_stepfun3:
+                    final_system_stepfun3 += "\n\n" + tool_context_stepfun3
+
+                if tool_result_stepfun3:
+                    badge_payload = json.dumps({"tool_used": tool_result_stepfun3.get("tool", ""), "intent": intent})
+                    yield f"data: {badge_payload}\n\n"
+                    sp = build_sources_payload(tool_result_stepfun3)
+                    if sp:
+                        yield f"data: {sp}\n\n"
+
+                stepfun3_messages = (
+                    [{"role": "system", "content": final_system_stepfun3}]
+                    + active_memory[-20:]
+                )
+                resp, err = call_nararouter_stream(stepfun3_messages, nara_key_stepfun3, "stepfun-3.7-flash", max_tokens=16000)
+
+                if resp is None:
+                    yield f"data: {json.dumps({'error': f'Stepfun 3.7 unavailable: {err}'})}\n\n"
+                    yield "data: [DONE]\n\n"
+                    return
+
+                try:
+                    for line in resp.iter_lines():
+                        if not line:
+                            continue
+                        decoded = line.decode("utf-8")
+                        if not decoded.startswith("data: "):
+                            continue
+                        payload = decoded[6:]
+                        if payload.strip() == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(payload)
+                            if "error" in chunk:
+                                logger.warning(f"⚠️ [STEPFUN 3.7] mid-stream error: {chunk['error']}")
+                                break
+                            choices = chunk.get("choices")
+                            if not choices:
+                                continue
+                            delta_stepfun3 = choices[0].get("delta") or {}
+                            reasoning_token_stepfun3 = delta_stepfun3.get("reasoning_content") or ""
+                            token = delta_stepfun3.get("content") or ""
+                            if reasoning_token_stepfun3:
+                                if not thinking_open_stepfun3:
+                                    full_reply += "<think>"
+                                    thinking_open_stepfun3 = True
+                                full_reply += reasoning_token_stepfun3
+                                yield f"data: {json.dumps({'thinking_token': reasoning_token_stepfun3}, ensure_ascii=False)}\n\n"
+                            if token:
+                                if thinking_open_stepfun3:
+                                    full_reply += "</think>"
+                                    thinking_open_stepfun3 = False
+                                full_reply += token
+                                yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
+                        except (json.JSONDecodeError, KeyError, TypeError, IndexError) as parse_err:
+                            logger.debug(f"⚠️ [STEPFUN 3.7] skipped unparsable stream chunk: {parse_err}")
+                            continue
+                except (requests.exceptions.RequestException, ConnectionError, OSError) as e:
+                    logger.warning(f"⚠️ [STEPFUN 3.7] stream network error: {e}")
+                except Exception as e:
+                    _log_unexpected("STEPFUN 3.7 stream", e)
+
+                if thinking_open_stepfun3:
+                    full_reply += "</think>"
+
+                if full_reply.strip():
+                    active_memory.append({"role": "assistant", "content": full_reply})
+                    if not ghost_mode and len(user_memory[session_id]) > 40:
+                        user_memory[session_id] = user_memory[session_id][-40:]
+                yield "data: [DONE]\n\n"
+
+            return StreamingResponse(
+                generate_stepfun3(),
+                media_type="text/event-stream",
+                headers=_rl({
+                    "Cache-Control": "no-cache",
+                    "Set-Cookie": build_session_cookie(session_id),
+                })
+            )
+
         # ── GLM-5.2: NVIDIA NIM API (NVIDIA_API_KEY) — z-ai/glm-5.2 ──
         if model_key == "glm52":
             nvidia_key_g52   = os.getenv("NVIDIA_API_KEY", "")
@@ -6624,6 +6906,8 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
             "glm":     [],  # Routed via Z.ai API (ZAI_API_KEY) — glm-4.7-flash (free)
             "minimax_m3": [],  # Routed via NVIDIA NIM API (NVIDIA_API_KEY) — minimaxai/minimax-m3
             "glm52":      [],  # Routed via NVIDIA NIM API (NVIDIA_API_KEY) — z-ai/glm-5.2
+            "agnes":      [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — agnes-2.5-flash
+            "stepfun3":   [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — stepfun-3.7-flash
             "mistral_large":  [],  # Routed via Mistral API (MISTRAL_API_KEY) — mistral-large-latest
             "mistral_medium": [],  # Routed via Mistral API (MISTRAL_API_KEY) — mistral-medium-latest
             "mistral_small":  [],  # Routed via Mistral API (MISTRAL_API_KEY) — mistral-small-latest
@@ -7172,6 +7456,46 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                 "You are knowledgeable about technology, science, finance, history, culture, and everyday topics. "
                 "For coding questions, write clean, well-commented code. "
                 "If asked what model or AI you are, say you are Catura AI MiniMax and cannot share "
+                "details about the underlying technology. "
+                "If asked who made you, say 'I was created by Anirban.' "
+                "Never make up facts. If you don't know something, say so honestly."
+                + NO_TOOL_CALL_RULE
+            ),
+            "agnes": (
+                "Your name is Catura (pronounced kuh-CHUR-uh) Agnes Model. You are a highly capable "
+                "AI assistant created by Anirban — an independent developer based in India. "
+                "You are Catura AI Agnes, built for fast, efficient, and high-quality responses. "
+                "You are clear, direct, and helpful. You speak like a knowledgeable friend — "
+                "never robotic, never sycophantic. "
+                "Never start a response with 'Certainly!', 'Of course!', 'Great question!', "
+                "'Absolutely!', or similar hollow openers. Just answer directly. "
+                "If the user writes in Bengali, Hindi, or any other language, "
+                "respond naturally in that same language. Match the user's language automatically. "
+                "Keep answers concise unless the user explicitly asks for detail. "
+                "Use bullet points or headers only when they genuinely improve clarity. "
+                "You are knowledgeable about technology, science, finance, history, culture, and everyday topics. "
+                "For coding questions, write clean, well-commented code. "
+                "If asked what model or AI you are, say you are Catura AI Agnes and cannot share "
+                "details about the underlying technology. "
+                "If asked who made you, say 'I was created by Anirban.' "
+                "Never make up facts. If you don't know something, say so honestly."
+                + NO_TOOL_CALL_RULE
+            ),
+            "stepfun3": (
+                "Your name is Catura (pronounced kuh-CHUR-uh) Stepfun Model. You are a highly capable "
+                "AI assistant created by Anirban — an independent developer based in India. "
+                "You are Catura AI Stepfun, built for fast, efficient, and high-quality responses. "
+                "You are clear, direct, and helpful. You speak like a knowledgeable friend — "
+                "never robotic, never sycophantic. "
+                "Never start a response with 'Certainly!', 'Of course!', 'Great question!', "
+                "'Absolutely!', or similar hollow openers. Just answer directly. "
+                "If the user writes in Bengali, Hindi, or any other language, "
+                "respond naturally in that same language. Match the user's language automatically. "
+                "Keep answers concise unless the user explicitly asks for detail. "
+                "Use bullet points or headers only when they genuinely improve clarity. "
+                "You are knowledgeable about technology, science, finance, history, culture, and everyday topics. "
+                "For coding questions, write clean, well-commented code. "
+                "If asked what model or AI you are, say you are Catura AI Stepfun and cannot share "
                 "details about the underlying technology. "
                 "If asked who made you, say 'I was created by Anirban.' "
                 "Never make up facts. If you don't know something, say so honestly."
@@ -7896,6 +8220,198 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                 generate_minimax_m3_get(), media_type="text/event-stream",
                 headers=_rl({"Cache-Control": "no-cache",
                          "Set-Cookie": build_session_cookie(session_id)})
+            )
+
+        # ── AGNES: NaraRouter API (NARAROUTER_API_KEY) — agnes-2.5-flash ──
+        if model_key == "agnes":
+            nara_key_agnes   = os.getenv("NARAROUTER_API_KEY", "")
+            agnes_system     = system_prompts.get("agnes", system_prompts["dagr"])
+
+            def generate_agnes():
+                full_reply = ""
+                thinking_open_agnes = False  # tracks whether <think> has been opened in full_reply
+
+                tool_result_agnes = None
+                if intent != "general" and not file_urls:
+                    yield f"data: {json.dumps({'status': 'tool_running', 'intent': intent})}\n\n"
+                    tool_result_agnes = run_tool(intent, prompt)
+
+                final_system_agnes = agnes_system
+                tool_context_agnes = build_tool_context(tool_result_agnes)
+                if tool_context_agnes:
+                    final_system_agnes += "\n\n" + tool_context_agnes
+
+                if tool_result_agnes:
+                    badge_payload = json.dumps({"tool_used": tool_result_agnes.get("tool", ""), "intent": intent})
+                    yield f"data: {badge_payload}\n\n"
+                    sp = build_sources_payload(tool_result_agnes)
+                    if sp:
+                        yield f"data: {sp}\n\n"
+
+                agnes_messages = (
+                    [{"role": "system", "content": final_system_agnes}]
+                    + active_memory[-20:]
+                )
+                resp, err = call_nararouter_stream(agnes_messages, nara_key_agnes, "agnes-2.5-flash", max_tokens=16000)
+
+                if resp is None:
+                    yield f"data: {json.dumps({'error': f'Agnes unavailable: {err}'})}\n\n"
+                    yield "data: [DONE]\n\n"
+                    return
+
+                try:
+                    for line in resp.iter_lines():
+                        if not line:
+                            continue
+                        decoded = line.decode("utf-8")
+                        if not decoded.startswith("data: "):
+                            continue
+                        payload = decoded[6:]
+                        if payload.strip() == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(payload)
+                            if "error" in chunk:
+                                logger.warning(f"⚠️ [AGNES] mid-stream error: {chunk['error']}")
+                                break
+                            choices = chunk.get("choices")
+                            if not choices:
+                                continue
+                            delta_agnes = choices[0].get("delta") or {}
+                            reasoning_token_agnes = delta_agnes.get("reasoning_content") or ""
+                            token = delta_agnes.get("content") or ""
+                            if reasoning_token_agnes:
+                                if not thinking_open_agnes:
+                                    full_reply += "<think>"
+                                    thinking_open_agnes = True
+                                full_reply += reasoning_token_agnes
+                                yield f"data: {json.dumps({'thinking_token': reasoning_token_agnes}, ensure_ascii=False)}\n\n"
+                            if token:
+                                if thinking_open_agnes:
+                                    full_reply += "</think>"
+                                    thinking_open_agnes = False
+                                full_reply += token
+                                yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
+                        except (json.JSONDecodeError, KeyError, TypeError, IndexError) as parse_err:
+                            logger.debug(f"⚠️ [AGNES] skipped unparsable stream chunk: {parse_err}")
+                            continue
+                except (requests.exceptions.RequestException, ConnectionError, OSError) as e:
+                    logger.warning(f"⚠️ [AGNES] stream network error: {e}")
+                except Exception as e:
+                    _log_unexpected("AGNES stream", e)
+
+                if thinking_open_agnes:
+                    full_reply += "</think>"
+
+                if full_reply.strip():
+                    active_memory.append({"role": "assistant", "content": full_reply})
+                    if not ghost_mode and len(user_memory[session_id]) > 40:
+                        user_memory[session_id] = user_memory[session_id][-40:]
+                yield "data: [DONE]\n\n"
+
+            return StreamingResponse(
+                generate_agnes(),
+                media_type="text/event-stream",
+                headers=_rl({
+                    "Cache-Control": "no-cache",
+                    "Set-Cookie": build_session_cookie(session_id),
+                })
+            )
+
+        # ── STEPFUN 3.7: NaraRouter API (NARAROUTER_API_KEY) — stepfun-3.7-flash ──
+        if model_key == "stepfun3":
+            nara_key_stepfun3   = os.getenv("NARAROUTER_API_KEY", "")
+            stepfun3_system     = system_prompts.get("stepfun3", system_prompts["dagr"])
+
+            def generate_stepfun3():
+                full_reply = ""
+                thinking_open_stepfun3 = False  # tracks whether <think> has been opened in full_reply
+
+                tool_result_stepfun3 = None
+                if intent != "general" and not file_urls:
+                    yield f"data: {json.dumps({'status': 'tool_running', 'intent': intent})}\n\n"
+                    tool_result_stepfun3 = run_tool(intent, prompt)
+
+                final_system_stepfun3 = stepfun3_system
+                tool_context_stepfun3 = build_tool_context(tool_result_stepfun3)
+                if tool_context_stepfun3:
+                    final_system_stepfun3 += "\n\n" + tool_context_stepfun3
+
+                if tool_result_stepfun3:
+                    badge_payload = json.dumps({"tool_used": tool_result_stepfun3.get("tool", ""), "intent": intent})
+                    yield f"data: {badge_payload}\n\n"
+                    sp = build_sources_payload(tool_result_stepfun3)
+                    if sp:
+                        yield f"data: {sp}\n\n"
+
+                stepfun3_messages = (
+                    [{"role": "system", "content": final_system_stepfun3}]
+                    + active_memory[-20:]
+                )
+                resp, err = call_nararouter_stream(stepfun3_messages, nara_key_stepfun3, "stepfun-3.7-flash", max_tokens=16000)
+
+                if resp is None:
+                    yield f"data: {json.dumps({'error': f'Stepfun 3.7 unavailable: {err}'})}\n\n"
+                    yield "data: [DONE]\n\n"
+                    return
+
+                try:
+                    for line in resp.iter_lines():
+                        if not line:
+                            continue
+                        decoded = line.decode("utf-8")
+                        if not decoded.startswith("data: "):
+                            continue
+                        payload = decoded[6:]
+                        if payload.strip() == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(payload)
+                            if "error" in chunk:
+                                logger.warning(f"⚠️ [STEPFUN 3.7] mid-stream error: {chunk['error']}")
+                                break
+                            choices = chunk.get("choices")
+                            if not choices:
+                                continue
+                            delta_stepfun3 = choices[0].get("delta") or {}
+                            reasoning_token_stepfun3 = delta_stepfun3.get("reasoning_content") or ""
+                            token = delta_stepfun3.get("content") or ""
+                            if reasoning_token_stepfun3:
+                                if not thinking_open_stepfun3:
+                                    full_reply += "<think>"
+                                    thinking_open_stepfun3 = True
+                                full_reply += reasoning_token_stepfun3
+                                yield f"data: {json.dumps({'thinking_token': reasoning_token_stepfun3}, ensure_ascii=False)}\n\n"
+                            if token:
+                                if thinking_open_stepfun3:
+                                    full_reply += "</think>"
+                                    thinking_open_stepfun3 = False
+                                full_reply += token
+                                yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
+                        except (json.JSONDecodeError, KeyError, TypeError, IndexError) as parse_err:
+                            logger.debug(f"⚠️ [STEPFUN 3.7] skipped unparsable stream chunk: {parse_err}")
+                            continue
+                except (requests.exceptions.RequestException, ConnectionError, OSError) as e:
+                    logger.warning(f"⚠️ [STEPFUN 3.7] stream network error: {e}")
+                except Exception as e:
+                    _log_unexpected("STEPFUN 3.7 stream", e)
+
+                if thinking_open_stepfun3:
+                    full_reply += "</think>"
+
+                if full_reply.strip():
+                    active_memory.append({"role": "assistant", "content": full_reply})
+                    if not ghost_mode and len(user_memory[session_id]) > 40:
+                        user_memory[session_id] = user_memory[session_id][-40:]
+                yield "data: [DONE]\n\n"
+
+            return StreamingResponse(
+                generate_stepfun3(),
+                media_type="text/event-stream",
+                headers=_rl({
+                    "Cache-Control": "no-cache",
+                    "Set-Cookie": build_session_cookie(session_id),
+                })
             )
 
         # ── GLM-5.2: NVIDIA NIM API — isolated from all other models ──
