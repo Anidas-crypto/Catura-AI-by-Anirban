@@ -864,7 +864,7 @@ def share_page(slug: str):
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.427"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.428"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -874,7 +874,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.427", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.428", "timestamp": datetime.utcnow().isoformat()}
 
 # ── 🧠 MEMORY MODELS ────────────────────────────────────────────────────────
 from pydantic import BaseModel as _MemBaseModel
@@ -3931,7 +3931,7 @@ def call_sambhav_groq_stream(messages, api_key):
                 "messages": messages,
                 "stream": True,
                 "temperature": 0.4,
-                "max_tokens": 8000,
+                "max_completion_tokens": 32768,
             },
             stream=True,
             timeout=(10, 120),
@@ -3977,7 +3977,7 @@ def call_zai_stream(messages, api_key):
                 "messages": messages,
                 "stream": True,
                 "temperature": 0.7,
-                "max_tokens": 24000,
+                "max_tokens": 65536,
             },
             stream=True,
             timeout=(10, 120),
@@ -4004,7 +4004,7 @@ def call_zai_stream(messages, api_key):
 # ✅ HELPER: Call NaraRouter — agnes-2.5-flash, stepfun-3.7-flash
 # OpenAI-compatible endpoint at router.bynara.id (NARAROUTER_API_KEY)
 # ============================================================
-def call_nararouter_stream(messages, api_key, model_id, max_tokens=16000):
+def call_nararouter_stream(messages, api_key, model_id, max_tokens=32768):
     """
     Dedicated NaraRouter streaming function.
     Shared by all NaraRouter-hosted models (Agnes 2.5 Flash, Stepfun 3.7 Flash,
@@ -4051,7 +4051,7 @@ def call_nararouter_stream(messages, api_key, model_id, max_tokens=16000):
 # ✅ HELPER: Call NVIDIA NIM API — z-ai/glm-5.2, minimaxai/minimax-m3
 # OpenAI-compatible endpoint at integrate.api.nvidia.com (NVIDIA_API_KEY)
 # ============================================================
-def call_nvidia_stream(messages, api_key, model_id, temperature=1.0, template_kwargs=None, max_tokens=16000):
+def call_nvidia_stream(messages, api_key, model_id, temperature=1.0, template_kwargs=None, max_tokens=16384):
     """
     Dedicated NVIDIA NIM streaming function.
     Shared by all NVIDIA-hosted reasoning models (MiniMax M3, GLM-5.2,
@@ -4066,7 +4066,7 @@ def call_nvidia_stream(messages, api_key, model_id, temperature=1.0, template_kw
         that key is not recognized by MiniMax's chat template, so thinking
         never actually turned on and the model answered directly.)
       - GLM-5.2      -> {"thinking": true} (GLM already reasons by default,
-        but the real bug here was max_tokens=16000 being too small: a 744B
+        but the real bug here was max_tokens=16384 being too small: a 744B
         reasoning model can easily spend the entire budget on the hidden
         <think> trace and hit the token cap before ever emitting the final
         'content' delta — which looks exactly like "takes minutes and never
@@ -4158,7 +4158,7 @@ def call_mistral_stream(messages, api_key, model_id="mistral-large-latest", reas
             "messages": messages,
             "stream": True,
             "temperature": 0.7,
-            "max_tokens": 8000,
+            "max_tokens": 16000,
         }
         if reasoning_effort:
             payload["reasoning_effort"] = reasoning_effort
