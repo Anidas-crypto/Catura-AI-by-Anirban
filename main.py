@@ -864,7 +864,7 @@ def share_page(slug: str):
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.425"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.426"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -874,7 +874,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.425", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.426", "timestamp": datetime.utcnow().isoformat()}
 
 # ── 🧠 MEMORY MODELS ────────────────────────────────────────────────────────
 from pydantic import BaseModel as _MemBaseModel
@@ -1240,7 +1240,7 @@ async def extract_and_save_memory(request: Request, req: MemoryExtractRequest, a
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "https://catura.ai",
+            "HTTP-Referer": "https://catura.duckdns.org",
         }
 
         # Model fallback chain — try in order until one succeeds
@@ -3534,7 +3534,8 @@ def call_openrouter_stream(model_id, messages, api_key, file_urls=None, vision_i
                 "messages": messages,
                 "stream": True,
                 "temperature": 1.0,
-                "max_tokens": 16000,
+                "max_completion_tokens": 33000,
+                "max_tokens": 33000,   # optional compatibility
                 **({"provider": {"order": ["OpenAI"], "allow_fallbacks": True}} if "gpt-oss" in model_id else {}),
                 # ✅ Cohere North Mini Code and Ling-3.0-flash are reasoning/thinking
                 # models — OpenRouter only runs the thinking pass when a "reasoning"
