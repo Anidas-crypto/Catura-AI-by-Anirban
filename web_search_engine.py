@@ -4437,3 +4437,116 @@ def generate_verified_answer(query: str, result: dict) -> dict:
         "citations":  result.get("citations", {}),
         "confidence": result.get("confidence", 0),
     }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PIPELINE ARCHITECTURE — explicit staged orchestration
+#
+#   Search → Retrieve → Extract → Reason
+#       → Need more evidence?
+#           yes → Search again → Repeat
+#           no  → Verify → Answer
+#
+# This is an ADDITIVE orchestrator built on top of the existing building
+# blocks — it does not change run_production_search()'s behavior or
+# contract in any way, so any existing caller of run_production_search()
+# keeps working exactly as before ("preserve compatibility with the
+# existing API"). Use run_search_pipeline() for the full staged flow
+# including verification/answer generation; use run_production_search()
+# directly when only the evidence stage is needed.
+# ══════════════════════════════════════════════════════════════════════════════
+
+PIPELINE_MAX_EVIDENCE_CYCLES = 2    # "Search again → Repeat" hard cap — no infinite loops
+PIPELINE_MIN_CONFIDENCE      = 55   # below this after Reason, evidence is considered insufficient
+
+
+def _needs_more_evidence(evidence: dict) -> bool:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    The "Need more evidence?" decision point in the pipeline. Reasons over
+    what Search → Retrieve → Extract → Reason already produced:
+      - zero results at all
+      - overall confidence below PIPELINE_MIN_CONFIDENCE
+      - unresolved contradictions (low per-entity confidence_score) that
+        weren't cleared up by the evidence gathered so far
+    Any of these signal that another Search cycle is worth trying before
+    moving on to Verify → Answer.
+    """
+    if evidence.get("result_count", 0) == 0:
+        return True
+    if evidence.get("confidence", 0) < PIPELINE_MIN_CONFIDENCE:
+        return True
+
+    cross_ref = evidence.get("cross_ref", {}) or {}
+    unresolved = [
+        c for c in cross_ref.get("contradictions", [])
+        if c.get("confidence_score", 100) < 50
+    ]
+    if unresolved:
+        return True
+
+    return False
+
+
+def run_search_pipeline(query: str) -> dict:
+    """
+    ── NEW ──────────────────────────────────────────────────────────────────
+    Explicit staged pipeline architecture:
+
+        Search → Retrieve → Extract → Reason
+            → Need more evidence?
+                yes → Search again → Repeat (bounded by PIPELINE_MAX_EVIDENCE_CYCLES)
+                no  → Verify → Answer
+
+    Stage mapping onto existing, unmodified building blocks:
+      - Search / Retrieve / Extract / Reason
+            = run_production_search() — query planning + multi-round search,
+              dedup, Firecrawl page extraction/chunking, entity/knowledge-
+              graph extraction, trust scoring, cross-reference analysis,
+              reranking, and confidence scoring
+      - Need more evidence?
+            = _needs_more_evidence() over that Reason output
+      - Search again → Repeat
+            = re-invoking run_production_search(), capped at
+              PIPELINE_MAX_EVIDENCE_CYCLES total cycles so this stage can
+              never loop indefinitely
+      - Verify → Answer
+            = generate_verified_answer() — draft answer generation, then a
+              second-pass verifier checking for unsupported claims, wrong
+              dates/numbers, hallucinations, missing citations, and
+              contradictions, revising the answer if verification fails
+
+    run_production_search() itself is completely unchanged — this function
+    only orchestrates calls to it and to generate_verified_answer(), so
+    every existing caller of either of those keeps working unmodified.
+
+    Returns:
+      {"evidence": <run_production_search() dict>,
+       "evidence_cycles": int,
+       "answer": str|None, "verified": bool, "revised": bool,
+       "issues": list[str], "citations": dict, "confidence": int}
+    """
+    evidence = run_production_search(query)   # Search → Retrieve → Extract → Reason
+    cycles = 1
+
+    while _needs_more_evidence(evidence) and cycles < PIPELINE_MAX_EVIDENCE_CYCLES:
+        print(
+            f"🔁 [Pipeline] Need more evidence (confidence={evidence.get('confidence', 0)}, "
+            f"results={evidence.get('result_count', 0)}) — searching again "
+            f"(cycle {cycles + 1}/{PIPELINE_MAX_EVIDENCE_CYCLES})"
+        )
+        evidence = run_production_search(query)   # Search again → Repeat
+        cycles += 1
+
+    verdict = generate_verified_answer(query, evidence)   # Verify → Answer
+
+    return {
+        "evidence":        evidence,
+        "evidence_cycles": cycles,
+        "answer":          verdict["answer"],
+        "verified":        verdict["verified"],
+        "revised":         verdict["revised"],
+        "issues":          verdict["issues"],
+        "citations":       verdict["citations"],
+        "confidence":      verdict["confidence"],
+    }
