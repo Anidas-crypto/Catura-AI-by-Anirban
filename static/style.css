@@ -3669,6 +3669,84 @@ html { scroll-behavior: smooth; }
     background: #0f0f0f;
 }
 
+/* ── Model search bar ── */
+.model-search-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 4px 8px 6px;
+    padding: 7px 10px;
+    background: #111;
+    border: 1px solid #2a2a2a;
+    border-radius: 8px;
+    transition: border-color 0.15s;
+}
+
+.model-search-wrap:focus-within {
+    border-color: #10a37f55;
+}
+
+.model-search-icon {
+    color: #666;
+    flex-shrink: 0;
+}
+
+.model-search-input {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #e5e5e5;
+    font-size: 13px;
+    font-family: inherit;
+}
+
+.model-search-input::placeholder {
+    color: #666;
+}
+
+.model-search-clear {
+    background: transparent;
+    border: none;
+    color: #666;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 2px 4px;
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+.model-search-clear:hover {
+    color: #ccc;
+}
+
+.model-search-results {
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.model-search-empty {
+    padding: 20px 14px;
+    text-align: center;
+    color: #666;
+    font-size: 12.5px;
+}
+
+/* ── Category / section labels ── */
+.model-category-label {
+    padding: 8px 14px 4px;
+    font-size: 10.5px;
+    font-weight: 700;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+}
+
+.model-category-label.model-search-result-label {
+    padding-top: 10px;
+}
+
 .model-option {
     display: flex;
     align-items: center;

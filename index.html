@@ -144,7 +144,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
-    <link rel="stylesheet" href="static/style.css?v=0.0.429">   <!-- this is CSS linking section -->
+    <link rel="stylesheet" href="static/style.css?v=0.0.430">   <!-- this is CSS linking section -->
     
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#000000" />
@@ -469,7 +469,26 @@
                     </button>
                     <div class="model-dropdown" id="modelDropdown">
 
+                        <!-- ── SEARCH BAR ── -->
+                        <div class="model-search-wrap">
+                            <svg class="model-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                            <input type="text" id="modelSearchInput" class="model-search-input" placeholder="Search models..." autocomplete="off" oninput="handleModelSearch(event)" onclick="event.stopPropagation()">
+                            <button class="model-search-clear" id="modelSearchClear" onclick="clearModelSearch(event)" title="Clear" style="display:none">✕</button>
+                        </div>
+
+                        <!-- ── SEARCH RESULTS (shown only while searching) ── -->
+                        <div class="model-search-results" id="modelSearchResults" style="display:none"></div>
+                        <div class="model-search-empty" id="modelSearchEmpty" style="display:none">No models match your search</div>
+
+                        <!-- ── DEFAULT CONTENT (hidden while searching) ── -->
+                        <div id="modelDropdownDefault">
+
+                        <!-- ── RECENTLY USED ── -->
+                        <div class="model-category-label" id="recentModelsLabel" style="display:none">Recently used</div>
+                        <div id="recentModelsSection"></div>
+
                         <!-- ── PRIMARY MODELS (always visible) ── -->
+                        <div class="model-category-label">Recommended</div>
                         <div class="model-option active" data-model="dagr" data-name="Dagr" onclick="selectModel('dagr', 'Dagr', event)">
                             <div class="model-option-info">
                                 <div class="model-option-name">Dagr</div>
@@ -524,6 +543,8 @@
                             <span class="model-more-label">More models</span>
                             <svg class="model-more-arrow" id="moreModelsArrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
                         </div>
+                        </div>
+                        <!-- end #modelDropdownDefault -->
                     </div>
                     <!-- end .model-dropdown -->
                 </div>
@@ -546,6 +567,7 @@
                         <svg class="model-more-arrow" id="puterModelsArrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
                     </div>
 
+                    <div class="model-category-label">Powerful & agentic</div>
                     <div class="model-option" data-model="apep" data-name="Apep" onclick="selectModel('apep', 'Apep', event)">
                         <div class="model-option-info">
                             <div class="model-option-name">Apep</div>
@@ -567,6 +589,7 @@
                         </div>
                         <div class="model-option-check">✓</div>
                     </div>
+                    <div class="model-category-label">Fast & lightweight</div>
                     <div class="model-option" data-model="nivo" data-name="Nivo" onclick="selectModel('nivo', 'Nivo', event)">
                         <div class="model-option-info">
                             <div class="model-option-name">Nivo</div>
@@ -609,6 +632,7 @@
                         </div>
                         <div class="model-option-check">✓</div>
                     </div>
+                    <div class="model-category-label">Mistral AI</div>
                     <div class="model-option" data-model="mistral_large" data-name="Mistral Large" onclick="selectModel('mistral_large', 'Mistral Large', event)">
                         <div class="model-option-info">
                             <div class="model-option-name">Mistral Large</div>
@@ -630,6 +654,7 @@
                         </div>
                         <div class="model-option-check">✓</div>
                     </div>
+                    <div class="model-category-label">Coding & agentic</div>
                     <div class="model-option" data-model="mercury2" data-name="Mercury 2" onclick="selectModel('mercury2', 'Mercury 2', event)">
                         <div class="model-option-info">
                             <div class="model-option-name">Mercury 2</div>
@@ -665,6 +690,7 @@
                         </div>
                         <div class="model-option-check">✓</div>
                     </div>
+                    <div class="model-category-label">Advanced reasoning</div>
                     <div class="model-option" data-model="nemotron" data-name="Nemotron" onclick="selectModel('nemotron', 'Nemotron', event)">
                         <div class="model-option-info">
                             <div class="model-option-name">Nemotron</div>
@@ -861,18 +887,18 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
     
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <script src="static/firebase-config.js?v=0.0.429"></script>
-    <script src="static/live-sync.js?v=0.0.429"></script>
-    <script src="static/logic.js?v=0.0.429"></script>
-    <script src="static/feedback.js?v=0.0.429"></script>
-    <script src="static/file-upload.js?v=0.0.429"></script>
+    <script src="static/firebase-config.js?v=0.0.430"></script>
+    <script src="static/live-sync.js?v=0.0.430"></script>
+    <script src="static/logic.js?v=0.0.430"></script>
+    <script src="static/feedback.js?v=0.0.430"></script>
+    <script src="static/file-upload.js?v=0.0.430"></script>
 
     <script>
         console.log('🚀 Catura AI v27.0.5 loaded');
         
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js?v=0.0.429')
+                navigator.serviceWorker.register('/service-worker.js?v=0.0.430')
                     .then(() => console.log('✅ Catura AI PWA Ready - v27.0.5'))
                     .catch((err) => console.log('❌ SW Error:', err));
             });

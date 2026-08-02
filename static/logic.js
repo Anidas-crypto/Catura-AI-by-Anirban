@@ -5248,6 +5248,13 @@ window.toggleModelSelector = function (e) {
     closeAllModelMenus();
 
     if (!isOpen) {
+        renderRecentModels();
+        const searchInput = document.getElementById('modelSearchInput');
+        if (searchInput) {
+            searchInput.value = '';
+            handleModelSearch({ target: searchInput });
+        }
+
         const isMobile = window.innerWidth <= 768;
 
         if (isMobile) {
@@ -5324,9 +5331,134 @@ window.toggleModelSelector = function (e) {
     }
 };
 
+// ── RECENTLY USED MODELS ──────────────────────────────────────────
+const RECENT_MODELS_KEY = 'catura_recent_models';
+const RECENT_MODELS_MAX = 3;
+
+function getRecentModels() {
+    try {
+        return JSON.parse(localStorage.getItem(RECENT_MODELS_KEY)) || [];
+    } catch (e) { return []; }
+}
+
+function saveRecentModel(modelId, modelName) {
+    let list = getRecentModels().filter(m => m.id !== modelId);
+    list.unshift({ id: modelId, name: modelName });
+    list = list.slice(0, RECENT_MODELS_MAX);
+    try { localStorage.setItem(RECENT_MODELS_KEY, JSON.stringify(list)); } catch (e) {}
+}
+
+function renderRecentModels() {
+    const section = document.getElementById('recentModelsSection');
+    const label = document.getElementById('recentModelsLabel');
+    if (!section || !label) return;
+
+    const list = getRecentModels();
+    // Don't show a "recent" entry for the model that's already the default/current pick
+    section.innerHTML = '';
+    if (!list.length) {
+        label.style.display = 'none';
+        return;
+    }
+    label.style.display = '';
+    list.forEach(m => {
+        const original = document.querySelector(`.model-option[data-model="${m.id}"]`);
+        const desc = original ? original.querySelector('.model-option-desc')?.textContent || '' : '';
+        const div = document.createElement('div');
+        div.className = 'model-option' + (m.id === selectedModel ? ' active' : '');
+        div.setAttribute('data-model', m.id);
+        div.setAttribute('data-name', m.name);
+        div.onclick = (e) => selectModel(m.id, m.name, e);
+        div.innerHTML = `
+            <div class="model-option-info">
+                <div class="model-option-name">${m.name}</div>
+                ${desc ? `<div class="model-option-desc">${desc}</div>` : ''}
+            </div>
+            <div class="model-option-check">✓</div>`;
+        section.appendChild(div);
+    });
+}
+
+// ── MODEL SEARCH ───────────────────────────────────────────────────
+function getAllModelOptionsData() {
+    const nodes = document.querySelectorAll('#modelDropdownDefault .model-option, #moreModelsPanel .model-option, #puterModelsPanel .model-option');
+    const seen = new Set();
+    const data = [];
+    nodes.forEach(el => {
+        const id = el.getAttribute('data-model');
+        if (!id || seen.has(id)) return;
+        seen.add(id);
+        data.push({
+            id,
+            name: el.getAttribute('data-name') || el.querySelector('.model-option-name')?.textContent || id,
+            desc: el.querySelector('.model-option-desc')?.textContent || ''
+        });
+    });
+    return data;
+}
+
+window.handleModelSearch = function (e) {
+    const query = e.target.value.trim().toLowerCase();
+    const clearBtn = document.getElementById('modelSearchClear');
+    const resultsEl = document.getElementById('modelSearchResults');
+    const emptyEl = document.getElementById('modelSearchEmpty');
+    const defaultEl = document.getElementById('modelDropdownDefault');
+    if (clearBtn) clearBtn.style.display = query ? '' : 'none';
+
+    if (!query) {
+        if (resultsEl) resultsEl.style.display = 'none';
+        if (emptyEl) emptyEl.style.display = 'none';
+        if (defaultEl) defaultEl.style.display = '';
+        // Also close any open floating sub-panels since we're back to default view
+        const morePanel = document.getElementById('moreModelsPanel');
+        const puterPanel = document.getElementById('puterModelsPanel');
+        if (morePanel) morePanel.classList.remove('open');
+        if (puterPanel) puterPanel.classList.remove('open');
+        return;
+    }
+
+    if (defaultEl) defaultEl.style.display = 'none';
+    const morePanel = document.getElementById('moreModelsPanel');
+    const puterPanel = document.getElementById('puterModelsPanel');
+    if (morePanel) morePanel.classList.remove('open');
+    if (puterPanel) puterPanel.classList.remove('open');
+
+    const matches = getAllModelOptionsData().filter(m =>
+        m.name.toLowerCase().includes(query) || m.desc.toLowerCase().includes(query)
+    );
+
+    if (!resultsEl) return;
+    if (!matches.length) {
+        resultsEl.style.display = 'none';
+        if (emptyEl) emptyEl.style.display = '';
+        return;
+    }
+    if (emptyEl) emptyEl.style.display = 'none';
+    resultsEl.style.display = '';
+    resultsEl.innerHTML = matches.map(m => `
+        <div class="model-option${m.id === selectedModel ? ' active' : ''}" data-model="${m.id}" data-name="${m.name}" onclick="selectModel('${m.id}', '${m.name.replace(/'/g, "\\'")}', event)">
+            <div class="model-option-info">
+                <div class="model-option-name">${m.name}</div>
+                ${m.desc ? `<div class="model-option-desc">${m.desc}</div>` : ''}
+            </div>
+            <div class="model-option-check">✓</div>
+        </div>`).join('');
+};
+
+window.clearModelSearch = function (e) {
+    if (e) e.stopPropagation();
+    const input = document.getElementById('modelSearchInput');
+    if (input) {
+        input.value = '';
+        input.focus();
+        handleModelSearch({ target: input });
+    }
+};
+
 window.selectModel = function (modelId, modelName, e) {
     if (e) e.stopPropagation();
     selectedModel = modelId.toLowerCase();
+    saveRecentModel(selectedModel, modelName);
 
     const modelNameEl = document.getElementById('modelName');
     if (modelNameEl) modelNameEl.textContent = modelName;
