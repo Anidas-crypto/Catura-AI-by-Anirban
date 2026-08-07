@@ -5262,6 +5262,7 @@ const MODEL_ICONS = {
     mistral_small:  'mistral.png',
     nemotron:       'nvidia.png',
     n_nano:         'nvidia.png',
+    nivo:           'groq.png',
     omni:           'nvidia.png',
     stepfun3:       'stepfun.png',
     claude_puter:   'claude.png',
