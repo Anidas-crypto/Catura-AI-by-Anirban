@@ -5239,6 +5239,68 @@ function initWebSearchUI() {
 // ============================
 let selectedModel = 'dagr'; // Default model — options: dagr, apep, sambhav, Gemma4, nivo, Laguna
 
+// ── MODEL ICONS (dropdown list only — the selector button stays plain text) ──
+const MODEL_ICONS = {
+    dagr:           'openai.png',
+    sambhav:        'meta.png',
+    gemini35flash:  'gemini.png',
+    agnes:          'agnes-.jpg',
+    apep:           'openai.png',
+    cohere:         'Cohere.png',
+    gemma:          'google.png',
+    gemma4:         'google.png',
+    glm:            'GLM.png',
+    glm52:          'GLM.png',
+    laguna:         'poolside.ico',
+    laguna_core:    'poolside.ico',
+    laguna_s:       'poolside.ico',
+    ling:           'ling.png',
+    mercury2:       'Mercury.png',
+    minimax_m3:     'minimax.png',
+    mistral_large:  'mistral.png',
+    mistral_medium: 'mistral.png',
+    mistral_small:  'mistral.png',
+    nemotron:       'nvidia.png',
+    n_nano:         'nvidia.png',
+    omni:           'nvidia.png',
+    stepfun3:       'stepfun.png',
+    claude_puter:   'claude.png',
+    gpt5_puter:     'openai.png',
+    gemini_puter:   'gemini.png',
+    grok_puter:     'grok.png'
+};
+
+function getModelIconUrl(modelId) {
+    const file = MODEL_ICONS[(modelId || '').toLowerCase()];
+    return file ? `static/icons/${file}` : null;
+}
+
+function modelIconHtml(modelId) {
+    const url = getModelIconUrl(modelId);
+    if (!url) return '';
+    return `<img src="${url}" class="model-option-icon" alt="" onerror="this.remove()">`;
+}
+
+// Decorate the static .model-option elements already in the HTML (default
+// list, "more models" panel, "puter models" panel) with icons in front of
+// the name. Runs once on load — selecting a model never touches this,
+// so the model-selector button keeps showing plain text only.
+function applyModelOptionIcons(root) {
+    (root || document).querySelectorAll('.model-option[data-model]').forEach(opt => {
+        if (opt.querySelector('.model-option-icon')) return; // already has one
+        const url = getModelIconUrl(opt.getAttribute('data-model'));
+        if (!url) return;
+        const img = document.createElement('img');
+        img.src = url;
+        img.className = 'model-option-icon';
+        img.alt = '';
+        img.onerror = function () { this.remove(); };
+        opt.insertBefore(img, opt.firstChild);
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => applyModelOptionIcons());
+
 window.toggleModelSelector = function (e) {
     e.stopPropagation();
     const dropdown = document.getElementById('modelDropdown');
@@ -5370,6 +5432,7 @@ function renderRecentModels() {
         div.setAttribute('data-name', m.name);
         div.onclick = (e) => selectModel(m.id, m.name, e);
         div.innerHTML = `
+            ${modelIconHtml(m.id)}
             <div class="model-option-info">
                 <div class="model-option-name">${m.name}</div>
                 ${desc ? `<div class="model-option-desc">${desc}</div>` : ''}
@@ -5437,6 +5500,7 @@ window.handleModelSearch = function (e) {
     resultsEl.style.display = '';
     resultsEl.innerHTML = matches.map(m => `
         <div class="model-option${m.id === selectedModel ? ' active' : ''}" data-model="${m.id}" data-name="${m.name}" onclick="selectModel('${m.id}', '${m.name.replace(/'/g, "\\'")}', event)">
+            ${modelIconHtml(m.id)}
             <div class="model-option-info">
                 <div class="model-option-name">${m.name}</div>
                 ${m.desc ? `<div class="model-option-desc">${m.desc}</div>` : ''}

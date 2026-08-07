@@ -3777,6 +3777,17 @@ html { scroll-behavior: smooth; }
     color: #10a37f;
 }
 
+.model-option-icon {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    object-fit: contain;
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.06);
+    padding: 3px;
+    box-sizing: border-box;
+}
+
 .model-option-info {
     flex: 1;
     min-width: 0;
