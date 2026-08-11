@@ -864,7 +864,7 @@ def share_page(slug: str):
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.433"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.434"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -874,7 +874,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.433", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.434", "timestamp": datetime.utcnow().isoformat()}
 
 # ── 🧠 MEMORY MODELS ────────────────────────────────────────────────────────
 from pydantic import BaseModel as _MemBaseModel
@@ -4463,7 +4463,7 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
             "cohere":       ["cohere/north-mini-code:free"],
             "n_nano":  ["nvidia/nemotron-nano-12b-v2-vl:free"],
             "omni":    ["nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"],
-            "ling":    ["inclusionai/ling-3.0-flash:free"],  # OpenRouter — hybrid reasoning/thinking model
+            "ling":    ["inclusionai/ling-3.0-tiny:free"],  # OpenRouter — hybrid reasoning/thinking model
         }
         model_key  = model.strip()
         model_pool = model_pools.get(model_key, model_pools["dagr"])
@@ -6920,7 +6920,7 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
             "nemotron":["nvidia/nemotron-3-ultra-550b-a55b:free"],
             "n_nano":["nvidia/nemotron-nano-12b-v2-vl:free"],
             "omni": ["nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"],
-            "ling": ["inclusionai/ling-3.0-flash:free"],  # OpenRouter — hybrid reasoning/thinking model
+            "ling": ["inclusionai/ling-3.0-tiny:free"],  # OpenRouter — hybrid reasoning/thinking model
         }
         model_key  = model.strip()
         model_pool = model_pools.get(model_key, model_pools["dagr"])
