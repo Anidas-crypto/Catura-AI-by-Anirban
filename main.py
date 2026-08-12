@@ -865,7 +865,7 @@ def share_page(slug: str):
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.435"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.436"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -875,7 +875,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.435", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.436", "timestamp": datetime.utcnow().isoformat()}
 
 # ── 🧠 MEMORY MODELS ────────────────────────────────────────────────────────
 from pydantic import BaseModel as _MemBaseModel
@@ -4027,7 +4027,7 @@ def call_opencode_deepseek_stream(messages, api_key):
                 "Content-Type": "application/json",
             },
             json={
-                "model": "deepseek-v4-flash",
+                "model": "deepseek-v4-flash-free",
                 "messages": messages,
                 "stream": True,
                 "temperature": 0.7,
