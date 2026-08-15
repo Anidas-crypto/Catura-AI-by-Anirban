@@ -865,7 +865,7 @@ def share_page(slug: str):
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.439"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.440"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -875,7 +875,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.439", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.440", "timestamp": datetime.utcnow().isoformat()}
 
 # ── 🧠 MEMORY MODELS ────────────────────────────────────────────────────────
 from pydantic import BaseModel as _MemBaseModel
@@ -3766,7 +3766,7 @@ def call_groq_stream(messages, api_key):
                 "messages": messages,
                 "stream": True,
                 "temperature": 0.3,
-                "max_completion_tokens": 9000,
+                "max_completion_tokens": 8000,
             },
             stream=True,
             timeout=(10, 120),
