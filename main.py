@@ -865,7 +865,7 @@ def share_page(slug: str):
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.436"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.437"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -875,7 +875,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.436", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.437", "timestamp": datetime.utcnow().isoformat()}
 
 # ── 🧠 MEMORY MODELS ────────────────────────────────────────────────────────
 from pydantic import BaseModel as _MemBaseModel
