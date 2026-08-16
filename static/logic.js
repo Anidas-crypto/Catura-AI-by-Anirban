@@ -1584,26 +1584,7 @@ function formatMessage(rawText) {
     const codeBlocks = [];
     let text = rawText.replace(/```([\w+\-#. ]*)\n?([\s\S]*?)```/g, (_match, lang, code) => {
         const language = lang.trim() || "text";
-        const escapedCode = code
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;");
-        codeBlocks.push(`<div class="code-block">
-            <div class="code-header">
-                <div class="mac-dots" aria-hidden="true">
-                    <span class="mac-dot mac-dot-red"></span>
-                    <span class="mac-dot mac-dot-yellow"></span>
-                    <span class="mac-dot mac-dot-green"></span>
-                </div>
-                <span class="lang-label">${language}</span>
-                <button class="copy-btn" onclick="copyCode(this)">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                    </svg><span class="copy-btn-label">Copy</span></button>
-            </div>
-            <pre><code>${escapedCode.trimEnd()}</code></pre>
-        </div>`);
+        codeBlocks.push(renderCodeArtifactBlock(code.replace(/\n+$/,""), language));
         return `\x00CODE${codeBlocks.length - 1}\x00`;
     });
 
@@ -1852,6 +1833,152 @@ function applyInline(text) {
     text = text.replace(/\x01IC(\d+)\x01/g, (_, i) => inlineCode[+i]);
     return text;
 }
+
+// ============================
+// 🖊️ CODE ARTIFACT — Claude / GLM style "writing" summary row + side panel
+// ============================
+window.__codeArtifacts = window.__codeArtifacts || {};
+let _codeArtifactSeq = 0;
+
+const LANG_DISPLAY_NAMES = {
+    js: "JavaScript", javascript: "JavaScript", jsx: "JSX", ts: "TypeScript",
+    tsx: "TSX", py: "Python", python: "Python", html: "HTML", css: "CSS",
+    json: "JSON", java: "Java", c: "C", cpp: "C++", "c++": "C++", cs: "C#",
+    go: "Go", rs: "Rust", rb: "Ruby", php: "PHP", swift: "Swift", kt: "Kotlin",
+    sh: "Shell", bash: "Bash", xml: "XML", yaml: "YAML", yml: "YAML",
+    toml: "TOML", md: "Markdown", sql: "SQL", text: "Plain Text"
+};
+
+function langDisplayName(lang) {
+    const key = (lang || "text").toLowerCase();
+    return LANG_DISPLAY_NAMES[key] || (lang ? lang.charAt(0).toUpperCase() + lang.slice(1) : "Plain Text");
+}
+
+// Builds the collapsed "pencil / writing" row shown inline in the chat,
+// and registers the full code so the side panel can render it on click.
+function renderCodeArtifactBlock(code, language) {
+    const id = `artifact-${Date.now()}-${_codeArtifactSeq++}`;
+    const lineCount = code.length ? code.split("\n").length : 0;
+    window.__codeArtifacts[id] = { code, language: language || "text" };
+
+    return `<div class="code-artifact-row" id="${id}" onclick="openCodeArtifact('${id}')" role="button" tabindex="0">
+        <span class="code-artifact-pen" aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 20h9"/>
+                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+            </svg>
+        </span>
+        <span class="code-artifact-label">Wrote code</span>
+        <span class="code-artifact-lang">${langDisplayName(language)}</span>
+        ${lineCount ? `<span class="code-artifact-diff"><span class="diff-add">+${lineCount}</span></span>` : ""}
+        <svg class="code-artifact-chevron" width="10" height="10" viewBox="0 0 10 10" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M2 1l5 4-5 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+    </div>`;
+}
+
+// Live-updates a code-artifact row's line/diff count while text is still streaming in.
+function updateCodeArtifactStreaming(id, code) {
+    const entry = window.__codeArtifacts[id];
+    if (!entry) return;
+    entry.code = code;
+    const row = document.getElementById(id);
+    if (!row) return;
+    const diffEl = row.querySelector(".code-artifact-diff");
+    const lineCount = code.length ? code.split("\n").length : 0;
+    if (diffEl) {
+        diffEl.innerHTML = `<span class="diff-add">+${lineCount}</span>`;
+    }
+    // If the panel for this exact artifact is currently open, keep it live too.
+    const panel = document.getElementById("codeArtifactPanel");
+    if (panel && panel.dataset.activeId === id) {
+        const codeEl = document.getElementById("codeArtifactPanelCode");
+        if (codeEl) codeEl.textContent = code;
+    }
+}
+
+function openCodeArtifact(id) {
+    const entry = window.__codeArtifacts[id];
+    if (!entry) return;
+    const panel = document.getElementById("codeArtifactPanel");
+    const overlay = document.getElementById("codeArtifactPanelOverlay");
+    if (!panel) return;
+
+    panel.dataset.activeId = id;
+    document.getElementById("codeArtifactPanelLang").textContent = langDisplayName(entry.language);
+    document.getElementById("codeArtifactPanelCode").textContent = entry.code;
+    document.getElementById("codeArtifactPanelCode").className = `language-${(entry.language || "text").toLowerCase()}`;
+
+    panel.classList.add("open");
+    if (overlay) overlay.classList.add("open");
+    document.body.classList.add("code-artifact-panel-open");
+}
+
+function closeCodeArtifactPanel() {
+    const panel = document.getElementById("codeArtifactPanel");
+    const overlay = document.getElementById("codeArtifactPanelOverlay");
+    if (panel) { panel.classList.remove("open"); panel.classList.remove("expanded"); panel.dataset.activeId = ""; }
+    if (overlay) overlay.classList.remove("open");
+    document.body.classList.remove("code-artifact-panel-open");
+}
+
+function toggleCodeArtifactExpand() {
+    const panel = document.getElementById("codeArtifactPanel");
+    if (!panel) return;
+    panel.classList.toggle("expanded");
+}
+
+function copyArtifactCode() {
+    const panel = document.getElementById("codeArtifactPanel");
+    const id = panel && panel.dataset.activeId;
+    const entry = id && window.__codeArtifacts[id];
+    if (!entry) return;
+    const btn = document.getElementById("codeArtifactCopyBtn");
+    navigator.clipboard.writeText(entry.code).then(() => {
+        if (btn) {
+            const original = btn.innerHTML;
+            btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+            setTimeout(() => { btn.innerHTML = original; }, 1500);
+        }
+    }).catch(() => showToast("Failed to copy code"));
+}
+
+// Drag-to-resize handle on the left edge of the side panel.
+(function initCodeArtifactResize() {
+    document.addEventListener("DOMContentLoaded", () => {
+        const handle = document.getElementById("codeArtifactResizeHandle");
+        const panel = document.getElementById("codeArtifactPanel");
+        if (!handle || !panel) return;
+        let dragging = false;
+
+        const onMove = (e) => {
+            if (!dragging) return;
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            let newWidth = window.innerWidth - clientX;
+            newWidth = Math.max(320, Math.min(newWidth, window.innerWidth - 280));
+            panel.style.width = `${newWidth}px`;
+        };
+        const onUp = () => {
+            dragging = false;
+            document.body.classList.remove("code-artifact-resizing");
+        };
+
+        handle.addEventListener("mousedown", (e) => {
+            dragging = true;
+            e.preventDefault();
+            document.body.classList.add("code-artifact-resizing");
+        });
+        handle.addEventListener("touchstart", (e) => {
+            dragging = true;
+            document.body.classList.add("code-artifact-resizing");
+        }, { passive: true });
+
+        document.addEventListener("mousemove", onMove);
+        document.addEventListener("touchmove", onMove, { passive: true });
+        document.addEventListener("mouseup", onUp);
+        document.addEventListener("touchend", onUp);
+    });
+})();
 
 // ============================
 // 📋 COPY CODE

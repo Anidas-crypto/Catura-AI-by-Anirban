@@ -144,7 +144,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
-    <link rel="stylesheet" href="static/style.css?v=0.0.445">   <!-- this is CSS linking section -->
+    <link rel="stylesheet" href="static/style.css?v=0.0.446">   <!-- this is CSS linking section -->
     
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#000000" />
@@ -882,6 +882,33 @@
         </div>
     </div>
 
+    <!-- 🖊️ CODE ARTIFACT SIDE PANEL (Claude / GLM style split view) -->
+    <div id="codeArtifactPanelOverlay" class="code-artifact-panel-overlay" onclick="closeCodeArtifactPanel()"></div>
+    <div id="codeArtifactPanel" class="code-artifact-panel">
+        <div class="code-artifact-resize-handle" id="codeArtifactResizeHandle" title="Drag to resize"></div>
+        <div class="code-artifact-panel-header">
+            <span class="code-artifact-panel-lang" id="codeArtifactPanelLang">Code</span>
+            <div class="code-artifact-panel-actions">
+                <button class="code-artifact-panel-btn" id="codeArtifactCopyBtn" onclick="copyArtifactCode()" title="Copy code">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                    </svg>
+                </button>
+                <button class="code-artifact-panel-btn" onclick="toggleCodeArtifactExpand()" title="Expand panel">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+                        <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+                    </svg>
+                </button>
+                <button class="code-artifact-panel-btn code-artifact-panel-close" onclick="closeCodeArtifactPanel()" title="Close">✕</button>
+            </div>
+        </div>
+        <div class="code-artifact-panel-body">
+            <pre><code id="codeArtifactPanelCode"></code></pre>
+        </div>
+    </div>
+
     <!-- 🟣 Puter.js — powers the Claude Sonnet model option (frontend-only, no API key) -->
     <script src="https://js.puter.com/v2/"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -889,18 +916,18 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
     
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <script src="static/firebase-config.js?v=0.0.445"></script>
-    <script src="static/live-sync.js?v=0.0.445"></script>
-    <script src="static/logic.js?v=0.0.445"></script>
-    <script src="static/feedback.js?v=0.0.445"></script>
-    <script src="static/file-upload.js?v=0.0.445"></script>
+    <script src="static/firebase-config.js?v=0.0.446"></script>
+    <script src="static/live-sync.js?v=0.0.446"></script>
+    <script src="static/logic.js?v=0.0.446"></script>
+    <script src="static/feedback.js?v=0.0.446"></script>
+    <script src="static/file-upload.js?v=0.0.446"></script>
 
     <script>
         console.log('🚀 Catura AI v27.0.5 loaded');
         
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js?v=0.0.445')
+                navigator.serviceWorker.register('/service-worker.js?v=0.0.446')
                     .then(() => console.log('✅ Catura AI PWA Ready - v27.0.5'))
                     .catch((err) => console.log('❌ SW Error:', err));
             });
