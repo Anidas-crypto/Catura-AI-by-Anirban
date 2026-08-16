@@ -865,7 +865,7 @@ def share_page(slug: str):
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.443"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.444"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -875,7 +875,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.443", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.444", "timestamp": datetime.utcnow().isoformat()}
 
 # ── 🧠 MEMORY MODELS ────────────────────────────────────────────────────────
 from pydantic import BaseModel as _MemBaseModel
@@ -922,6 +922,282 @@ class SkillToggleRequest(_MemBaseModel):
 
 class SkillDeleteRequest(_MemBaseModel):
     skill_id: str
+
+
+# ============================================================
+# ✅ CONNECTORS FEATURE — MCP (Model Context Protocol) integration
+# Lets the user connect external tools/data sources to Catura, the same
+# way Claude.ai / ChatGPT "Connectors" work:
+#   - "Popular" built-in connectors (Gmail, Google Drive, Slack) — OAuth.
+#     Wired end-to-end (authorize-URL builder + callback token exchange);
+#     just needs real OAuth app credentials in env vars to go live (see
+#     _BUILTIN_CONNECTORS below for which env vars each one needs).
+#   - "Custom connector" — user pastes a Remote MCP server URL. Catura
+#     performs a real MCP JSON-RPC handshake (initialize → tools/list)
+#     right when it's added, stores the discovered tools, and — for every
+#     chat message afterwards — checks if any connected connector's tools
+#     are relevant (same lightweight keyword-overlap router already used
+#     for Skills), calls the matching tool live over MCP (tools/call), and
+#     feeds the result into the model's context so it can actually use it.
+# ============================================================
+
+class ConnectorCustomAddRequest(_MemBaseModel):
+    name: str
+    mcp_url: str
+    oauth_client_id: str | None = None
+    oauth_client_secret: str | None = None
+
+
+class ConnectorIdRequest(_MemBaseModel):
+    connector_id: str
+
+
+class ConnectorBuiltinConnectRequest(_MemBaseModel):
+    provider: str  # "gmail" | "google_drive" | "slack" | "github"
+
+
+# ── Built-in "popular" connector catalog ────────────────────────────────
+# Each entry's OAuth env vars are read lazily (at connect-time), so adding
+# real credentials later just works — no code changes needed.
+_BUILTIN_CONNECTORS = {
+    "gmail": {
+        "name": "Gmail",
+        "icon": "gmail",
+        "authorize_url": "https://accounts.google.com/o/oauth2/v2/auth",
+        "token_url": "https://oauth2.googleapis.com/token",
+        "scope": "https://www.googleapis.com/auth/gmail.readonly",
+        "client_id_env": "GMAIL_OAUTH_CLIENT_ID",
+        "client_secret_env": "GMAIL_OAUTH_CLIENT_SECRET",
+    },
+    "google_drive": {
+        "name": "Google Drive",
+        "icon": "google_drive",
+        "authorize_url": "https://accounts.google.com/o/oauth2/v2/auth",
+        "token_url": "https://oauth2.googleapis.com/token",
+        "scope": "https://www.googleapis.com/auth/drive.readonly",
+        "client_id_env": "GDRIVE_OAUTH_CLIENT_ID",
+        "client_secret_env": "GDRIVE_OAUTH_CLIENT_SECRET",
+    },
+    "slack": {
+        "name": "Slack",
+        "icon": "slack",
+        "authorize_url": "https://slack.com/oauth/v2/authorize",
+        "token_url": "https://slack.com/api/oauth.v2.access",
+        "scope": "channels:read,chat:write,users:read",
+        "client_id_env": "SLACK_OAUTH_CLIENT_ID",
+        "client_secret_env": "SLACK_OAUTH_CLIENT_SECRET",
+    },
+    "github": {
+        "name": "GitHub Integration",
+        "icon": "github",
+        "authorize_url": "https://github.com/login/oauth/authorize",
+        "token_url": "https://github.com/login/oauth/access_token",
+        "scope": "repo read:user",
+        "client_id_env": "GITHUB_OAUTH_CLIENT_ID",
+        "client_secret_env": "GITHUB_OAUTH_CLIENT_SECRET",
+    },
+}
+
+
+def _connector_public_row(row: dict) -> dict:
+    """Strips secrets (tokens, oauth client secret) before sending a connector row to the client."""
+    return {
+        "id": row.get("id"),
+        "name": row.get("name"),
+        "provider": row.get("provider"),
+        "type": row.get("type"),
+        "mcp_url": row.get("mcp_url"),
+        "status": row.get("status", "not_connected"),
+        "tool_count": len(row.get("tools") or []),
+        "created_at": row.get("created_at"),
+    }
+
+
+# ── MCP JSON-RPC client ─────────────────────────────────────────────────
+# Minimal client for the Model Context Protocol's streamable-HTTP transport:
+# every call is a single JSON-RPC 2.0 request POSTed to the server's URL.
+# https://modelcontextprotocol.io/specification — "initialize", "tools/list",
+# and "tools/call" are the three methods Catura needs for a working connector.
+_MCP_PROTOCOL_VERSION = "2025-06-18"
+
+
+async def _mcp_rpc(url: str, method: str, params: dict | None, headers: dict | None = None):
+    """Sends one JSON-RPC 2.0 request to a remote MCP server. Returns (result, error)."""
+    payload = {
+        "jsonrpc": "2.0",
+        "id": str(uuid.uuid4()),
+        "method": method,
+        "params": params or {},
+    }
+    req_headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
+    }
+    if headers:
+        req_headers.update(headers)
+    try:
+        resp = await anyio.to_thread.run_sync(
+            lambda: _http.post(url, json=payload, headers=req_headers, timeout=20)
+        )
+        if resp.status_code >= 400:
+            return None, f"MCP server returned HTTP {resp.status_code}"
+        # Servers may reply as plain JSON or as an SSE event containing JSON —
+        # handle both so this works against any spec-compliant MCP server.
+        ctype = resp.headers.get("content-type", "")
+        if "text/event-stream" in ctype:
+            data_line = next(
+                (l[5:].strip() for l in resp.text.splitlines() if l.startswith("data:")), None
+            )
+            if not data_line:
+                return None, "Empty MCP stream response"
+            body = json.loads(data_line)
+        else:
+            body = resp.json()
+        if "error" in body:
+            return None, body["error"].get("message", "MCP server returned an error")
+        return body.get("result"), None
+    except requests.exceptions.Timeout:
+        return None, "MCP server timed out"
+    except (requests.exceptions.RequestException, ValueError, json.JSONDecodeError) as e:
+        return None, f"MCP connection failed: {e}"
+    except Exception as e:
+        _log_unexpected("_mcp_rpc", e)
+        return None, "MCP connection failed"
+
+
+async def mcp_handshake_and_list_tools(url: str, headers: dict | None = None):
+    """
+    Full connection test used when a custom connector is added:
+    initialize → notifications/initialized → tools/list.
+    Returns (tools_list, error).
+    """
+    init_result, err = await _mcp_rpc(url, "initialize", {
+        "protocolVersion": _MCP_PROTOCOL_VERSION,
+        "capabilities": {},
+        "clientInfo": {"name": "Catura AI", "version": "0.0.444"},
+    }, headers)
+    if err:
+        return None, err
+
+    # Best-effort — some servers require this notification before tools/list,
+    # but per spec it has no response, so we don't treat a failure as fatal.
+    try:
+        await anyio.to_thread.run_sync(lambda: _http.post(
+            url,
+            json={"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}},
+            headers={"Content-Type": "application/json"},
+            timeout=10,
+        ))
+    except Exception:
+        pass
+
+    tools_result, err = await _mcp_rpc(url, "tools/list", {}, headers)
+    if err:
+        return None, err
+    return (tools_result or {}).get("tools", []), None
+
+
+async def mcp_call_tool(url: str, tool_name: str, arguments: dict, headers: dict | None = None):
+    """Invokes one tool on a remote MCP server. Returns (result_text, error)."""
+    result, err = await _mcp_rpc(url, "tools/call", {
+        "name": tool_name,
+        "arguments": arguments or {},
+    }, headers)
+    if err:
+        return None, err
+    content = (result or {}).get("content", [])
+    text_parts = [c.get("text", "") for c in content if isinstance(c, dict) and c.get("type") == "text"]
+    return "\n".join(text_parts).strip() or "(tool returned no text output)", None
+
+
+def _connector_headers(row: dict) -> dict:
+    """Builds auth headers for calling a connector's MCP server, if it has an access token."""
+    token = row.get("access_token")
+    return {"Authorization": f"Bearer {token}"} if token else {}
+
+
+async def get_matching_connector_tool(user_id: str, prompt: str):
+    """
+    Same lightweight keyword-overlap router used for Skills (see
+    get_matching_skills above), applied to connected connectors' MCP tools
+    instead. Returns (connector_row, tool_dict) for the best match, or
+    (None, None) if nothing relevant is connected.
+    """
+    try:
+        def _load():
+            return _supabase_admin.table("connectors") \
+                .select("id, name, mcp_url, provider, type, status, access_token, tools") \
+                .eq("user_id", user_id).eq("status", "connected").execute()
+        rows = (await _db(_load)).data or []
+        if not rows:
+            return None, None
+
+        lower_prompt = prompt.lower()
+        prompt_words = {w for w in re.findall(r"[a-z0-9]+", lower_prompt) if len(w) > 3}
+        if not prompt_words:
+            return None, None
+
+        best = None
+        best_score = 0
+        for row in rows:
+            for tool in (row.get("tools") or []):
+                haystack = f"{tool.get('name','')} {tool.get('description','')}".lower()
+                tool_words = {w for w in re.findall(r"[a-z0-9]+", haystack) if len(w) > 3}
+                overlap = len(prompt_words & tool_words)
+                if overlap > best_score:
+                    best_score, best = overlap, (row, tool)
+        return best if best else (None, None)
+    except Exception as e:
+        _log_unexpected("Connectors routing (non-fatal, skipping)", e)
+        return None, None
+
+
+def _first_string_param(tool: dict) -> str | None:
+    """Finds the first string-typed parameter name in a tool's inputSchema, if any."""
+    schema = tool.get("inputSchema") or {}
+    props = schema.get("properties") or {}
+    for pname, pdef in props.items():
+        if isinstance(pdef, dict) and pdef.get("type") == "string":
+            return pname
+    return None
+
+
+async def run_connector_tool(user_id: str, prompt: str):
+    """
+    Finds and calls the best-matching connected connector tool for this
+    message. Heuristic (matches this app's existing single-shot tool
+    design — see run_tool() below): if the tool takes zero required
+    parameters, call it with none; if its first parameter is a plain
+    string, pass the user's message into it. Anything more structured
+    than that is skipped rather than guessed at.
+    Returns a dict shaped like the other tool_*() results, or None.
+    """
+    row, tool = await get_matching_connector_tool(user_id, prompt)
+    if not row or not tool:
+        return None
+
+    schema = tool.get("inputSchema") or {}
+    required = schema.get("required") or []
+    args = {}
+    if required:
+        str_param = _first_string_param(tool)
+        if str_param and str_param in required and len(required) == 1:
+            args = {str_param: prompt}
+        else:
+            # Tool needs structured args we can't safely guess — skip silently.
+            return None
+
+    text, err = await mcp_call_tool(row["mcp_url"], tool["name"], args, _connector_headers(row))
+    if err:
+        logger.warning(f"⚠️ [Connector] '{row.get('name')}' tool '{tool.get('name')}' call failed: {err}")
+        return None
+    return {
+        "tool": "connector",
+        "connector_name": row.get("name"),
+        "tool_name": tool.get("name"),
+        "output": text,
+    }
+
 
 
 def _parse_skill_md(raw: str, fallback_name: str = "Untitled Skill") -> dict:
@@ -1139,6 +1415,318 @@ async def delete_skill(request: Request, id: str, auth: dict = Depends(require_a
     except Exception as e:
         _log_unexpected("Skills delete", e)
         return JSONResponse({"ok": False, "error": _client_safe_error(e, "Skills delete")}, status_code=500)
+
+# ── 🔌 CONNECTORS ENDPOINTS ───────────────────────────────────────────────────
+# Data layer note: needs a `connectors` table in Supabase with columns:
+#   id uuid pk default gen_random_uuid(), user_id uuid, name text,
+#   provider text, type text ('builtin'|'custom'), mcp_url text,
+#   oauth_client_id text, oauth_client_secret text, access_token text,
+#   refresh_token text, status text default 'not_connected', tools jsonb,
+#   oauth_state text, created_at timestamptz default now(),
+#   updated_at timestamptz default now()
+# (RLS: users can only select/insert/update/delete rows where user_id = auth.uid())
+
+@app.get("/api/connectors/list")
+@limiter.limit("30/minute")
+async def list_connectors(request: Request, auth: dict = Depends(require_auth)):
+    """
+    Returns the full connector list the settings UI renders: the 4 built-in
+    providers (status pulled from the user's row if they've connected one)
+    plus every custom MCP connector the user has added.
+    """
+    try:
+        user_id = auth["user_id"]
+
+        def _load():
+            return _supabase_admin.table("connectors") \
+                .select("id, name, provider, type, mcp_url, status, tools, created_at") \
+                .eq("user_id", user_id).order("created_at", desc=True).execute()
+
+        rows = (await _db(_load)).data or []
+        by_provider = {r["provider"]: r for r in rows if r.get("type") == "builtin" and r.get("provider")}
+        custom_rows = [r for r in rows if r.get("type") == "custom"]
+
+        popular = []
+        for provider, meta in _BUILTIN_CONNECTORS.items():
+            existing = by_provider.get(provider)
+            popular.append({
+                "id": existing["id"] if existing else None,
+                "provider": provider,
+                "name": meta["name"],
+                "icon": meta["icon"],
+                "type": "builtin",
+                "status": existing["status"] if existing else "not_connected",
+                "configured": bool(os.getenv(meta["client_id_env"])),
+            })
+
+        custom = [_connector_public_row(r) for r in custom_rows]
+        return JSONResponse({"ok": True, "popular": popular, "custom": custom})
+    except Exception as e:
+        _log_unexpected("Connectors list", e)
+        return JSONResponse({"ok": False, "popular": [], "custom": []})
+
+
+@app.post("/api/connectors/custom/add")
+@limiter.limit("10/minute")
+async def add_custom_connector(request: Request, req: ConnectorCustomAddRequest, auth: dict = Depends(require_auth)):
+    """
+    Adds a custom MCP connector. Performs a real MCP handshake
+    (initialize → tools/list) against the given URL right away — the
+    connector is only saved as 'connected' if the server actually responds
+    correctly, so a broken URL never silently shows as connected.
+    """
+    try:
+        user_id = auth["user_id"]
+        name = (req.name or "").strip()
+        mcp_url = (req.mcp_url or "").strip()
+        if not name:
+            return JSONResponse({"ok": False, "error": "Name is required."}, status_code=400)
+        if not mcp_url:
+            return JSONResponse({"ok": False, "error": "Remote MCP server URL is required."}, status_code=400)
+
+        parsed = urlparse(mcp_url)
+        if parsed.scheme != "https":
+            return JSONResponse({"ok": False, "error": "MCP server URL must start with https://"}, status_code=400)
+
+        # Reject private/internal hosts — same SSRF principle used for skill installs.
+        try:
+            resolved_ips = socket.getaddrinfo(parsed.hostname, None)
+            for _fam, _type, _proto, _cn, sockaddr in resolved_ips:
+                ip = ipaddress.ip_address(sockaddr[0])
+                if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+                    return JSONResponse({"ok": False, "error": "That MCP server URL is not reachable."}, status_code=400)
+        except (socket.gaierror, ValueError) as e:
+            return JSONResponse({"ok": False, "error": f"Could not resolve MCP server host: {e}"}, status_code=400)
+
+        headers = {}
+        if req.oauth_client_id and req.oauth_client_secret:
+            # Custom connectors may gate their MCP endpoint behind basic client
+            # credentials rather than a full OAuth flow — pass them through.
+            headers["Authorization"] = "Bearer " + base64.b64encode(
+                f"{req.oauth_client_id}:{req.oauth_client_secret}".encode()
+            ).decode()
+
+        tools, err = await mcp_handshake_and_list_tools(mcp_url, headers)
+        if err:
+            return JSONResponse({"ok": False, "error": f"Couldn't connect: {err}"}, status_code=400)
+
+        row = {
+            "user_id": user_id,
+            "name": name[:120],
+            "provider": None,
+            "type": "custom",
+            "mcp_url": mcp_url,
+            "oauth_client_id": req.oauth_client_id,
+            "oauth_client_secret": req.oauth_client_secret,
+            "access_token": None,
+            "status": "connected",
+            "tools": tools,
+            "updated_at": datetime.utcnow().isoformat(),
+        }
+        result = await _db(lambda: _supabase_admin.table("connectors").insert(row).execute())
+        saved = result.data[0] if result.data else row
+        logger.info(f"🔌 [Connectors] custom connector added: {name} ({len(tools)} tools)")
+        return JSONResponse({"ok": True, "connector": _connector_public_row(saved)})
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        _log_unexpected("Connectors custom add", e)
+        return JSONResponse({"ok": False, "error": _client_safe_error(e, "Connectors custom add")}, status_code=500)
+
+
+@app.post("/api/connectors/builtin/connect")
+@limiter.limit("20/minute")
+async def connect_builtin_connector(request: Request, req: ConnectorBuiltinConnectRequest, auth: dict = Depends(require_auth)):
+    """
+    Starts the OAuth flow for a built-in "popular" connector (Gmail, Google
+    Drive, Slack, GitHub). Returns an authorize_url the frontend redirects
+    (or opens a popup) to. Needs the provider's OAuth app credentials set
+    in env vars — see _BUILTIN_CONNECTORS for the exact var names; returns
+    a clear 'not configured' error until they're set, rather than pretending
+    to work.
+    """
+    try:
+        provider = req.provider
+        meta = _BUILTIN_CONNECTORS.get(provider)
+        if not meta:
+            return JSONResponse({"ok": False, "error": "Unknown connector."}, status_code=400)
+
+        client_id = os.getenv(meta["client_id_env"])
+        if not client_id:
+            return JSONResponse({
+                "ok": False,
+                "error": f"{meta['name']} isn't configured yet. Set {meta['client_id_env']} and "
+                         f"{meta['client_secret_env']} in your environment to enable it.",
+            }, status_code=400)
+
+        user_id = auth["user_id"]
+        state = str(uuid.uuid4())
+        # Stash the state on a pending row so the callback can verify it and
+        # know which user/provider it belongs to (OAuth state has no other
+        # way to carry that safely).
+        await _db(lambda: _supabase_admin.table("connectors").upsert({
+            "user_id": user_id,
+            "provider": provider,
+            "type": "builtin",
+            "name": meta["name"],
+            "status": "not_connected",
+            "oauth_state": state,
+            "updated_at": datetime.utcnow().isoformat(),
+        }, on_conflict="user_id,provider").execute())
+
+        redirect_uri = f"{APP_URL.rstrip('/')}/api/connectors/oauth/callback"
+        params = {
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "scope": meta["scope"],
+            "state": f"{provider}:{state}:{user_id}",
+            "response_type": "code",
+            "access_type": "offline",
+        }
+        auth_url = meta["authorize_url"] + "?" + "&".join(f"{k}={requests.utils.quote(str(v))}" for k, v in params.items())
+        return JSONResponse({"ok": True, "auth_url": auth_url})
+    except Exception as e:
+        _log_unexpected("Connectors builtin connect", e)
+        return JSONResponse({"ok": False, "error": _client_safe_error(e, "Connectors builtin connect")}, status_code=500)
+
+
+@app.get("/api/connectors/oauth/callback")
+@limiter.limit("20/minute")
+async def connectors_oauth_callback(request: Request, code: str = "", state: str = "", error: str = ""):
+    """
+    OAuth redirect target for built-in connectors. Exchanges the code for
+    an access token and marks the connector connected, then redirects back
+    into the app with a status flag the frontend reads to show a toast.
+    """
+    try:
+        if error:
+            return _oauth_result_page(False, error)
+        try:
+            provider, oauth_state, user_id = state.split(":", 2)
+        except ValueError:
+            return _oauth_result_page(False, "Invalid OAuth state.")
+
+        meta = _BUILTIN_CONNECTORS.get(provider)
+        if not meta:
+            return _oauth_result_page(False, "Unknown connector.")
+
+        def _get_row():
+            return _supabase_admin.table("connectors").select("*") \
+                .eq("user_id", user_id).eq("provider", provider).limit(1).execute()
+        existing = (await _db(_get_row)).data
+        if not existing or existing[0].get("oauth_state") != oauth_state:
+            return _oauth_result_page(False, "OAuth state mismatch — please try connecting again.")
+
+        client_id = os.getenv(meta["client_id_env"])
+        client_secret = os.getenv(meta["client_secret_env"])
+        redirect_uri = f"{APP_URL.rstrip('/')}/api/connectors/oauth/callback"
+
+        resp = await anyio.to_thread.run_sync(lambda: _http.post(
+            meta["token_url"],
+            data={
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "code": code,
+                "redirect_uri": redirect_uri,
+                "grant_type": "authorization_code",
+            },
+            headers={"Accept": "application/json"},
+            timeout=15,
+        ))
+        token_data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+        access_token = token_data.get("access_token")
+        if not access_token:
+            return _oauth_result_page(False, token_data.get("error_description") or "Token exchange failed.")
+
+        await _db(lambda: _supabase_admin.table("connectors").update({
+            "status": "connected",
+            "access_token": access_token,
+            "refresh_token": token_data.get("refresh_token"),
+            "oauth_state": None,
+            "updated_at": datetime.utcnow().isoformat(),
+        }).eq("id", existing[0]["id"]).execute())
+
+        return _oauth_result_page(True, f"{meta['name']} connected!")
+    except Exception as e:
+        _log_unexpected("Connectors OAuth callback", e)
+        return _oauth_result_page(False, "Something went wrong connecting this account.")
+
+
+def _oauth_result_page(ok: bool, message: str):
+    """Tiny HTML page that posts the result to the opener window and closes itself."""
+    from fastapi.responses import HTMLResponse
+    safe_msg = json.dumps(message)
+    return HTMLResponse(f"""<!doctype html><html><body style="background:#111;color:#eee;
+        font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;">
+        <p>{'✓' if ok else '✗'} {message}</p>
+        <script>
+            if (window.opener) {{
+                window.opener.postMessage({{ catura_connector_result: {{ ok: {str(ok).lower()}, message: {safe_msg} }} }}, "*");
+            }}
+            setTimeout(() => window.close(), 1200);
+        </script>
+    </body></html>""")
+
+
+@app.post("/api/connectors/disconnect")
+@limiter.limit("20/minute")
+async def disconnect_connector(request: Request, req: ConnectorIdRequest, auth: dict = Depends(require_auth)):
+    try:
+        user_id = auth["user_id"]
+        await _db(lambda: _supabase_admin.table("connectors").update({
+            "status": "not_connected",
+            "access_token": None,
+            "refresh_token": None,
+            "updated_at": datetime.utcnow().isoformat(),
+        }).eq("id", req.connector_id).eq("user_id", user_id).execute())
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        _log_unexpected("Connectors disconnect", e)
+        return JSONResponse({"ok": False, "error": _client_safe_error(e, "Connectors disconnect")}, status_code=500)
+
+
+@app.delete("/api/connectors/delete")
+@limiter.limit("10/minute")
+async def delete_connector(request: Request, id: str, auth: dict = Depends(require_auth)):
+    try:
+        user_id = auth["user_id"]
+        await _db(lambda: _supabase_admin.table("connectors").delete().eq("id", id).eq("user_id", user_id).execute())
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        _log_unexpected("Connectors delete", e)
+        return JSONResponse({"ok": False, "error": _client_safe_error(e, "Connectors delete")}, status_code=500)
+
+
+@app.post("/api/connectors/custom/test")
+@limiter.limit("15/minute")
+async def test_custom_connector(request: Request, id: str = "", auth: dict = Depends(require_auth)):
+    """Re-runs the MCP handshake for an existing custom connector and refreshes its tool list."""
+    try:
+        user_id = auth["user_id"]
+
+        def _get_row():
+            return _supabase_admin.table("connectors").select("*").eq("id", id).eq("user_id", user_id).limit(1).execute()
+        rows = (await _db(_get_row)).data
+        if not rows:
+            return JSONResponse({"ok": False, "error": "Connector not found."}, status_code=404)
+        row = rows[0]
+
+        tools, err = await mcp_handshake_and_list_tools(row["mcp_url"], _connector_headers(row))
+        new_status = "connected" if not err else "error"
+        await _db(lambda: _supabase_admin.table("connectors").update({
+            "status": new_status,
+            "tools": tools if not err else row.get("tools"),
+            "updated_at": datetime.utcnow().isoformat(),
+        }).eq("id", id).execute())
+
+        if err:
+            return JSONResponse({"ok": False, "error": err})
+        return JSONResponse({"ok": True, "tool_count": len(tools)})
+    except Exception as e:
+        _log_unexpected("Connectors custom test", e)
+        return JSONResponse({"ok": False, "error": _client_safe_error(e, "Connectors custom test")}, status_code=500)
+
 
 # ── 🧠 MEMORY ENDPOINTS ───────────────────────────────────────────────────────
 
@@ -3370,6 +3958,11 @@ def build_tool_context(tool_result: dict) -> str:
             "- DO NOT mention source names, URLs, or outlet names inline. Sources are shown in the UI.\n"
         )
 
+    elif tool == "connector":
+        lines.append(f"Connector: {tool_result.get('connector_name', 'Unknown')}")
+        lines.append(f"Tool called: {tool_result.get('tool_name', 'unknown')}")
+        lines.append(f"\nResult:\n{tool_result.get('output', '')}")
+
     lines.append(
         "\n\n🚨 CRITICAL RULES FOR ALL LIVE DATA:\n"
         "1. Use ONLY the data shown above — NEVER use numbers or facts from your training memory.\n"
@@ -5303,6 +5896,18 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
             skill_names = ", ".join(s.get("name", "?") for s in matched_skills)
             logger.info(f"🛠️ [Skills] matched: {skill_names}")
             system_prompt = system_prompt + build_skill_context(matched_skills)
+        # ─────────────────────────────────────────────────────────────────────
+        # ── 🔌 CONNECTORS INJECTION ──────────────────────────────────────────
+        # Checks the user's connected custom MCP connectors for a tool that
+        # matches this message, calls it live over MCP, and folds the result
+        # into the system prompt — same shape as the Skills injection above,
+        # applies to every model that inherits from base_system_prompt below.
+        connector_tool_result = None
+        if not file_urls:
+            connector_tool_result = await run_connector_tool(auth["user_id"], prompt)
+            if connector_tool_result:
+                logger.info(f"🔌 [Connectors] used: {connector_tool_result.get('connector_name')} → {connector_tool_result.get('tool_name')}")
+                system_prompt = system_prompt + "\n\n" + build_tool_context(connector_tool_result)
         # ─────────────────────────────────────────────────────────────────────
         base_system_prompt = system_prompt  # save before tool injection
         messages_base = [{"role": "system", "content": system_prompt}] + active_memory[-20:]

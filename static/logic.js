@@ -921,7 +921,331 @@ window.deleteSkillFromPanel = async function (id) {
     });
 };
 
+// ============================================================
+// 🔌 CONNECTORS FEATURE — frontend
+// Two-layer popup, same pattern as Skills:
+//   1. openConnectorsPanel()      → main list (popular + all connectors, matches image 1)
+//   2. openAddCustomConnector()   → "Add custom connector" form (matches image 2)
+// Wired to /api/connectors/* on the backend (list, custom/add, builtin/connect,
+// disconnect, delete, custom/test). Built-in OAuth connectors (Gmail, Google
+// Drive, Slack, GitHub) open a popup window and complete via postMessage from
+// /api/connectors/oauth/callback. Custom MCP connectors connect immediately —
+// the backend does a live MCP handshake before saving.
+// ============================================================
+
+const _CONNECTOR_ICONS = {
+    gmail: '<svg width="20" height="20" viewBox="0 0 24 24"><path fill="#EA4335" d="M2 6.5A2.5 2.5 0 0 1 4.5 4h15A2.5 2.5 0 0 1 22 6.5v11A2.5 2.5 0 0 1 19.5 20h-15A2.5 2.5 0 0 1 2 17.5v-11Z"/><path fill="#fff" d="m4 6 8 6 8-6" stroke="#EA4335" stroke-width="0" /><path fill="#C5221F" d="M4 6.2 12 12l8-5.8v2.3l-8 5.8-8-5.8V6.2Z"/></svg>',
+    google_drive: '<svg width="20" height="20" viewBox="0 0 24 24"><path fill="#0F9D58" d="m8 3 8 14H8L0 3h8Z" opacity="0"/><path fill="#4285F4" d="M7.7 3h8.6l7.4 12.8-4.3 7.4H4.6L0 15.8 7.7 3Z" opacity="0"/><path fill="#FFCD40" d="M8.6 3h6.8l7.6 13.2h-6.8L8.6 3Z"/><path fill="#0F9D58" d="M1 16.2 4.6 22h14.8l3.6-5.8H1Z"/><path fill="#4285F4" d="M8.6 3 1 16.2h7.2L16 3H8.6Z"/></svg>',
+    slack: '<svg width="20" height="20" viewBox="0 0 24 24"><path fill="#36C5F0" d="M9 15a2 2 0 1 1-2-2h2v2Z"/><path fill="#36C5F0" d="M10 15a2 2 0 1 1 4 0v5a2 2 0 1 1-4 0v-5Z"/><path fill="#2EB67D" d="M9 9a2 2 0 1 1 2 2H9V9Z"/><path fill="#2EB67D" d="M9 10a2 2 0 1 1 0 4H4a2 2 0 1 1 0-4h5Z"/><path fill="#ECB22E" d="M15 9a2 2 0 1 1 2 2h-2V9Z"/><path fill="#ECB22E" d="M14 9a2 2 0 1 1-4 0V4a2 2 0 1 1 4 0v5Z"/><path fill="#E01E5A" d="M15 15a2 2 0 1 1 0-4h5a2 2 0 1 1 0 4h-5Z"/><path fill="#E01E5A" d="M15 14a2 2 0 1 1-2 2v-2h2Z"/></svg>',
+    github: '<svg width="20" height="20" viewBox="0 0 24 24" fill="#e5e5e5"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49 0-.24-.01-1.04-.01-1.88-2.78.62-3.37-1.22-3.37-1.22-.45-1.18-1.11-1.5-1.11-1.5-.9-.63.07-.62.07-.62 1 .07 1.53 1.06 1.53 1.06.9 1.57 2.34 1.12 2.91.86.09-.66.35-1.12.63-1.38-2.22-.26-4.56-1.14-4.56-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.32.1-2.75 0 0 .84-.28 2.75 1.05a9.3 9.3 0 0 1 5 0c1.9-1.33 2.74-1.05 2.74-1.05.55 1.43.2 2.49.1 2.75.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.79-4.57 5.05.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.6.69.49A10.26 10.26 0 0 0 22 12.25C22 6.58 17.52 2 12 2Z"/></svg>',
+    custom: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8b8b8b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a2 2 0 1 0-4 0v8a2 2 0 1 0 4 0V8Z"></path><path d="M6 8a2 2 0 1 1 4 0v8a2 2 0 1 1-4 0V8Z"></path><path d="M14 8h-4"></path><path d="M14 16h-4"></path></svg>',
+};
+
+let _connectorsCache = null;
+
+async function _fetchConnectors(forceRefresh = false) {
+    if (!currentUser) return { popular: [], custom: [] };
+    if (_connectorsCache && !forceRefresh) return _connectorsCache;
+    try {
+        const headers = await _authHeaders();
+        if (!headers) return { popular: [], custom: [] };
+        const resp = await fetch('/api/connectors/list', { headers });
+        const data = await resp.json();
+        _connectorsCache = { popular: data.popular || [], custom: data.custom || [] };
+        return _connectorsCache;
+    } catch (e) {
+        console.warn('[Connectors] list fetch error:', e);
+        return { popular: [], custom: [] };
+    }
+}
+
+window.refreshConnectorsCountSub = async function () {
+    const sub = document.getElementById('connectorsCountSub');
+    if (!sub) return;
+    const { popular, custom } = await _fetchConnectors();
+    const connectedCount = [...popular, ...custom].filter(c => c.status === 'connected').length;
+    const total = popular.length + custom.length;
+    sub.textContent = total
+        ? `${connectedCount} connected`
+        : 'Connect apps and data sources to Catura';
+};
+
+// ── Main Connectors popup (matches "Connectors" screenshot) ────────────────
+window.openConnectorsPanel = async function () {
+    if (!currentUser) { showToast('Please log in first'); return; }
+    const existing = document.getElementById('connectorsPanelModal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'connectorsPanelModal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;';
+    modal.innerHTML = `
+        <div style="position:absolute;inset:0;background:rgba(0,0,0,0.65);" onclick="document.getElementById('connectorsPanelModal').remove()"></div>
+        <div style="position:relative;background:var(--bg-modal,#1a1a1a);border:1px solid var(--border,#2a2a2a);border-radius:14px;padding:24px;width:min(720px,94vw);max-height:82vh;display:flex;flex-direction:column;gap:18px;z-index:1;">
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+                <h3 style="margin:0;font-size:17px;font-weight:600;color:var(--text-primary,#e5e5e5);">Connectors</h3>
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <button onclick="openAddCustomConnector()"
+                        style="display:flex;align-items:center;gap:6px;padding:7px 12px;background:var(--bg-surface2,#242424);border:1px solid var(--border,#333);border-radius:8px;color:var(--text-primary,#e5e5e5);font-size:13px;font-weight:500;cursor:pointer;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                        Add
+                    </button>
+                    <button onclick="document.getElementById('connectorsPanelModal').remove()" style="background:none;border:none;cursor:pointer;color:var(--text-muted,#888);font-size:18px;">✕</button>
+                </div>
+            </div>
+
+            <div>
+                <p style="margin:0 0 10px;font-size:12px;font-weight:600;color:var(--text-muted,#888);text-transform:uppercase;letter-spacing:0.04em;">Popular</p>
+                <div id="connectorsPopularGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;">
+                    <p style="font-size:13px;color:var(--text-muted,#888);">Loading…</p>
+                </div>
+            </div>
+
+            <div style="flex:1;overflow-y:auto;min-height:0;">
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border-subtle,#242424);">
+                    <span style="font-size:12px;font-weight:600;color:var(--text-primary,#e5e5e5);cursor:default;">All</span>
+                </div>
+                <div style="display:grid;grid-template-columns:1.5fr 0.6fr 0.9fr;gap:8px;padding:0 4px 8px;font-size:11px;font-weight:600;color:var(--text-muted,#777);text-transform:uppercase;letter-spacing:0.03em;">
+                    <span>Connector</span><span>Type</span><span>Status</span>
+                </div>
+                <div id="connectorsAllList" style="display:flex;flex-direction:column;gap:2px;">
+                    <p style="font-size:13px;color:var(--text-muted,#888);padding:8px 4px;">Loading…</p>
+                </div>
+            </div>
+        </div>`;
+    document.body.appendChild(modal);
+    await _renderConnectorsPanel();
+};
+
+async function _renderConnectorsPanel() {
+    const { popular, custom } = await _fetchConnectors(true);
+
+    const grid = document.getElementById('connectorsPopularGrid');
+    if (grid) {
+        grid.innerHTML = popular.map(c => `
+            <div style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--bg-surface2,#161616);border:1px solid var(--border-subtle,#1e1e1e);border-radius:10px;">
+                <div style="flex-shrink:0;width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:#0d0d0d;border-radius:7px;">${_CONNECTOR_ICONS[c.icon] || _CONNECTOR_ICONS.custom}</div>
+                <span style="flex:1;font-size:13px;font-weight:500;color:var(--text-primary,#e5e5e5);min-width:0;">${escapeHtml(c.name)}</span>
+                ${_connectorActionButton(c)}
+            </div>
+        `).join('');
+    }
+
+    const list = document.getElementById('connectorsAllList');
+    if (list) {
+        const all = [
+            ...popular.map(c => ({ ...c, _kind: 'builtin' })),
+            ...custom.map(c => ({ ...c, _kind: 'custom', icon: 'custom' })),
+        ];
+        if (all.length === 0) {
+            list.innerHTML = `<p style="font-size:13px;color:var(--text-muted,#888);padding:8px 4px;">No connectors yet.</p>`;
+        } else {
+            list.innerHTML = all.map(c => `
+                <div style="display:grid;grid-template-columns:1.5fr 0.6fr 0.9fr;gap:8px;align-items:center;padding:9px 4px;border-radius:8px;">
+                    <div style="display:flex;align-items:center;gap:9px;min-width:0;">
+                        <div style="flex-shrink:0;width:22px;height:22px;display:flex;align-items:center;justify-content:center;">${_CONNECTOR_ICONS[c.icon] || _CONNECTOR_ICONS.custom}</div>
+                        <span style="font-size:13px;color:var(--text-primary,#e5e5e5);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(c.name)}</span>
+                    </div>
+                    <span style="font-size:12px;color:var(--text-muted,#888);">Web</span>
+                    <div style="display:flex;align-items:center;gap:6px;">${_connectorActionButton(c)}</div>
+                </div>
+            `).join('');
+        }
+    }
+    await refreshConnectorsCountSub();
+}
+
+function _connectorActionButton(c) {
+    if (c.status === 'connected') {
+        return `<button onclick="disconnectConnector('${c.id}', ${c._kind === 'custom'})"
+            style="padding:6px 12px;background:rgba(16,163,127,0.12);border:1px solid rgba(16,163,127,0.3);border-radius:7px;color:#10a37f;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">Connected</button>`;
+    }
+    if (c._kind === 'custom') {
+        return `<div style="display:flex;gap:6px;">
+            <button onclick="testCustomConnector('${c.id}')" title="Retry connection"
+                style="padding:6px 10px;background:var(--bg-surface2,#242424);border:1px solid var(--border,#333);border-radius:7px;color:var(--text-primary,#e5e5e5);font-size:12px;cursor:pointer;">Retry</button>
+            <button onclick="deleteConnector('${c.id}')" title="Remove"
+                style="padding:6px 10px;background:none;border:1px solid var(--border,#333);border-radius:7px;color:#e06c6c;font-size:12px;cursor:pointer;">Remove</button>
+        </div>`;
+    }
+    return `<button onclick="connectBuiltinConnector('${c.provider}')"
+        style="padding:6px 14px;background:var(--bg-surface2,#242424);border:1px solid var(--border,#333);border-radius:7px;color:var(--text-primary,#e5e5e5);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">Connect</button>`;
+}
+
+// ── "Add custom connector" popup (matches "Add custom connector" screenshot) ──
+window.openAddCustomConnector = function () {
+    const existing = document.getElementById('addConnectorModal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'addConnectorModal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;';
+    modal.innerHTML = `
+        <div style="position:absolute;inset:0;background:rgba(0,0,0,0.7);" onclick="document.getElementById('addConnectorModal').remove()"></div>
+        <div style="position:relative;background:var(--bg-modal,#1a1a1a);border:1px solid var(--border,#2a2a2a);border-radius:14px;padding:24px;width:min(480px,92vw);z-index:1;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                <h3 style="margin:0;font-size:17px;font-weight:600;color:var(--text-primary,#e5e5e5);">Add custom connector</h3>
+                <button onclick="document.getElementById('addConnectorModal').remove()" style="background:none;border:none;cursor:pointer;color:var(--text-muted,#888);font-size:18px;">✕</button>
+            </div>
+            <p style="margin:0 0 18px;font-size:12.5px;color:var(--text-muted,#888);line-height:1.5;">Connect Catura to your data and tools using the Model Context Protocol (MCP).</p>
+
+            <label style="display:block;font-size:12px;color:var(--text-muted,#999);margin-bottom:5px;">Name</label>
+            <input id="connName" type="text" placeholder="Name"
+                style="width:100%;background:#161616;border:1px solid #2a2a2a;border-radius:8px;padding:10px 12px;color:#e5e5e5;font-size:13px;outline:none;box-sizing:border-box;margin-bottom:4px;">
+            <p style="margin:0 0 14px;font-size:11px;color:var(--text-muted,#777);">Shown in the connectors list.</p>
+
+            <label style="display:block;font-size:12px;color:var(--text-muted,#999);margin-bottom:5px;">Remote MCP server URL</label>
+            <input id="connUrl" type="text" placeholder="https://mcp.example.com/mcp"
+                style="width:100%;background:#161616;border:1px solid #2a2a2a;border-radius:8px;padding:10px 12px;color:#e5e5e5;font-size:13px;outline:none;box-sizing:border-box;margin-bottom:4px;">
+            <p style="margin:0 0 14px;font-size:11px;color:var(--text-muted,#777);">The HTTPS address where the server accepts MCP requests, e.g. https://mcp.example.com/mcp.</p>
+
+            <div onclick="_toggleConnectorAdvanced()" style="display:flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:10px;">
+                <svg id="connAdvArrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted,#888)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transition:transform .15s;"><polyline points="18 15 12 9 6 15"></polyline></svg>
+                <span style="font-size:12.5px;color:var(--text-muted,#999);">Advanced settings</span>
+            </div>
+            <div id="connAdvancedFields">
+                <input id="connClientId" type="text" placeholder="OAuth Client ID (optional)"
+                    style="width:100%;background:#161616;border:1px solid #2a2a2a;border-radius:8px;padding:10px 12px;color:#e5e5e5;font-size:13px;outline:none;box-sizing:border-box;margin-bottom:10px;">
+                <input id="connClientSecret" type="password" placeholder="OAuth Client Secret (optional)"
+                    style="width:100%;background:#161616;border:1px solid #2a2a2a;border-radius:8px;padding:10px 12px;color:#e5e5e5;font-size:13px;outline:none;box-sizing:border-box;margin-bottom:14px;">
+            </div>
+
+            <p style="margin:0 0 16px;font-size:11.5px;color:var(--text-muted,#777);line-height:1.5;">Only use connectors from developers you trust. Catura does not control which tools developers make available and cannot verify that they will work as intended.</p>
+
+            <p id="connAddStatus" style="margin:0 0 12px;font-size:12px;min-height:14px;"></p>
+
+            <div style="display:flex;justify-content:flex-end;gap:10px;">
+                <button onclick="document.getElementById('addConnectorModal').remove()"
+                    style="padding:9px 16px;background:none;border:1px solid var(--border,#333);border-radius:8px;color:var(--text-primary,#e5e5e5);font-size:13px;cursor:pointer;">Cancel</button>
+                <button id="connAddBtn" onclick="submitCustomConnector()"
+                    style="padding:9px 18px;background:#10a37f;border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:600;cursor:pointer;">Add</button>
+            </div>
+        </div>`;
+    document.body.appendChild(modal);
+    document.getElementById('connName')?.focus();
+};
+
+window._toggleConnectorAdvanced = function () {
+    const fields = document.getElementById('connAdvancedFields');
+    const arrow = document.getElementById('connAdvArrow');
+    if (!fields) return;
+    const hidden = fields.style.display === 'none';
+    fields.style.display = hidden ? 'block' : 'none';
+    if (arrow) arrow.style.transform = hidden ? 'rotate(0deg)' : 'rotate(-90deg)';
+};
+
+window.submitCustomConnector = async function () {
+    const name = document.getElementById('connName')?.value.trim();
+    const url = document.getElementById('connUrl')?.value.trim();
+    const clientId = document.getElementById('connClientId')?.value.trim();
+    const clientSecret = document.getElementById('connClientSecret')?.value.trim();
+    const status = document.getElementById('connAddStatus');
+    const btn = document.getElementById('connAddBtn');
+
+    if (!name) { if (status) { status.style.color = '#e06c6c'; status.textContent = 'Name is required.'; } return; }
+    if (!url || !/^https:\/\//i.test(url)) { if (status) { status.style.color = '#e06c6c'; status.textContent = 'Enter a valid https:// MCP server URL.'; } return; }
+
+    if (btn) { btn.disabled = true; btn.textContent = 'Connecting…'; }
+    if (status) { status.style.color = '#888'; status.textContent = 'Connecting to MCP server…'; }
+
+    try {
+        const headers = await _authHeaders({ 'Content-Type': 'application/json' });
+        if (!headers) { if (status) { status.style.color = '#e06c6c'; status.textContent = 'Please log in again.'; } if (btn) { btn.disabled = false; btn.textContent = 'Add'; } return; }
+        const resp = await fetch('/api/connectors/custom/add', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+                name,
+                mcp_url: url,
+                oauth_client_id: clientId || null,
+                oauth_client_secret: clientSecret || null,
+            })
+        });
+        const data = await resp.json();
+        if (data.ok) {
+            showToast(`✓ ${name} connected`);
+            document.getElementById('addConnectorModal')?.remove();
+            await _renderConnectorsPanel();
+        } else {
+            if (status) { status.style.color = '#e06c6c'; status.textContent = data.error || 'Could not connect.'; }
+        }
+    } catch (e) {
+        if (status) { status.style.color = '#e06c6c'; status.textContent = 'Network error while connecting.'; }
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Add'; }
+    }
+};
+
+window.connectBuiltinConnector = async function (provider) {
+    try {
+        const headers = await _authHeaders({ 'Content-Type': 'application/json' });
+        if (!headers) { showToast('❌ Please log in again'); return; }
+        const resp = await fetch('/api/connectors/builtin/connect', {
+            method: 'POST', headers, body: JSON.stringify({ provider })
+        });
+        const data = await resp.json();
+        if (!data.ok) { showToast(`❌ ${data.error || 'Could not connect'}`); return; }
+        const popup = window.open(data.auth_url, 'catura_oauth', 'width=520,height=650');
+        const listener = (event) => {
+            if (event.data && event.data.catura_connector_result) {
+                const r = event.data.catura_connector_result;
+                showToast(r.ok ? `✓ ${r.message}` : `❌ ${r.message}`);
+                if (r.ok) _renderConnectorsPanel();
+                window.removeEventListener('message', listener);
+            }
+        };
+        window.addEventListener('message', listener);
+    } catch (e) { showToast('❌ Failed to start connection'); }
+};
+
+window.disconnectConnector = async function (id, isCustom) {
+    if (!id) return;
+    try {
+        const headers = await _authHeaders({ 'Content-Type': 'application/json' });
+        if (!headers) { showToast('❌ Please log in again'); return; }
+        const resp = await fetch('/api/connectors/disconnect', {
+            method: 'POST', headers, body: JSON.stringify({ connector_id: id })
+        });
+        const data = await resp.json();
+        if (data.ok) { showToast('Disconnected'); await _renderConnectorsPanel(); }
+        else showToast('❌ Failed to disconnect');
+    } catch (e) { showToast('❌ Failed to disconnect'); }
+};
+
+window.testCustomConnector = async function (id) {
+    try {
+        const headers = await _authHeaders();
+        if (!headers) { showToast('❌ Please log in again'); return; }
+        const resp = await fetch(`/api/connectors/custom/test?id=${id}`, { method: 'POST', headers });
+        const data = await resp.json();
+        if (data.ok) showToast(`✓ Connected — ${data.tool_count} tool${data.tool_count === 1 ? '' : 's'} found`);
+        else showToast(`❌ ${data.error || 'Connection failed'}`);
+        await _renderConnectorsPanel();
+    } catch (e) { showToast('❌ Connection failed'); }
+};
+
+window.deleteConnector = async function (id) {
+    showModal({
+        type: 'confirm', dangerous: true,
+        title: 'Remove connector',
+        subtitle: 'This cannot be undone',
+        message: 'Catura will no longer be able to use this connector.',
+        confirmLabel: 'Remove',
+        onConfirm: async () => {
+            try {
+                const headers = await _authHeaders();
+                if (!headers) { showToast('❌ Please log in again'); return; }
+                const resp = await fetch(`/api/connectors/delete?id=${id}`, { method: 'DELETE', headers });
+                const data = await resp.json();
+                if (data.ok) { showToast('✓ Connector removed'); await _renderConnectorsPanel(); }
+                else showToast('❌ Failed to remove connector');
+            } catch (e) { showToast('❌ Failed to remove connector'); }
+        }
+    });
+};
+
 // ── Chat-triggered install: "install <link>" typed directly in the message box ──
+
 // Matches a URL together with an install-intent word/phrase, anywhere in the message.
 // Returns true if it handled (and short-circuited) the send — caller should stop.
 const _SKILL_URL_RX = /(https?:\/\/[^\s]+)/i;
@@ -2751,6 +3075,21 @@ window.showSettingsTab = function (tab, clickedEl) {
                     </div>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-left:8px;opacity:0.4;"><polyline points="9 18 15 12 9 6"/></svg>
                 </div>
+
+                <!-- Connectors (opens Connectors popup) -->
+                <div class="sc-row" onclick="openConnectorsPanel()" style="cursor:pointer;">
+                    <svg class="sc-row-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 8a2 2 0 1 0-4 0v8a2 2 0 1 0 4 0V8Z"></path>
+                        <path d="M6 8a2 2 0 1 1 4 0v8a2 2 0 1 1-4 0V8Z"></path>
+                        <path d="M14 8h-4"></path>
+                        <path d="M14 16h-4"></path>
+                    </svg>
+                    <div class="sc-row-body">
+                        <p class="sc-row-label">Connectors</p>
+                        <p class="sc-row-sub" id="connectorsCountSub">Connect apps and data sources to Catura</p>
+                    </div>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-left:8px;opacity:0.4;"><polyline points="9 18 15 12 9 6"/></svg>
+                </div>
             </div>`,
 
         // ============================
@@ -3012,6 +3351,7 @@ window.showSettingsTab = function (tab, clickedEl) {
     // Wire up Memory & context expand/collapse
     if (tab === 'personalization') {
         if (typeof refreshSkillsCountSub === 'function') refreshSkillsCountSub();
+        if (typeof refreshConnectorsCountSub === 'function') refreshConnectorsCountSub();
         const allRows = content.querySelectorAll('.sc-section .sc-row');
         allRows.forEach(row => {
             const chevron = row.querySelector('.sc-row-chevron');
