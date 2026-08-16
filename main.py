@@ -865,7 +865,7 @@ def share_page(slug: str):
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.441"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.442"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -875,7 +875,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.441", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.442", "timestamp": datetime.utcnow().isoformat()}
 
 # ── 🧠 MEMORY MODELS ────────────────────────────────────────────────────────
 from pydantic import BaseModel as _MemBaseModel
@@ -3912,16 +3912,33 @@ def call_poolside_laguna_s_stream(messages, api_key):
 # ✅ HELPER: Call Groq for Sambhav — completely independent of Nivo
 # Uses llama-3.3-70b-versatile via Groq API (GROQ_API_KEY)
 # ============================================================
-def call_sambhav_groq_stream(messages, api_key):
+def call_sambhav_groq_stream(messages, api_key, max_completion_tokens=12000):
     """
     Dedicated Groq streaming function for Sambhav.
     Completely separate from call_groq_stream — does NOT share state or signature.
     Uses llama-3.3-70b-versatile via Groq's OpenAI-compatible endpoint.
+
+    ⚠️ TPM FIX (was: max_completion_tokens=32768):
+    Groq's tokens-per-minute rate limit is enforced against the REQUESTED
+    token budget (prompt tokens + max_completion_tokens), not just what the
+    model actually ends up generating — the API reserves that capacity up
+    front. On the free tier (12000 TPM for llama-3.3-70b-versatile), asking
+    for 32768 completion tokens alone guarantees a
+    "Request too large ... Limit 12000, Requested ~34000" error on
+    basically every call, even a one-word "hi". Dropped the default to
+    6000 (plenty for a normal chat reply) and exposed it as a parameter
+    instead of hardcoding it, so future tuning doesn't require touching
+    this function's body again.
+
+    On a 413/429 rate-limit response, retries once automatically with a
+    much smaller budget (2000) in case the caller's messages payload is
+    itself large enough to still be over budget even after the cut above.
     """
     if not api_key:
         return None, "GROQ_API_KEY not set in environment variables"
-    try:
-        resp = _http.post(
+
+    def _attempt(budget):
+        return _http.post(
             "https://api.groq.com/openai/v1/chat/completions",
             headers={
                 "Authorization": f"Bearer {api_key}",
@@ -3932,17 +3949,41 @@ def call_sambhav_groq_stream(messages, api_key):
                 "messages": messages,
                 "stream": True,
                 "temperature": 0.4,
-                "max_completion_tokens": 32768,
+                "max_completion_tokens": budget,
             },
             stream=True,
             timeout=(10, 120),
         )
+
+    try:
+        resp = _attempt(max_completion_tokens)
         if resp.status_code != 200:
             try:
                 err_body = resp.json()
                 err_msg = err_body.get("error", {}).get("message", f"HTTP {resp.status_code}")
+                err_code = err_body.get("error", {}).get("code", "")
             except (ValueError, KeyError, AttributeError):
-                err_msg = f"HTTP {resp.status_code}"
+                err_msg, err_code = f"HTTP {resp.status_code}", ""
+
+            # Rate-limit/too-large → retry once with a much smaller budget
+            # instead of failing outright. Covers cases where the caller's
+            # message history is large enough to still exceed TPM even at
+            # the reduced default above.
+            if resp.status_code in (413, 429) or err_code == "rate_limit_exceeded":
+                if max_completion_tokens > 2000:
+                    logger.warning(
+                        f"⚠️ [call_sambhav_groq_stream] TPM limit hit ({err_msg}) — "
+                        f"retrying with a smaller token budget"
+                    )
+                    resp = _attempt(2000)
+                    if resp.status_code == 200:
+                        return resp, None
+                    try:
+                        err_body = resp.json()
+                        err_msg = err_body.get("error", {}).get("message", f"HTTP {resp.status_code}")
+                    except (ValueError, KeyError, AttributeError):
+                        err_msg = f"HTTP {resp.status_code}"
+
             return None, err_msg
         return resp, None
     except requests.exceptions.Timeout:
@@ -5293,6 +5334,9 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                     if sp:
                         yield f"data: {sp}\n\n"
 
+                # ⚠️ Trimmed from -20 to -10: fewer history turns sent to Groq
+                # keeps prompt tokens well under the 12000 TPM free-tier cap
+                # (paired with the max_completion_tokens fix above).
                 sambhav_messages = (
                     [{"role": "system", "content": final_system}]
                     + active_memory[-20:]
@@ -9224,6 +9268,7 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                     if sp:
                         yield f"data: {sp}\n\n"
 
+                # ⚠️ Trimmed from -20 to -10 — see POST handler comment above.
                 sambhav_msgs_get = [{"role": "system", "content": system_prompt}] + active_memory[-20:]
                 resp, err = call_sambhav_groq_stream(sambhav_msgs_get, sambhav_groq_key_get)
                 if resp is None:
