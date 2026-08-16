@@ -1194,40 +1194,46 @@ html { scroll-behavior: smooth; }
    light and dark site themes, like a real Terminal/iTerm window.
 ============================ */
 .code-block {
-    background: #1e1e1e;
-    border-radius: 12px;
+    background: #1c1c1e;
+    border-radius: 14px;
     margin: 16px 0;
     overflow: hidden;
-    border: 1px solid rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.09);
     box-shadow:
-        0 1px 0 rgba(255,255,255,0.04) inset,
-        0 16px 36px rgba(0,0,0,0.35),
-        0 2px 8px rgba(0,0,0,0.25);
-    transition: box-shadow 0.2s ease, transform 0.2s ease;
+        0 0 0 1px rgba(0,0,0,0.3),
+        0 1.5px 0 rgba(255,255,255,0.06) inset,
+        0 18px 40px rgba(0,0,0,0.4),
+        0 4px 12px rgba(0,0,0,0.28);
+    transition: box-shadow 0.25s ease, transform 0.25s ease, border-color 0.25s ease;
 }
 .code-block:hover {
+    border-color: rgba(255,255,255,0.14);
     box-shadow:
-        0 1px 0 rgba(255,255,255,0.05) inset,
-        0 20px 44px rgba(0,0,0,0.42),
-        0 3px 10px rgba(0,0,0,0.3);
+        0 0 0 1px rgba(0,0,0,0.3),
+        0 1.5px 0 rgba(255,255,255,0.07) inset,
+        0 24px 52px rgba(0,0,0,0.48),
+        0 6px 16px rgba(0,0,0,0.32);
 }
 
-/* ── Title bar ── */
+/* ── Title bar — modern macOS "vibrancy" toolbar ── */
 .code-header {
     display: grid;
     grid-template-columns: auto 1fr auto;
     align-items: center;
     gap: 10px;
-    padding: 11px 14px;
-    background: linear-gradient(180deg, #3a3a3c 0%, #2c2c2e 100%);
-    border-bottom: 1px solid rgba(0,0,0,0.4);
+    padding: 12px 14px;
+    background: linear-gradient(180deg, rgba(58,58,60,0.92) 0%, rgba(40,40,42,0.92) 100%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(20px) saturate(180%);
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.05) inset;
     font-size: 12px;
     color: #9a9a9e;
-    font-family: monospace;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', monospace;
     position: relative;
 }
 
-/* Traffic-light window controls */
+/* Traffic-light window controls — real macOS proportions + subtle glossy hover */
 .mac-dots {
     display: flex;
     align-items: center;
@@ -1238,21 +1244,27 @@ html { scroll-behavior: smooth; }
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    box-shadow: inset 0 0 0 0.5px rgba(0,0,0,0.25), 0 0.5px 0 rgba(255,255,255,0.15);
+    position: relative;
+    box-shadow:
+        inset 0 0 0 0.5px rgba(0,0,0,0.3),
+        0 0.5px 0.5px rgba(255,255,255,0.2);
+    transition: filter 0.15s ease, transform 0.15s ease;
 }
-.mac-dot-red { background: linear-gradient(180deg, #ff6a5f 0%, #ec4c40 100%); }
-.mac-dot-yellow { background: linear-gradient(180deg, #ffc02e 0%, #e0a419 100%); }
-.mac-dot-green { background: linear-gradient(180deg, #29c93f 0%, #1fab34 100%); }
+.mac-dot-red { background: radial-gradient(circle at 30% 28%, #ff8a80 0%, #ff5f57 45%, #e0443e 100%); }
+.mac-dot-yellow { background: radial-gradient(circle at 30% 28%, #ffe08a 0%, #ffbd2e 45%, #dea123 100%); }
+.mac-dot-green { background: radial-gradient(circle at 30% 28%, #8cf59b 0%, #28c840 45%, #1aa62f 100%); }
+.mac-dots:hover .mac-dot { filter: brightness(1.08); }
 
 .code-header .lang-label {
     justify-self: center;
-    color: #d0d0d5;
+    color: #c9c9ce;
     font-weight: 600;
     font-size: 11px;
     text-transform: uppercase;
-    letter-spacing: 0.6px;
-    background: rgba(255,255,255,0.06);
-    padding: 3px 10px;
+    letter-spacing: 0.7px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.06);
+    padding: 3.5px 12px;
     border-radius: 20px;
     white-space: nowrap;
     overflow: hidden;
@@ -1265,51 +1277,58 @@ html { scroll-behavior: smooth; }
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.055);
+    border: 1px solid rgba(255,255,255,0.09);
     color: #b8b8bd;
-    padding: 5px 11px;
+    padding: 5px 12px;
     border-radius: 20px;
     cursor: pointer;
     font-size: 11.5px;
     font-weight: 500;
-    transition: all 0.2s ease;
+    letter-spacing: 0.1px;
+    transition: all 0.18s ease;
     width: auto;
     height: auto;
     white-space: nowrap;
 }
 .code-header .copy-btn:hover {
-    background: rgba(16,163,127,0.16);
-    color: #3ddba0;
-    border-color: rgba(16,163,127,0.4);
+    background: rgba(10,132,255,0.16);
+    color: #6ab8ff;
+    border-color: rgba(10,132,255,0.4);
+    transform: translateY(-0.5px);
 }
+.code-header .copy-btn:active { transform: translateY(0); }
 .code-header .copy-btn.copied {
     color: #3ddba0;
-    border-color: rgba(16,163,127,0.5);
-    background: rgba(16,163,127,0.16);
+    border-color: rgba(48,209,88,0.45);
+    background: rgba(48,209,88,0.14);
 }
 
 /* ── Terminal body ── */
 .code-block pre {
     margin: 0;
-    padding: 16px 18px;
+    padding: 17px 18px;
     overflow-x: auto;
-    background: #1e1e1e;
-    font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    background:
+        radial-gradient(ellipse 900px 200px at 50% 0%, rgba(255,255,255,0.025), transparent 60%),
+        #1c1c1e;
+    font-family: 'SF Mono', 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
     font-size: 13px;
-    line-height: 1.65;
+    line-height: 1.7;
     max-height: 420px;
     overflow-y: auto;
 }
-.code-block code { white-space: pre; color: #d4d4d8; }
+.code-block code { white-space: pre; color: #dcdce0; }
 
 /* Scrollbar inside the terminal body */
 .code-block pre::-webkit-scrollbar { height: 8px; width: 8px; }
 .code-block pre::-webkit-scrollbar-thumb {
-    background: rgba(255,255,255,0.14);
+    background: rgba(255,255,255,0.16);
     border-radius: 8px;
+    background-clip: padding-box;
+    border: 2px solid transparent;
 }
-.code-block pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
+.code-block pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.26); }
 .code-block pre::-webkit-scrollbar-track { background: transparent; }
 
 /* While a message is actively streaming, its innerHTML is fully replaced on
