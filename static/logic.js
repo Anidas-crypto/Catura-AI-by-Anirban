@@ -1566,25 +1566,31 @@ window.toggleThinking = function (btn) {
 
 // Renders a finalized bot message (thinking dropdown, if present, + answer body)
 // into botMsg, and stores the raw (tag-inclusive) text on wrapper.dataset.raw.
-function renderBotContent(wrapper, botMsg, rawText) {
+function renderBotContent(wrapper, botMsg, rawText, ctx) {
     const { thinking, answer } = splitThinking(rawText);
     let html = "";
     if (thinking) {
         html += buildThinkingHTML(thinking, false);
     }
-    html += formatMessage(repairTruncated(answer));
+    html += formatMessage(repairTruncated(answer), ctx);
     botMsg.innerHTML = html;
     if (wrapper) wrapper.dataset.raw = rawText;
 }
 
-function formatMessage(rawText) {
+function formatMessage(rawText, ctx) {
     if (!rawText) return "";
 
     // ── STEP 1: Stash fenced code blocks ──────────────────────────────────
+    // Total block count (on the already fence-balanced text) tells us which
+    // one — if any — is still the "live" one currently being written.
+    const totalCodeBlocks = (rawText.match(/```/g) || []).length >> 1;
+    let codeIndex = 0;
     const codeBlocks = [];
     let text = rawText.replace(/```([\w+\-#. ]*)\n?([\s\S]*?)```/g, (_match, lang, code) => {
         const language = lang.trim() || "text";
-        codeBlocks.push(renderCodeArtifactBlock(code.replace(/\n+$/,""), language));
+        const isLastOfStream = codeIndex === totalCodeBlocks - 1;
+        codeBlocks.push(renderCodeArtifactBlock(code.replace(/\n+$/,""), language, ctx, codeIndex, isLastOfStream));
+        codeIndex++;
         return `\x00CODE${codeBlocks.length - 1}\x00`;
     });
 
@@ -1837,7 +1843,9 @@ function applyInline(text) {
 // ============================
 // 🖊️ CODE ARTIFACT — Claude / GLM style "writing" summary row + side panel
 // ============================
-window.__codeArtifacts = window.__codeArtifacts || {};
+window.__codeArtifacts   = window.__codeArtifacts || {};   // id -> {code, language, streaming, streamId}
+window.__inlineOpenId    = window.__inlineOpenId || null;  // artifact id whose inline dropdown is expanded
+window.__activePanelId   = window.__activePanelId || null; // artifact id currently shown in the side panel
 let _codeArtifactSeq = 0;
 
 const LANG_DISPLAY_NAMES = {
@@ -1854,83 +1862,150 @@ function langDisplayName(lang) {
     return LANG_DISPLAY_NAMES[key] || (lang ? lang.charAt(0).toUpperCase() + lang.slice(1) : "Plain Text");
 }
 
-// Builds the collapsed "pencil / writing" row shown inline in the chat,
-// and registers the full code so the side panel can render it on click.
-function renderCodeArtifactBlock(code, language) {
-    const id = `artifact-${Date.now()}-${_codeArtifactSeq++}`;
-    const lineCount = code.length ? code.split("\n").length : 0;
-    window.__codeArtifacts[id] = { code, language: language || "text" };
+function escapeArtifactCode(code) {
+    return code.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
 
-    return `<div class="code-artifact-row" id="${id}" onclick="openCodeArtifact('${id}')" role="button" tabindex="0">
-        <span class="code-artifact-pen" aria-hidden="true">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 20h9"/>
-                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+// Builds the collapsed "pencil / writing" row shown inline in the chat.
+// ctx (optional): { streamId, streaming, isLastOfStream } — used while a
+// message is actively streaming so the SAME artifact id survives every
+// re-render (the whole message HTML gets rebuilt on every tick), which is
+// what lets the inline dropdown stay open/closed correctly mid-stream.
+function renderCodeArtifactBlock(code, language, ctx, codeIndex, isLastOfStream) {
+    const id = (ctx && ctx.streamId) ? `${ctx.streamId}-code-${codeIndex}` : `artifact-${Date.now()}-${_codeArtifactSeq++}`;
+    const lineCount = code.length ? code.split("\n").length : 0;
+    const isStreaming = !!(ctx && ctx.streaming && isLastOfStream);
+
+    window.__codeArtifacts[id] = {
+        code,
+        language: language || "text",
+        streaming: isStreaming,
+        streamId: ctx ? ctx.streamId : null
+    };
+
+    const isExpanded = window.__inlineOpenId === id;
+
+    return `<div class="code-artifact${isExpanded ? ' expanded' : ''}" id="${id}">
+        <div class="code-artifact-row" onclick="handleCodeArtifactClick('${id}')" role="button" tabindex="0">
+            ${isStreaming
+                ? `<span class="code-artifact-live-dot" aria-hidden="true"></span>`
+                : `<span class="code-artifact-pen" aria-hidden="true">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 20h9"/>
+                        <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+                    </svg>
+                </span>`}
+            <span class="code-artifact-label">${isStreaming ? "Writing code" : "Wrote code"}</span>
+            <span class="code-artifact-lang">${langDisplayName(language)}</span>
+            ${lineCount ? `<span class="code-artifact-diff"><span class="diff-add">+${lineCount}</span></span>` : ""}
+            <svg class="code-artifact-chevron" width="10" height="10" viewBox="0 0 10 10" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M2 1l5 4-5 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-        </span>
-        <span class="code-artifact-label">Wrote code</span>
-        <span class="code-artifact-lang">${langDisplayName(language)}</span>
-        ${lineCount ? `<span class="code-artifact-diff"><span class="diff-add">+${lineCount}</span></span>` : ""}
-        <svg class="code-artifact-chevron" width="10" height="10" viewBox="0 0 10 10" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <path d="M2 1l5 4-5 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
+        </div>
+        <div class="code-artifact-inline-body"><pre><code>${escapeArtifactCode(code)}</code></pre></div>
     </div>`;
 }
 
-// Live-updates a code-artifact row's line/diff count while text is still streaming in.
-function updateCodeArtifactStreaming(id, code) {
+// Click behaviour differs by state, matching Claude/GLM:
+//  - still being written  -> toggle the inline mini dropdown (live preview)
+//  - already finished     -> open the full side panel directly
+function handleCodeArtifactClick(id) {
     const entry = window.__codeArtifacts[id];
     if (!entry) return;
-    entry.code = code;
+    if (entry.streaming) {
+        toggleInlineArtifact(id);
+    } else {
+        if (window.__inlineOpenId === id) closeInlineArtifact(id);
+        openCodeArtifact(id);
+    }
+}
+
+function toggleInlineArtifact(id) {
+    const wasOpen = window.__inlineOpenId === id;
+    if (window.__inlineOpenId && window.__inlineOpenId !== id) {
+        const prevRow = document.getElementById(window.__inlineOpenId);
+        if (prevRow) prevRow.classList.remove("expanded");
+    }
+    window.__inlineOpenId = wasOpen ? null : id;
     const row = document.getElementById(id);
-    if (!row) return;
-    const diffEl = row.querySelector(".code-artifact-diff");
-    const lineCount = code.length ? code.split("\n").length : 0;
-    if (diffEl) {
-        diffEl.innerHTML = `<span class="diff-add">+${lineCount}</span>`;
+    if (row) row.classList.toggle("expanded", !wasOpen);
+}
+
+function closeInlineArtifact(id) {
+    if (window.__inlineOpenId !== id) return;
+    window.__inlineOpenId = null;
+    const row = document.getElementById(id);
+    if (row) row.classList.remove("expanded");
+}
+
+// Called once a streamed code block's fence actually closes — auto-closes
+// any inline dropdown left open for it and auto-opens the side panel,
+// exactly like Claude/GLM do when a write finishes.
+function finalizeCodeArtifact(id) {
+    const entry = window.__codeArtifacts[id];
+    if (!entry) return;
+    entry.streaming = false;
+    if (window.__inlineOpenId === id) closeInlineArtifact(id);
+    openCodeArtifact(id);
+}
+
+function autoCloseSidebarForArtifact() {
+    const sidebar  = document.getElementById("sidebar");
+    const iconRail = document.getElementById("iconRail");
+    if (sidebar && sidebar.classList.contains("open")) {
+        sidebar.classList.remove("open");
+        if (iconRail) iconRail.classList.add("visible");
     }
-    // If the panel for this exact artifact is currently open, keep it live too.
-    const panel = document.getElementById("codeArtifactPanel");
-    if (panel && panel.dataset.activeId === id) {
-        const codeEl = document.getElementById("codeArtifactPanelCode");
-        if (codeEl) codeEl.textContent = code;
-    }
+    if (typeof closeSidebar === "function") closeSidebar();
 }
 
 function openCodeArtifact(id) {
     const entry = window.__codeArtifacts[id];
     if (!entry) return;
     const panel = document.getElementById("codeArtifactPanel");
-    const overlay = document.getElementById("codeArtifactPanelOverlay");
     if (!panel) return;
 
-    panel.dataset.activeId = id;
+    window.__activePanelId = id;
     document.getElementById("codeArtifactPanelLang").textContent = langDisplayName(entry.language);
-    document.getElementById("codeArtifactPanelCode").textContent = entry.code;
-    document.getElementById("codeArtifactPanelCode").className = `language-${(entry.language || "text").toLowerCase()}`;
+    const codeEl = document.getElementById("codeArtifactPanelCode");
+    codeEl.textContent = entry.code;
+    codeEl.className = `language-${(entry.language || "text").toLowerCase()}`;
 
     panel.classList.add("open");
-    if (overlay) overlay.classList.add("open");
     document.body.classList.add("code-artifact-panel-open");
+    autoCloseSidebarForArtifact();
 }
 
+// Live-keeps the open side panel in sync while its artifact is still streaming.
+function refreshOpenPanelIfActive(id) {
+    if (window.__activePanelId !== id) return;
+    const panel = document.getElementById("codeArtifactPanel");
+    if (!panel || !panel.classList.contains("open")) return;
+    const entry = window.__codeArtifacts[id];
+    if (!entry) return;
+    const codeEl = document.getElementById("codeArtifactPanelCode");
+    if (codeEl) codeEl.textContent = entry.code;
+}
+
+// Closing is explicit only — the ✕ button. No click-outside/backdrop dismiss,
+// so an accidental click elsewhere in the app never loses the artifact view.
 function closeCodeArtifactPanel() {
     const panel = document.getElementById("codeArtifactPanel");
-    const overlay = document.getElementById("codeArtifactPanelOverlay");
-    if (panel) { panel.classList.remove("open"); panel.classList.remove("expanded"); panel.dataset.activeId = ""; }
-    if (overlay) overlay.classList.remove("open");
+    if (panel) { panel.classList.remove("open"); panel.classList.remove("expanded"); }
     document.body.classList.remove("code-artifact-panel-open");
+    document.body.classList.remove("code-artifact-panel-expanded");
+    window.__activePanelId = null;
 }
 
 function toggleCodeArtifactExpand() {
     const panel = document.getElementById("codeArtifactPanel");
     if (!panel) return;
-    panel.classList.toggle("expanded");
+    const nowExpanded = panel.classList.toggle("expanded");
+    document.body.classList.toggle("code-artifact-panel-expanded", nowExpanded);
 }
 
 function copyArtifactCode() {
-    const panel = document.getElementById("codeArtifactPanel");
-    const id = panel && panel.dataset.activeId;
+    const id = window.__activePanelId;
     const entry = id && window.__codeArtifacts[id];
     if (!entry) return;
     const btn = document.getElementById("codeArtifactCopyBtn");
@@ -1943,20 +2018,26 @@ function copyArtifactCode() {
     }).catch(() => showToast("Failed to copy code"));
 }
 
-// Drag-to-resize handle on the left edge of the side panel.
+// Drag-to-resize handle on the left edge of the side panel — now a real
+// flex sibling, so resizing just overrides the 50/50 flex-basis split.
 (function initCodeArtifactResize() {
     document.addEventListener("DOMContentLoaded", () => {
         const handle = document.getElementById("codeArtifactResizeHandle");
         const panel = document.getElementById("codeArtifactPanel");
-        if (!handle || !panel) return;
+        const app = document.getElementById("app");
+        if (!handle || !panel || !app) return;
         let dragging = false;
 
         const onMove = (e) => {
             if (!dragging) return;
             const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-            let newWidth = window.innerWidth - clientX;
-            newWidth = Math.max(320, Math.min(newWidth, window.innerWidth - 280));
-            panel.style.width = `${newWidth}px`;
+            const containerRect = panel.parentElement.getBoundingClientRect();
+            let panelWidth = containerRect.right - clientX;
+            const minWidth = 320;
+            const maxWidth = containerRect.width - 280;
+            panelWidth = Math.max(minWidth, Math.min(panelWidth, maxWidth));
+            panel.style.flex = `0 0 ${panelWidth}px`;
+            app.style.flex = `1 1 auto`;
         };
         const onUp = () => {
             dragging = false;
@@ -1968,7 +2049,7 @@ function copyArtifactCode() {
             e.preventDefault();
             document.body.classList.add("code-artifact-resizing");
         });
-        handle.addEventListener("touchstart", (e) => {
+        handle.addEventListener("touchstart", () => {
             dragging = true;
             document.body.classList.add("code-artifact-resizing");
         }, { passive: true });
@@ -5323,6 +5404,10 @@ async function performWebSearch(query) {
 
 // ── streamWordsWithTools — word-queue streaming animator (ChatGPT/Claude style) ──
 async function streamWordsWithTools(botMsgInitial, wrapperInitial, reader, decoder, chatbox, onToolUsed, onFirstToken, onToolRunning, onSources) {
+    // Stable id prefix for this message's code artifacts — kept constant across
+    // every re-render tick (the whole message HTML gets rebuilt each tick), so
+    // an inline dropdown opened mid-stream survives until the block finishes.
+    const streamArtifactId = `stream${Date.now()}${Math.random().toString(36).slice(2, 7)}`;
     let buffer      = "";
     let fullReply   = "";       // complete received text (source of truth)
     let displayed   = "";       // what has been rendered so far
@@ -5439,7 +5524,15 @@ async function streamWordsWithTools(botMsgInitial, wrapperInitial, reader, decod
                 // needed for markdown lists, paragraphs, and code blocks.
                 animRunning = false;
                 if (thinkingEl) { thinkingEl.remove(); thinkingEl = null; }
-                renderBotContent(wrapper, bm, fullReply.replace(/\[\d+\](\[\d+\])*/g, '').trimEnd());
+                const finalText = fullReply.replace(/\[\d+\](\[\d+\])*/g, '').trimEnd();
+                // Any code block that was still "live" for this stream is now
+                // done — close its inline dropdown (if left open) and hand off
+                // straight to the side panel, Claude/GLM-style.
+                const finishedCount = (finalText.match(/```/g) || []).length >> 1;
+                renderBotContent(wrapper, bm, finalText, { streamId: streamArtifactId, streaming: false });
+                if (finishedCount > 0) {
+                    finalizeCodeArtifact(`${streamArtifactId}-code-${finishedCount - 1}`);
+                }
                 bm.classList.remove("streaming");
                 stickScrollToBottom();
             }
@@ -5453,7 +5546,11 @@ async function streamWordsWithTools(botMsgInitial, wrapperInitial, reader, decod
 
         if (tickCount % RENDER_EVERY === 0 || (streamDone && wordQueue.length === 0)) {
             // Full markdown re-parse (kept infrequent to stay fast)
-            bm.innerHTML = formatMessage(repairTruncated(displayed));
+            bm.innerHTML = formatMessage(repairTruncated(displayed), { streamId: streamArtifactId, streaming: true });
+            {
+                const liveCount = (repairTruncated(displayed).match(/```/g) || []).length >> 1;
+                if (liveCount > 0) refreshOpenPanelIfActive(`${streamArtifactId}-code-${liveCount - 1}`);
+            }
             if (!(streamDone && wordQueue.length === 0)) {
                 bm.classList.add("streaming");
             } else {
