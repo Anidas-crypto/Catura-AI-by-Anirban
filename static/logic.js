@@ -5265,7 +5265,7 @@ const MODEL_ICONS = {
     n_nano:         'nvidia.png',
     nivo:           'groq.png',
     omni:           'nvidia.png',
-    stepfun3:       'stepfun.png',
+    stepfun3:       'ling.png',
     claude_puter:   'claude.png',
     gpt5_puter:     'openai.png',
     gemini_puter:   'gemini.png',

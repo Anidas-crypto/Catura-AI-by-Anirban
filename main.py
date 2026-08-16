@@ -797,7 +797,7 @@ TAVILY_API_KEY      = os.getenv("TAVILY_API_KEY", "")               # https://ta
 GROQ_API_KEY        = os.getenv("GROQ_API_KEY", "")                 # https://console.groq.com (free tier)
 ZAI_API_KEY         = os.getenv("ZAI_API_KEY", "")                  # https://z.ai (GLM-4.7-Flash — free tier)
 ZEN_API_KEY         = os.getenv("ZEN_API_KEY", "")                   # https://opencode.ai/zen (DeepSeek V4 Flash — free tier)
-NARAROUTER_API_KEY  = os.getenv("NARAROUTER_API_KEY", "")           # https://router.bynara.id (Agnes 2.5 Flash, Stepfun 3.7 Flash — free tier)
+NARAROUTER_API_KEY  = os.getenv("NARAROUTER_API_KEY", "")           # https://router.bynara.id (Agnes 2.5 Flash, Ling 3.0 Flash — free tier)
 SERPER_API_KEY      = os.getenv("SERPER_API_KEY", "")               # https://serper.dev (2500 free searches)
 FIRECRAWL_API_KEY   = os.getenv("FIRECRAWL_API_KEY", "")            # https://firecrawl.dev (free tier)
 COHERE_API_KEY      = os.getenv("COHERE_API_KEY", "")               # https://cohere.com (1000 free reranks/month)
@@ -865,7 +865,7 @@ def share_page(slug: str):
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.442"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.443"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -875,7 +875,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.442", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.443", "timestamp": datetime.utcnow().isoformat()}
 
 # ── 🧠 MEMORY MODELS ────────────────────────────────────────────────────────
 from pydantic import BaseModel as _MemBaseModel
@@ -4096,13 +4096,13 @@ def call_opencode_deepseek_stream(messages, api_key):
 
 
 # ============================================================
-# ✅ HELPER: Call NaraRouter — agnes-2.5-flash, stepfun-3.7-flash
+# ✅ HELPER: Call NaraRouter — agnes-2.5-flash, ling-3.0-flash-free
 # OpenAI-compatible endpoint at router.bynara.id (NARAROUTER_API_KEY)
 # ============================================================
 def call_nararouter_stream(messages, api_key, model_id, max_tokens=32768):
     """
     Dedicated NaraRouter streaming function.
-    Shared by all NaraRouter-hosted models (Agnes 2.5 Flash, Stepfun 3.7 Flash,
+    Shared by all NaraRouter-hosted models (Agnes 2.5 Flash, Ling 3.0 Flash,
     etc.) via model_id param. OpenAI-compatible chat completions endpoint.
     """
     if not api_key:
@@ -4548,7 +4548,7 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
             "minimax_m3": [],  # Routed via NVIDIA NIM API (NVIDIA_API_KEY) — minimaxai/minimax-m3
             "glm52":      [],  # Routed via NVIDIA NIM API (NVIDIA_API_KEY) — z-ai/glm-5.2
             "agnes":      [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — agnes-2.5-flash
-            "stepfun3":   [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — stepfun-3.7-flash
+            "stepfun3":   [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — ling-3.0-flash-free (was stepfun-3.7-flash)
             "mistral_large":  [],  # Routed via Mistral API (MISTRAL_API_KEY) — mistral-large-latest
             "mistral_medium": [],  # Routed via Mistral API (MISTRAL_API_KEY) — mistral-medium-latest
             "mistral_small":  [],  # Routed via Mistral API (MISTRAL_API_KEY) — mistral-small-latest
@@ -4973,9 +4973,9 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                 + NO_TOOL_CALL_RULE
             ),
             "stepfun3": (
-                "Your name is Catura (pronounced kuh-CHUR-uh) Stepfun Model. You are a highly capable "
+                "Your name is Catura (pronounced kuh-CHUR-uh) Ling Model. You are a highly capable "
                 "AI assistant created by Anirban — an independent developer based in India. "
-                "You are Catura AI Stepfun, built for fast, efficient, and high-quality responses. "
+                "You are Catura AI Ling, built for fast, efficient, and high-quality responses. "
                 "You are clear, direct, and helpful. You speak like a knowledgeable friend — "
                 "never robotic, never sycophantic. "
                 "Never start a response with 'Certainly!', 'Of course!', 'Great question!', "
@@ -4986,7 +4986,7 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                 "Use bullet points or headers only when they genuinely improve clarity. "
                 "You are knowledgeable about technology, science, finance, history, culture, and everyday topics. "
                 "For coding questions, write clean, well-commented code. "
-                "If asked what model or AI you are, say you are Catura AI Stepfun and cannot share "
+                "If asked what model or AI you are, say you are Catura AI Ling and cannot share "
                 "details about the underlying technology. "
                 "If asked who made you, say 'I was created by Anirban.' "
                 "Never make up facts. If you don't know something, say so honestly."
@@ -6188,7 +6188,7 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                 })
             )
 
-        # ── STEPFUN 3.7: NaraRouter API (NARAROUTER_API_KEY) — stepfun-3.7-flash ──
+        # ── STEPFUN3 (key kept for compat): NaraRouter API (NARAROUTER_API_KEY) — ling-3.0-flash-free (was stepfun-3.7-flash) ──
         if model_key == "stepfun3":
             nara_key_stepfun3   = os.getenv("NARAROUTER_API_KEY", "")
             stepfun3_system     = system_prompts.get("stepfun3", system_prompts["dagr"])
@@ -6218,10 +6218,10 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                     [{"role": "system", "content": final_system_stepfun3}]
                     + active_memory[-20:]
                 )
-                resp, err = call_nararouter_stream(stepfun3_messages, nara_key_stepfun3, "stepfun-3.7-flash", max_tokens=16000)
+                resp, err = call_nararouter_stream(stepfun3_messages, nara_key_stepfun3, "ling-3.0-flash-free", max_tokens=16000)
 
                 if resp is None:
-                    yield f"data: {json.dumps({'error': f'Stepfun 3.7 unavailable: {err}'})}\n\n"
+                    yield f"data: {json.dumps({'error': f'Ling 3.0 unavailable: {err}'})}\n\n"
                     yield "data: [DONE]\n\n"
                     return
 
@@ -6238,7 +6238,7 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                         try:
                             chunk = json.loads(payload)
                             if "error" in chunk:
-                                logger.warning(f"⚠️ [STEPFUN 3.7] mid-stream error: {chunk['error']}")
+                                logger.warning(f"⚠️ [LING 3.0] mid-stream error: {chunk['error']}")
                                 break
                             choices = chunk.get("choices")
                             if not choices:
@@ -6259,12 +6259,12 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                                 full_reply += token
                                 yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
                         except (json.JSONDecodeError, KeyError, TypeError, IndexError) as parse_err:
-                            logger.debug(f"⚠️ [STEPFUN 3.7] skipped unparsable stream chunk: {parse_err}")
+                            logger.debug(f"⚠️ [LING 3.0] skipped unparsable stream chunk: {parse_err}")
                             continue
                 except (requests.exceptions.RequestException, ConnectionError, OSError) as e:
-                    logger.warning(f"⚠️ [STEPFUN 3.7] stream network error: {e}")
+                    logger.warning(f"⚠️ [LING 3.0] stream network error: {e}")
                 except Exception as e:
-                    _log_unexpected("STEPFUN 3.7 stream", e)
+                    _log_unexpected("LING 3.0 stream", e)
 
                 if thinking_open_stepfun3:
                     full_reply += "</think>"
@@ -7168,7 +7168,7 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
             "minimax_m3": [],  # Routed via NVIDIA NIM API (NVIDIA_API_KEY) — minimaxai/minimax-m3
             "glm52":      [],  # Routed via NVIDIA NIM API (NVIDIA_API_KEY) — z-ai/glm-5.2
             "agnes":      [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — agnes-2.5-flash
-            "stepfun3":   [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — stepfun-3.7-flash
+            "stepfun3":   [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — ling-3.0-flash-free (was stepfun-3.7-flash)
             "mistral_large":  [],  # Routed via Mistral API (MISTRAL_API_KEY) — mistral-large-latest
             "mistral_medium": [],  # Routed via Mistral API (MISTRAL_API_KEY) — mistral-medium-latest
             "mistral_small":  [],  # Routed via Mistral API (MISTRAL_API_KEY) — mistral-small-latest
@@ -7763,9 +7763,9 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                 + NO_TOOL_CALL_RULE
             ),
             "stepfun3": (
-                "Your name is Catura (pronounced kuh-CHUR-uh) Stepfun Model. You are a highly capable "
+                "Your name is Catura (pronounced kuh-CHUR-uh) Ling Model. You are a highly capable "
                 "AI assistant created by Anirban — an independent developer based in India. "
-                "You are Catura AI Stepfun, built for fast, efficient, and high-quality responses. "
+                "You are Catura AI Ling, built for fast, efficient, and high-quality responses. "
                 "You are clear, direct, and helpful. You speak like a knowledgeable friend — "
                 "never robotic, never sycophantic. "
                 "Never start a response with 'Certainly!', 'Of course!', 'Great question!', "
@@ -7776,7 +7776,7 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                 "Use bullet points or headers only when they genuinely improve clarity. "
                 "You are knowledgeable about technology, science, finance, history, culture, and everyday topics. "
                 "For coding questions, write clean, well-commented code. "
-                "If asked what model or AI you are, say you are Catura AI Stepfun and cannot share "
+                "If asked what model or AI you are, say you are Catura AI Ling and cannot share "
                 "details about the underlying technology. "
                 "If asked who made you, say 'I was created by Anirban.' "
                 "Never make up facts. If you don't know something, say so honestly."
@@ -8697,7 +8697,7 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                 })
             )
 
-        # ── STEPFUN 3.7: NaraRouter API (NARAROUTER_API_KEY) — stepfun-3.7-flash ──
+        # ── STEPFUN3 (key kept for compat): NaraRouter API (NARAROUTER_API_KEY) — ling-3.0-flash-free (was stepfun-3.7-flash) ──
         if model_key == "stepfun3":
             nara_key_stepfun3   = os.getenv("NARAROUTER_API_KEY", "")
             stepfun3_system     = system_prompts.get("stepfun3", system_prompts["dagr"])
@@ -8730,7 +8730,7 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                 resp, err = call_nararouter_stream(stepfun3_messages, nara_key_stepfun3, "ling-3.0-flash-free", max_tokens=16000)
 
                 if resp is None:
-                    yield f"data: {json.dumps({'error': f'Stepfun 3.7 unavailable: {err}'})}\n\n"
+                    yield f"data: {json.dumps({'error': f'Ling 3.0 unavailable: {err}'})}\n\n"
                     yield "data: [DONE]\n\n"
                     return
 
@@ -8747,7 +8747,7 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                         try:
                             chunk = json.loads(payload)
                             if "error" in chunk:
-                                logger.warning(f"⚠️ [STEPFUN 3.7] mid-stream error: {chunk['error']}")
+                                logger.warning(f"⚠️ [LING 3.0] mid-stream error: {chunk['error']}")
                                 break
                             choices = chunk.get("choices")
                             if not choices:
@@ -8768,12 +8768,12 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                                 full_reply += token
                                 yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
                         except (json.JSONDecodeError, KeyError, TypeError, IndexError) as parse_err:
-                            logger.debug(f"⚠️ [STEPFUN 3.7] skipped unparsable stream chunk: {parse_err}")
+                            logger.debug(f"⚠️ [LING 3.0] skipped unparsable stream chunk: {parse_err}")
                             continue
                 except (requests.exceptions.RequestException, ConnectionError, OSError) as e:
-                    logger.warning(f"⚠️ [STEPFUN 3.7] stream network error: {e}")
+                    logger.warning(f"⚠️ [LING 3.0] stream network error: {e}")
                 except Exception as e:
-                    _log_unexpected("STEPFUN 3.7 stream", e)
+                    _log_unexpected("LING 3.0 stream", e)
 
                 if thinking_open_stepfun3:
                     full_reply += "</think>"
