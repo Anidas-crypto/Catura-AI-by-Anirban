@@ -865,7 +865,7 @@ def share_page(slug: str):
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.440"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.441"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -875,7 +875,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.440", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.441", "timestamp": datetime.utcnow().isoformat()}
 
 # ── 🧠 MEMORY MODELS ────────────────────────────────────────────────────────
 from pydantic import BaseModel as _MemBaseModel
@@ -8683,7 +8683,7 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                     [{"role": "system", "content": final_system_stepfun3}]
                     + active_memory[-20:]
                 )
-                resp, err = call_nararouter_stream(stepfun3_messages, nara_key_stepfun3, "stepfun-3.7-flash", max_tokens=16000)
+                resp, err = call_nararouter_stream(stepfun3_messages, nara_key_stepfun3, "ling-3.0-flash-free", max_tokens=16000)
 
                 if resp is None:
                     yield f"data: {json.dumps({'error': f'Stepfun 3.7 unavailable: {err}'})}\n\n"
