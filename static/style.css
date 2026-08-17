@@ -9396,19 +9396,71 @@ body.code-artifact-resizing .code-artifact-resize-handle::after {
     tab-size: 4;
 }
 
-/* Mobile: panel takes the full screen, resize handle hidden, and the
-   sidebar/rail are already off-canvas so no 50/50 math is needed. */
+/* Mobile: half-screen bottom sheet — slides up automatically when a code
+   block finishes writing. Rounded top corners, drag handle to dismiss by
+   swiping down, tapping the body never closes it (only the handle drag or
+   the ✕ button do). None of this bottom-sheet behavior applies on desktop. */
+.code-artifact-panel-drag-handle { display: none; }
+
 @media (max-width: 900px) {
-    .code-artifact-panel.open {
-        flex: 1 1 100%;
-        width: 100vw !important;
-        min-width: 0;
-        border-left: none;
+    .code-artifact-panel {
         position: fixed;
-        inset: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        top: auto;
+        width: 100vw !important;
+        height: 68vh;
+        max-height: 68vh;
+        min-width: 0;
+        flex: none !important;
+        border-left: none;
+        border-top: 1px solid var(--border-strong);
+        border-top-left-radius: 20px;
+        border-top-right-radius: 20px;
+        box-shadow: 0 -8px 28px rgba(0,0,0,0.45);
         z-index: 950;
+        transform: translateY(100%);
+        opacity: 1;
+        transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
     }
-    body.code-artifact-panel-open .app { display: none; }
+    .code-artifact-panel.open {
+        transform: translateY(0);
+    }
+    body.code-artifact-panel-open .app { display: block; }
+    body.code-artifact-resizing .code-artifact-panel { transition: none; }
+
     .code-artifact-resize-handle { display: none; }
     .code-artifact, .code-artifact.expanded { max-width: 100%; }
+
+    /* Mobile header: language tag (left) · drag handle (center) · close (right) */
+    .code-artifact-panel-header {
+        position: relative;
+        padding: 10px 14px;
+        touch-action: none;
+    }
+    .code-artifact-panel-copy-btn,
+    #codeArtifactCopyBtn,
+    .code-artifact-panel-expand-btn {
+        display: none !important;
+    }
+    .code-artifact-panel-drag-handle {
+        display: block;
+        position: absolute;
+        left: 50%;
+        top: 8px;
+        transform: translateX(-50%);
+        width: 40px;
+        height: 4px;
+        border-radius: 3px;
+        background: var(--border-strong);
+    }
+    .code-artifact-panel-header {
+        padding-top: 18px;
+    }
+    .code-artifact-panel-close {
+        width: 30px;
+        height: 30px;
+        font-size: 14px;
+    }
 }

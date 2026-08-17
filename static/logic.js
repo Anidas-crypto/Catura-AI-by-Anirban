@@ -2045,6 +2045,58 @@ function copyArtifactCode() {
     }).catch(() => showToast("Failed to copy code"));
 }
 
+// Mobile bottom-sheet: swipe down on the header/handle to dismiss.
+// Tapping anywhere in the body never closes it — only this drag, or ✕.
+(function initCodeArtifactMobileSwipe() {
+    document.addEventListener("DOMContentLoaded", () => {
+        const header = document.getElementById("codeArtifactPanelHeader");
+        const panel = document.getElementById("codeArtifactPanel");
+        if (!header || !panel) return;
+
+        let startY = 0;
+        let dragging = false;
+
+        const isMobile = () => window.innerWidth <= 900;
+
+        const onStart = (e) => {
+            if (!isMobile() || !panel.classList.contains("open")) return;
+            // Let the close (✕) button behave as a normal tap, not a drag.
+            if (e.target.closest(".code-artifact-panel-close")) return;
+            dragging = true;
+            startY = e.touches ? e.touches[0].clientY : e.clientY;
+            panel.style.transition = "none";
+        };
+
+        const onMove = (e) => {
+            if (!dragging) return;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            const deltaY = Math.max(0, clientY - startY);
+            panel.style.transform = `translateY(${deltaY}px)`;
+        };
+
+        const onEnd = (e) => {
+            if (!dragging) return;
+            dragging = false;
+            panel.style.transition = "";
+            const clientY = (e.changedTouches ? e.changedTouches[0].clientY : e.clientY) || startY;
+            const deltaY = clientY - startY;
+            const dismissThreshold = panel.getBoundingClientRect().height * 0.22;
+            panel.style.transform = "";
+            if (deltaY > dismissThreshold) {
+                closeCodeArtifactPanel();
+            }
+        };
+
+        header.addEventListener("touchstart", onStart, { passive: true });
+        header.addEventListener("touchmove", onMove, { passive: true });
+        header.addEventListener("touchend", onEnd, { passive: true });
+        // Mouse fallback so it's also testable on desktop dev tools mobile emulation.
+        header.addEventListener("mousedown", onStart);
+        document.addEventListener("mousemove", onMove);
+        document.addEventListener("mouseup", onEnd);
+    });
+})();
+
 // Drag-to-resize handle on the left edge of the side panel — now a real
 // flex sibling, so resizing just overrides the 50/50 flex-basis split.
 (function initCodeArtifactResize() {
