@@ -1963,6 +1963,7 @@ function openCodeArtifact(id) {
     const entry = window.__codeArtifacts[id];
     if (!entry) return;
     const panel = document.getElementById("codeArtifactPanel");
+    const app = document.getElementById("app");
     if (!panel) return;
 
     window.__activePanelId = id;
@@ -1970,6 +1971,13 @@ function openCodeArtifact(id) {
     const codeEl = document.getElementById("codeArtifactPanelCode");
     codeEl.textContent = entry.code;
     codeEl.className = `language-${(entry.language || "text").toLowerCase()}`;
+
+    // Fresh open (not already open) starts clean at the default 50/50 split —
+    // any previous drag-resize width shouldn't carry over to a new session.
+    if (!panel.classList.contains("open")) {
+        panel.style.flex = "";
+        if (app) app.style.flex = "";
+    }
 
     panel.classList.add("open");
     document.body.classList.add("code-artifact-panel-open");
@@ -1991,7 +1999,18 @@ function refreshOpenPanelIfActive(id) {
 // so an accidental click elsewhere in the app never loses the artifact view.
 function closeCodeArtifactPanel() {
     const panel = document.getElementById("codeArtifactPanel");
-    if (panel) { panel.classList.remove("open"); panel.classList.remove("expanded"); }
+    const app = document.getElementById("app");
+    if (panel) {
+        panel.classList.remove("open");
+        panel.classList.remove("expanded");
+        // Clear any inline flex-basis left over from manual resizing —
+        // otherwise it overrides the CSS classes and the layout gets stuck
+        // at the last dragged width instead of collapsing back to 0.
+        panel.style.flex = "";
+    }
+    if (app) {
+        app.style.flex = "";
+    }
     document.body.classList.remove("code-artifact-panel-open");
     document.body.classList.remove("code-artifact-panel-expanded");
     window.__activePanelId = null;
@@ -1999,9 +2018,17 @@ function closeCodeArtifactPanel() {
 
 function toggleCodeArtifactExpand() {
     const panel = document.getElementById("codeArtifactPanel");
+    const app = document.getElementById("app");
     if (!panel) return;
     const nowExpanded = panel.classList.toggle("expanded");
     document.body.classList.toggle("code-artifact-panel-expanded", nowExpanded);
+    // Expanding fills 100% via CSS (!important) regardless of inline style,
+    // but clear any dragged width so un-expanding falls back to a clean 50/50
+    // split instead of the stale pre-expand pixel width.
+    if (nowExpanded) {
+        panel.style.flex = "";
+        if (app) app.style.flex = "";
+    }
 }
 
 function copyArtifactCode() {
