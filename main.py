@@ -796,7 +796,6 @@ GEMINI_API_KEY      = os.getenv("GEMINI_API_KEY", "")               # https://ai
 TAVILY_API_KEY      = os.getenv("TAVILY_API_KEY", "")               # https://tavily.com (free — 1000 searches/month)
 GROQ_API_KEY        = os.getenv("GROQ_API_KEY", "")                 # https://console.groq.com (free tier)
 ZAI_API_KEY         = os.getenv("ZAI_API_KEY", "")                  # https://z.ai (GLM-4.7-Flash — free tier)
-ZEN_API_KEY         = os.getenv("ZEN_API_KEY", "")                   # https://opencode.ai/zen (DeepSeek V4 Flash — free tier)
 NARAROUTER_API_KEY  = os.getenv("NARAROUTER_API_KEY", "")           # https://router.bynara.id (Agnes 2.5 Flash, Ling 3.0 Flash — free tier)
 SERPER_API_KEY      = os.getenv("SERPER_API_KEY", "")               # https://serper.dev (2500 free searches)
 FIRECRAWL_API_KEY   = os.getenv("FIRECRAWL_API_KEY", "")            # https://firecrawl.dev (free tier)
@@ -865,7 +864,7 @@ def share_page(slug: str):
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.449"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.450"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -875,7 +874,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.449", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.450", "timestamp": datetime.utcnow().isoformat()}
 
 # ── 🧠 MEMORY MODELS ────────────────────────────────────────────────────────
 from pydantic import BaseModel as _MemBaseModel
@@ -1074,7 +1073,7 @@ async def mcp_handshake_and_list_tools(url: str, headers: dict | None = None):
     init_result, err = await _mcp_rpc(url, "initialize", {
         "protocolVersion": _MCP_PROTOCOL_VERSION,
         "capabilities": {},
-        "clientInfo": {"name": "Catura AI", "version": "0.0.449"},
+        "clientInfo": {"name": "Catura AI", "version": "0.0.450"},
     }, headers)
     if err:
         return None, err
@@ -4636,59 +4635,6 @@ def call_zai_stream(messages, api_key):
 
 
 # ============================================================
-# ✅ HELPER: Call OpenCode Zen — deepseek-v4-flash (free tier)
-# OpenAI-compatible endpoint at opencode.ai/zen (ZEN_API_KEY)
-# Completely isolated from all other models — this model ONLY ever
-# uses ZEN_API_KEY, this function, and its own system prompt below.
-# It never shares state, keys, or code paths with any other model.
-# ============================================================
-def call_opencode_deepseek_stream(messages, api_key):
-    """
-    Dedicated OpenCode Zen streaming function for DeepSeek V4 Flash (free).
-    Uses OpenCode's official OpenAI-compatible endpoint
-    (https://opencode.ai/zen/v1/chat/completions). Completely isolated from
-    every other model in this file — does NOT touch any other API key,
-    does NOT share this function with any other model, and is not part of
-    any shared model_pool/handoff list.
-    """
-    if not api_key:
-        return None, "ZEN_API_KEY not set in environment variables"
-    try:
-        resp = _http.post(
-            "https://opencode.ai/zen/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": "deepseek-v4-flash-free",
-                "messages": messages,
-                "stream": True,
-                "temperature": 0.7,
-                "max_tokens": 32768,
-            },
-            stream=True,
-            timeout=(10, 120),
-        )
-        if resp.status_code != 200:
-            try:
-                err_body = resp.json()
-                err_msg = err_body.get("error", {}).get("message", f"HTTP {resp.status_code}")
-            except (ValueError, KeyError, AttributeError):
-                err_msg = f"HTTP {resp.status_code}"
-            return None, err_msg
-        return resp, None
-    except requests.exceptions.Timeout:
-        return None, "Request timed out"
-    except requests.exceptions.RequestException as e:
-        logger.warning(f"⚠️ [call_opencode_deepseek_stream] network error: {e}")
-        return None, _client_safe_error(e, "call_opencode_deepseek_stream")
-    except Exception as e:
-        _log_unexpected("call_opencode_deepseek_stream", e)
-        return None, _client_safe_error(e, "call_opencode_deepseek_stream")
-
-
-# ============================================================
 # ✅ HELPER: Call NaraRouter — agnes-2.5-flash, ling-3.0-flash-free
 # OpenAI-compatible endpoint at router.bynara.id (NARAROUTER_API_KEY)
 # ============================================================
@@ -5137,7 +5083,6 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
             "sambhav": [],  # Routed via Groq API (llama-3.3-70b-versatile) — see call_sambhav_groq_stream()
             "nivo":    [],  # Routed via Groq API (GROQ_API_KEY) — see generate_nivo()
             "glm":     [],  # Routed via Z.ai API (ZAI_API_KEY) — glm-4.7-flash (free)
-            "deepseek_v4": [],  # Routed via OpenCode Zen API (ZEN_API_KEY) — deepseek-v4-flash (free)
             "minimax_m3": [],  # Routed via NVIDIA NIM API (NVIDIA_API_KEY) — minimaxai/minimax-m3
             "glm52":      [],  # Routed via NVIDIA NIM API (NVIDIA_API_KEY) — z-ai/glm-5.2
             "agnes":      [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — agnes-2.5-flash
@@ -5478,43 +5423,6 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
 
                 # ── Identity rules ──
                 "If asked what model or AI you are, say you are Catura AI GLM and cannot share "
-                "details about the underlying technology. "
-                "If asked who made you, say 'I was created by Anirban.' "
-
-                # ── Hard rules ──
-                "Never make up facts. If you don't know something, say so honestly. "
-                "Never say 'I don't have real-time data' — if live data is provided in context, use it; "
-                "otherwise give your best knowledge-based answer."
-                + FORMATTING_RULES
-                + NO_TOOL_CALL_RULE
-            ),
-            "deepseek_v4": (
-                # ── Identity ──
-                "Your name is Catura (pronounced kuh-CHUR-uh) DeepSeek Model. You are a highly capable "
-                "AI assistant created by Anirban — an independent developer based in India. "
-                "You are Catura AI DeepSeek, built for fast, efficient, and high-quality responses. "
-
-                # ── Personality & tone ──
-                "You are clear, direct, and helpful. You speak like a knowledgeable friend — "
-                "never robotic, never sycophantic. "
-                "Never start a response with 'Certainly!', 'Of course!', 'Great question!', "
-                "'Absolutely!', or similar hollow openers. Just answer directly. "
-
-                # ── Language behaviour ──
-                "If the user writes in Bengali, Hindi, or any other language, "
-                "respond naturally in that same language. Match the user's language automatically. "
-
-                # ── Response style ──
-                "Keep answers concise unless the user explicitly asks for detail or a long explanation. "
-                "Use bullet points, numbered lists, or headers only when they genuinely improve clarity. "
-                "For simple questions, give simple answers. Don't pad responses. "
-
-                # ── Expertise ──
-                "You are knowledgeable about technology, science, finance, history, culture, and everyday topics. "
-                "For coding questions, write clean, well-commented code. "
-
-                # ── Identity rules ──
-                "If asked what model or AI you are, say you are Catura AI DeepSeek and cannot share "
                 "details about the underlying technology. "
                 "If asked who made you, say 'I was created by Anirban.' "
 
@@ -6471,129 +6379,6 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
 
             return StreamingResponse(
                 generate_glm(),
-                media_type="text/event-stream",
-                headers=_rl({
-                    "Cache-Control": "no-cache",
-                    "Set-Cookie": build_session_cookie(session_id),
-                })
-            )
-
-        # ── DEEPSEEK V4 FLASH: OpenCode Zen API (ZEN_API_KEY) — deepseek-v4-flash (free) ──
-        # Completely isolated from every other model: its own API key (ZEN_API_KEY),
-        # its own call function (call_opencode_deepseek_stream), and its own system
-        # prompt (system_prompts["deepseek_v4"]) — never shared with any other model.
-        if model_key == "deepseek_v4":
-            zen_key         = os.getenv("ZEN_API_KEY", "")
-            deepseek_system = system_prompts.get("deepseek_v4", system_prompts["dagr"])
-
-            def generate_deepseek_v4():
-                full_reply = ""
-                thinking_open_ds = False  # tracks whether <think> has been opened in full_reply
-
-                tool_result_ds = None
-                if intent != "general" and not file_urls:
-                    yield f"data: {json.dumps({'status': 'tool_running', 'intent': intent})}\n\n"
-                    tool_result_ds = run_tool(intent, prompt)
-
-                final_system_ds = deepseek_system
-                tool_context_ds = build_tool_context(tool_result_ds)
-                if tool_context_ds:
-                    final_system_ds += "\n\n" + tool_context_ds
-
-                if tool_result_ds:
-                    badge_payload = json.dumps({"tool_used": tool_result_ds.get("tool", ""), "intent": intent})
-                    yield f"data: {badge_payload}\n\n"
-                    sp = build_sources_payload(tool_result_ds)
-                    if sp:
-                        yield f"data: {sp}\n\n"
-
-                base_ds_messages = (
-                    [{"role": "system", "content": final_system_ds}]
-                    + active_memory[-20:]
-                )
-
-                # ── Handoff loop: same pattern as GLM/GLM-5.2 — if DeepSeek gets
-                # cut off for length, keep asking it to continue exactly where it
-                # left off instead of ending the stream with a half-finished reply.
-                MAX_DEEPSEEK_LEGS = 6
-                leg = 0
-                while leg < MAX_DEEPSEEK_LEGS:
-                    leg += 1
-                    ds_messages = (
-                        base_ds_messages + [
-                            {"role": "assistant", "content": full_reply},
-                            {"role": "user", "content": HANDOFF_CONTINUE_PROMPT},
-                        ]
-                        if full_reply.strip() else base_ds_messages
-                    )
-                    resp, err = call_opencode_deepseek_stream(ds_messages, zen_key)
-
-                    if resp is None:
-                        if full_reply.strip():
-                            break  # keep what we have rather than losing it
-                        yield f"data: {json.dumps({'error': f'DeepSeek V4 Flash unavailable: {err}'})}\n\n"
-                        yield "data: [DONE]\n\n"
-                        return
-
-                    finish_reason_ds = None
-                    try:
-                        for line in resp.iter_lines():
-                            if not line:
-                                continue
-                            decoded = line.decode("utf-8")
-                            if not decoded.startswith("data: "):
-                                continue
-                            payload = decoded[6:]
-                            if payload.strip() == "[DONE]":
-                                break
-                            try:
-                                chunk = json.loads(payload)
-                                if "error" in chunk:
-                                    logger.warning(f"⚠️ [DeepSeek V4] mid-stream error: {chunk['error']}")
-                                    break
-                                choices = chunk.get("choices")
-                                if not choices:
-                                    continue
-                                finish_reason_ds = choices[0].get("finish_reason") or finish_reason_ds
-                                delta_ds = choices[0].get("delta") or {}
-                                reasoning_token_ds = delta_ds.get("reasoning_content") or ""
-                                token = delta_ds.get("content") or ""
-                                if reasoning_token_ds:
-                                    if not thinking_open_ds:
-                                        full_reply += "<think>"
-                                        thinking_open_ds = True
-                                    full_reply += reasoning_token_ds
-                                    yield f"data: {json.dumps({'thinking_token': reasoning_token_ds}, ensure_ascii=False)}\n\n"
-                                if token:
-                                    if thinking_open_ds:
-                                        full_reply += "</think>"
-                                        thinking_open_ds = False
-                                    full_reply += token
-                                    yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
-                            except (json.JSONDecodeError, KeyError, TypeError, IndexError) as parse_err:
-                                logger.debug(f"⚠️ [DeepSeek V4] skipped unparsable stream chunk: {parse_err}")
-                                continue
-                    except (requests.exceptions.RequestException, ConnectionError, OSError) as e:
-                        logger.warning(f"⚠️ [DeepSeek V4] stream network error: {e}")
-                    except Exception as e:
-                        _log_unexpected("DeepSeek V4 stream", e)
-
-                    # Only keep going if DeepSeek was actually cut off for length reasons.
-                    if finish_reason_ds == "length":
-                        continue
-                    break
-
-                if thinking_open_ds:
-                    full_reply += "</think>"
-
-                if full_reply.strip():
-                    active_memory.append({"role": "assistant", "content": full_reply})
-                    if not ghost_mode and len(user_memory[session_id]) > 40:
-                        user_memory[session_id] = user_memory[session_id][-40:]
-                yield "data: [DONE]\n\n"
-
-            return StreamingResponse(
-                generate_deepseek_v4(),
                 media_type="text/event-stream",
                 headers=_rl({
                     "Cache-Control": "no-cache",
@@ -7769,7 +7554,6 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
             "sambhav": [],  # Routed via Groq API (llama-3.3-70b-versatile) — see call_sambhav_groq_stream()
             "nivo":    [],  # Routed via Groq API (GROQ_API_KEY)
             "glm":     [],  # Routed via Z.ai API (ZAI_API_KEY) — glm-4.7-flash (free)
-            "deepseek_v4": [],  # Routed via OpenCode Zen API (ZEN_API_KEY) — deepseek-v4-flash (free)
             "minimax_m3": [],  # Routed via NVIDIA NIM API (NVIDIA_API_KEY) — minimaxai/minimax-m3
             "glm52":      [],  # Routed via NVIDIA NIM API (NVIDIA_API_KEY) — z-ai/glm-5.2
             "agnes":      [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — agnes-2.5-flash
@@ -8302,26 +8086,6 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                 "You are knowledgeable about technology, science, finance, history, culture, and everyday topics. "
                 "For coding questions, write clean, well-commented code. "
                 "If asked what model or AI you are, say you are Catura AI GLM and cannot share "
-                "details about the underlying technology. "
-                "If asked who made you, say 'I was created by Anirban.' "
-                "Never make up facts. If you don't know something, say so honestly."
-                + NO_TOOL_CALL_RULE
-            ),
-            "deepseek_v4": (
-                "Your name is Catura (pronounced kuh-CHUR-uh) DeepSeek Model. You are a highly capable "
-                "AI assistant created by Anirban — an independent developer based in India. "
-                "You are Catura AI DeepSeek, built for fast, efficient, and high-quality responses. "
-                "You are clear, direct, and helpful. You speak like a knowledgeable friend — "
-                "never robotic, never sycophantic. "
-                "Never start a response with 'Certainly!', 'Of course!', 'Great question!', "
-                "'Absolutely!', or similar hollow openers. Just answer directly. "
-                "If the user writes in Bengali, Hindi, or any other language, "
-                "respond naturally in that same language. Match the user's language automatically. "
-                "Keep answers concise unless the user explicitly asks for detail. "
-                "Use bullet points or headers only when they genuinely improve clarity. "
-                "You are knowledgeable about technology, science, finance, history, culture, and everyday topics. "
-                "For coding questions, write clean, well-commented code. "
-                "If asked what model or AI you are, say you are Catura AI DeepSeek and cannot share "
                 "details about the underlying technology. "
                 "If asked who made you, say 'I was created by Anirban.' "
                 "Never make up facts. If you don't know something, say so honestly."
@@ -9031,104 +8795,6 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
 
             return StreamingResponse(
                 generate_glm_get(), media_type="text/event-stream",
-                headers=_rl({"Cache-Control": "no-cache",
-                         "Set-Cookie": build_session_cookie(session_id)})
-            )
-
-        # ── DEEPSEEK V4 FLASH: OpenCode Zen API (ZEN_API_KEY) — deepseek-v4-flash (GET handler) ──
-        # Completely isolated from every other model — own key, own call function,
-        # own system prompt. Never shares code paths with any other model.
-        if model_key == "deepseek_v4":
-            zen_key_get         = os.getenv("ZEN_API_KEY", "")
-            deepseek_system_get = system_prompts.get("deepseek_v4", system_prompts["dagr"])
-
-            def generate_deepseek_v4_get():
-                full_reply = ""
-                thinking_open_ds_get = False  # tracks whether <think> has been opened in full_reply
-                if tool_result:
-                    yield f"data: {json.dumps({'tool_used': tool_result.get('tool', ''), 'intent': intent})}\n\n"
-                    sp = build_sources_payload(tool_result)
-                    if sp:
-                        yield f"data: {sp}\n\n"
-
-                base_ds_msgs_get = [{"role": "system", "content": deepseek_system_get}] + active_memory[-20:]
-
-                # ── Same handoff/continue loop as the POST handler.
-                MAX_DEEPSEEK_LEGS = 6
-                leg = 0
-                while leg < MAX_DEEPSEEK_LEGS:
-                    leg += 1
-                    ds_msgs_get = (
-                        base_ds_msgs_get + [
-                            {"role": "assistant", "content": full_reply},
-                            {"role": "user", "content": HANDOFF_CONTINUE_PROMPT},
-                        ]
-                        if full_reply.strip() else base_ds_msgs_get
-                    )
-                    resp, err = call_opencode_deepseek_stream(ds_msgs_get, zen_key_get)
-                    if resp is None:
-                        if full_reply.strip():
-                            break
-                        yield f"data: {json.dumps({'error': f'DeepSeek V4 Flash unavailable: {err}'})}\n\n"
-                        yield "data: [DONE]\n\n"
-                        return
-
-                    finish_reason_ds_get = None
-                    try:
-                        for line in resp.iter_lines():
-                            if not line:
-                                continue
-                            decoded = line.decode("utf-8")
-                            if not decoded.startswith("data: "):
-                                continue
-                            payload = decoded[6:]
-                            if payload.strip() == "[DONE]":
-                                break
-                            try:
-                                chunk = json.loads(payload)
-                                if "error" in chunk:
-                                    break
-                                choices = chunk.get("choices")
-                                if not choices:
-                                    continue
-                                finish_reason_ds_get = choices[0].get("finish_reason") or finish_reason_ds_get
-                                delta_ds_get = choices[0].get("delta") or {}
-                                reasoning_token_ds_get = delta_ds_get.get("reasoning_content") or ""
-                                token = delta_ds_get.get("content") or ""
-                                if reasoning_token_ds_get:
-                                    if not thinking_open_ds_get:
-                                        full_reply += "<think>"
-                                        thinking_open_ds_get = True
-                                    full_reply += reasoning_token_ds_get
-                                    yield f"data: {json.dumps({'thinking_token': reasoning_token_ds_get}, ensure_ascii=False)}\n\n"
-                                if token:
-                                    if thinking_open_ds_get:
-                                        full_reply += "</think>"
-                                        thinking_open_ds_get = False
-                                    full_reply += token
-                                    yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
-                            except (json.JSONDecodeError, KeyError, TypeError, IndexError) as parse_err:
-                                logger.debug(f"⚠️ [DeepSeek V4 GET] skipped unparsable stream chunk: {parse_err}")
-                                continue
-                    except (requests.exceptions.RequestException, ConnectionError, OSError) as e:
-                        logger.warning(f"⚠️ [DeepSeek V4 GET] stream network error: {e}")
-                    except Exception as e:
-                        _log_unexpected("DeepSeek V4 GET stream", e)
-
-                    if finish_reason_ds_get == "length":
-                        continue
-                    break
-
-                if thinking_open_ds_get:
-                    full_reply += "</think>"
-                if full_reply.strip():
-                    active_memory.append({"role": "assistant", "content": full_reply})
-                    if not ghost_mode and len(user_memory[session_id]) > 40:
-                        user_memory[session_id] = user_memory[session_id][-40:]
-                yield "data: [DONE]\n\n"
-
-            return StreamingResponse(
-                generate_deepseek_v4_get(), media_type="text/event-stream",
                 headers=_rl({"Cache-Control": "no-cache",
                          "Set-Cookie": build_session_cookie(session_id)})
             )
