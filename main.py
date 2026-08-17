@@ -864,7 +864,7 @@ def share_page(slug: str):
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.450"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.451"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -874,7 +874,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.450", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.451", "timestamp": datetime.utcnow().isoformat()}
 
 # ── 🧠 MEMORY MODELS ────────────────────────────────────────────────────────
 from pydantic import BaseModel as _MemBaseModel
@@ -1073,7 +1073,7 @@ async def mcp_handshake_and_list_tools(url: str, headers: dict | None = None):
     init_result, err = await _mcp_rpc(url, "initialize", {
         "protocolVersion": _MCP_PROTOCOL_VERSION,
         "capabilities": {},
-        "clientInfo": {"name": "Catura AI", "version": "0.0.450"},
+        "clientInfo": {"name": "Catura AI", "version": "0.0.451"},
     }, headers)
     if err:
         return None, err
@@ -4635,14 +4635,14 @@ def call_zai_stream(messages, api_key):
 
 
 # ============================================================
-# ✅ HELPER: Call NaraRouter — agnes-2.5-flash, ling-3.0-flash-free
+# ✅ HELPER: Call NaraRouter — agnes-2.5-flash, ling-3.0-flash-free, mimo-v2.5-free
 # OpenAI-compatible endpoint at router.bynara.id (NARAROUTER_API_KEY)
 # ============================================================
 def call_nararouter_stream(messages, api_key, model_id, max_tokens=32768):
     """
     Dedicated NaraRouter streaming function.
     Shared by all NaraRouter-hosted models (Agnes 2.5 Flash, Ling 3.0 Flash,
-    etc.) via model_id param. OpenAI-compatible chat completions endpoint.
+    Mimo v2.5, etc.) via model_id param. OpenAI-compatible chat completions endpoint.
     """
     if not api_key:
         return None, "NARAROUTER_API_KEY not set in environment variables"
@@ -5087,6 +5087,7 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
             "glm52":      [],  # Routed via NVIDIA NIM API (NVIDIA_API_KEY) — z-ai/glm-5.2
             "agnes":      [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — agnes-2.5-flash
             "stepfun3":   [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — ling-3.0-flash-free (was stepfun-3.7-flash)
+            "mimo25":     [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — mimo-v2.5-free
             "mistral_large":  [],  # Routed via Mistral API (MISTRAL_API_KEY) — mistral-large-latest
             "mistral_medium": [],  # Routed via Mistral API (MISTRAL_API_KEY) — mistral-medium-latest
             "mistral_small":  [],  # Routed via Mistral API (MISTRAL_API_KEY) — mistral-small-latest
@@ -5488,6 +5489,26 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                 "You are knowledgeable about technology, science, finance, history, culture, and everyday topics. "
                 "For coding questions, write clean, well-commented code. "
                 "If asked what model or AI you are, say you are Catura AI Ling and cannot share "
+                "details about the underlying technology. "
+                "If asked who made you, say 'I was created by Anirban.' "
+                "Never make up facts. If you don't know something, say so honestly."
+                + NO_TOOL_CALL_RULE
+            ),
+            "mimo25": (
+                "Your name is Catura (pronounced kuh-CHUR-uh) Mimo Model. You are a highly capable "
+                "AI assistant created by Anirban — an independent developer based in India. "
+                "You are Catura AI Mimo, built for fast, efficient, and high-quality responses. "
+                "You are clear, direct, and helpful. You speak like a knowledgeable friend — "
+                "never robotic, never sycophantic. "
+                "Never start a response with 'Certainly!', 'Of course!', 'Great question!', "
+                "'Absolutely!', or similar hollow openers. Just answer directly. "
+                "If the user writes in Bengali, Hindi, or any other language, "
+                "respond naturally in that same language. Match the user's language automatically. "
+                "Keep answers concise unless the user explicitly asks for detail. "
+                "Use bullet points or headers only when they genuinely improve clarity. "
+                "You are knowledgeable about technology, science, finance, history, culture, and everyday topics. "
+                "For coding questions, write clean, well-commented code. "
+                "If asked what model or AI you are, say you are Catura AI Mimo and cannot share "
                 "details about the underlying technology. "
                 "If asked who made you, say 'I was created by Anirban.' "
                 "Never make up facts. If you don't know something, say so honestly."
@@ -6674,6 +6695,102 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                 })
             )
 
+        # ── MIMO25: NaraRouter API (NARAROUTER_API_KEY) — mimo-v2.5-free ──
+        if model_key == "mimo25":
+            nara_key_mimo25   = os.getenv("NARAROUTER_API_KEY", "")
+            mimo25_system     = system_prompts.get("mimo25", system_prompts["dagr"])
+
+            def generate_mimo25():
+                full_reply = ""
+                thinking_open_mimo25 = False  # tracks whether <think> has been opened in full_reply
+
+                tool_result_mimo25 = None
+                if intent != "general" and not file_urls:
+                    yield f"data: {json.dumps({'status': 'tool_running', 'intent': intent})}\n\n"
+                    tool_result_mimo25 = run_tool(intent, prompt)
+
+                final_system_mimo25 = mimo25_system
+                tool_context_mimo25 = build_tool_context(tool_result_mimo25)
+                if tool_context_mimo25:
+                    final_system_mimo25 += "\n\n" + tool_context_mimo25
+
+                if tool_result_mimo25:
+                    badge_payload = json.dumps({"tool_used": tool_result_mimo25.get("tool", ""), "intent": intent})
+                    yield f"data: {badge_payload}\n\n"
+                    sp = build_sources_payload(tool_result_mimo25)
+                    if sp:
+                        yield f"data: {sp}\n\n"
+
+                mimo25_messages = (
+                    [{"role": "system", "content": final_system_mimo25}]
+                    + active_memory[-20:]
+                )
+                resp, err = call_nararouter_stream(mimo25_messages, nara_key_mimo25, "mimo-v2.5-free", max_tokens=16000)
+
+                if resp is None:
+                    yield f"data: {json.dumps({'error': f'Mimo unavailable: {err}'})}\n\n"
+                    yield "data: [DONE]\n\n"
+                    return
+
+                try:
+                    for line in resp.iter_lines():
+                        if not line:
+                            continue
+                        decoded = line.decode("utf-8")
+                        if not decoded.startswith("data: "):
+                            continue
+                        payload = decoded[6:]
+                        if payload.strip() == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(payload)
+                            if "error" in chunk:
+                                logger.warning(f"⚠️ [MIMO25] mid-stream error: {chunk['error']}")
+                                break
+                            choices = chunk.get("choices")
+                            if not choices:
+                                continue
+                            delta_mimo25 = choices[0].get("delta") or {}
+                            reasoning_token_mimo25 = delta_mimo25.get("reasoning_content") or ""
+                            token = delta_mimo25.get("content") or ""
+                            if reasoning_token_mimo25:
+                                if not thinking_open_mimo25:
+                                    full_reply += "<think>"
+                                    thinking_open_mimo25 = True
+                                full_reply += reasoning_token_mimo25
+                                yield f"data: {json.dumps({'thinking_token': reasoning_token_mimo25}, ensure_ascii=False)}\n\n"
+                            if token:
+                                if thinking_open_mimo25:
+                                    full_reply += "</think>"
+                                    thinking_open_mimo25 = False
+                                full_reply += token
+                                yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
+                        except (json.JSONDecodeError, KeyError, TypeError, IndexError) as parse_err:
+                            logger.debug(f"⚠️ [MIMO25] skipped unparsable stream chunk: {parse_err}")
+                            continue
+                except (requests.exceptions.RequestException, ConnectionError, OSError) as e:
+                    logger.warning(f"⚠️ [MIMO25] stream network error: {e}")
+                except Exception as e:
+                    _log_unexpected("MIMO25 stream", e)
+
+                if thinking_open_mimo25:
+                    full_reply += "</think>"
+
+                if full_reply.strip():
+                    active_memory.append({"role": "assistant", "content": full_reply})
+                    if not ghost_mode and len(user_memory[session_id]) > 40:
+                        user_memory[session_id] = user_memory[session_id][-40:]
+                yield "data: [DONE]\n\n"
+
+            return StreamingResponse(
+                generate_mimo25(),
+                media_type="text/event-stream",
+                headers=_rl({
+                    "Cache-Control": "no-cache",
+                    "Set-Cookie": build_session_cookie(session_id),
+                })
+            )
+
         # ── GLM-5.2: NVIDIA NIM API (NVIDIA_API_KEY) — z-ai/glm-5.2 ──
         if model_key == "glm52":
             nvidia_key_g52   = os.getenv("NVIDIA_API_KEY", "")
@@ -7558,6 +7675,7 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
             "glm52":      [],  # Routed via NVIDIA NIM API (NVIDIA_API_KEY) — z-ai/glm-5.2
             "agnes":      [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — agnes-2.5-flash
             "stepfun3":   [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — ling-3.0-flash-free (was stepfun-3.7-flash)
+            "mimo25":     [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — mimo-v2.5-free
             "mistral_large":  [],  # Routed via Mistral API (MISTRAL_API_KEY) — mistral-large-latest
             "mistral_medium": [],  # Routed via Mistral API (MISTRAL_API_KEY) — mistral-medium-latest
             "mistral_small":  [],  # Routed via Mistral API (MISTRAL_API_KEY) — mistral-small-latest
@@ -8146,6 +8264,26 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                 "You are knowledgeable about technology, science, finance, history, culture, and everyday topics. "
                 "For coding questions, write clean, well-commented code. "
                 "If asked what model or AI you are, say you are Catura AI Ling and cannot share "
+                "details about the underlying technology. "
+                "If asked who made you, say 'I was created by Anirban.' "
+                "Never make up facts. If you don't know something, say so honestly."
+                + NO_TOOL_CALL_RULE
+            ),
+            "mimo25": (
+                "Your name is Catura (pronounced kuh-CHUR-uh) Mimo Model. You are a highly capable "
+                "AI assistant created by Anirban — an independent developer based in India. "
+                "You are Catura AI Mimo, built for fast, efficient, and high-quality responses. "
+                "You are clear, direct, and helpful. You speak like a knowledgeable friend — "
+                "never robotic, never sycophantic. "
+                "Never start a response with 'Certainly!', 'Of course!', 'Great question!', "
+                "'Absolutely!', or similar hollow openers. Just answer directly. "
+                "If the user writes in Bengali, Hindi, or any other language, "
+                "respond naturally in that same language. Match the user's language automatically. "
+                "Keep answers concise unless the user explicitly asks for detail. "
+                "Use bullet points or headers only when they genuinely improve clarity. "
+                "You are knowledgeable about technology, science, finance, history, culture, and everyday topics. "
+                "For coding questions, write clean, well-commented code. "
+                "If asked what model or AI you are, say you are Catura AI Mimo and cannot share "
                 "details about the underlying technology. "
                 "If asked who made you, say 'I was created by Anirban.' "
                 "Never make up facts. If you don't know something, say so honestly."
@@ -9057,6 +9195,102 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
 
             return StreamingResponse(
                 generate_stepfun3(),
+                media_type="text/event-stream",
+                headers=_rl({
+                    "Cache-Control": "no-cache",
+                    "Set-Cookie": build_session_cookie(session_id),
+                })
+            )
+
+        # ── MIMO25: NaraRouter API (NARAROUTER_API_KEY) — mimo-v2.5-free ──
+        if model_key == "mimo25":
+            nara_key_mimo25   = os.getenv("NARAROUTER_API_KEY", "")
+            mimo25_system     = system_prompts.get("mimo25", system_prompts["dagr"])
+
+            def generate_mimo25():
+                full_reply = ""
+                thinking_open_mimo25 = False  # tracks whether <think> has been opened in full_reply
+
+                tool_result_mimo25 = None
+                if intent != "general" and not file_urls:
+                    yield f"data: {json.dumps({'status': 'tool_running', 'intent': intent})}\n\n"
+                    tool_result_mimo25 = run_tool(intent, prompt)
+
+                final_system_mimo25 = mimo25_system
+                tool_context_mimo25 = build_tool_context(tool_result_mimo25)
+                if tool_context_mimo25:
+                    final_system_mimo25 += "\n\n" + tool_context_mimo25
+
+                if tool_result_mimo25:
+                    badge_payload = json.dumps({"tool_used": tool_result_mimo25.get("tool", ""), "intent": intent})
+                    yield f"data: {badge_payload}\n\n"
+                    sp = build_sources_payload(tool_result_mimo25)
+                    if sp:
+                        yield f"data: {sp}\n\n"
+
+                mimo25_messages = (
+                    [{"role": "system", "content": final_system_mimo25}]
+                    + active_memory[-20:]
+                )
+                resp, err = call_nararouter_stream(mimo25_messages, nara_key_mimo25, "mimo-v2.5-free", max_tokens=16000)
+
+                if resp is None:
+                    yield f"data: {json.dumps({'error': f'Mimo unavailable: {err}'})}\n\n"
+                    yield "data: [DONE]\n\n"
+                    return
+
+                try:
+                    for line in resp.iter_lines():
+                        if not line:
+                            continue
+                        decoded = line.decode("utf-8")
+                        if not decoded.startswith("data: "):
+                            continue
+                        payload = decoded[6:]
+                        if payload.strip() == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(payload)
+                            if "error" in chunk:
+                                logger.warning(f"⚠️ [MIMO25] mid-stream error: {chunk['error']}")
+                                break
+                            choices = chunk.get("choices")
+                            if not choices:
+                                continue
+                            delta_mimo25 = choices[0].get("delta") or {}
+                            reasoning_token_mimo25 = delta_mimo25.get("reasoning_content") or ""
+                            token = delta_mimo25.get("content") or ""
+                            if reasoning_token_mimo25:
+                                if not thinking_open_mimo25:
+                                    full_reply += "<think>"
+                                    thinking_open_mimo25 = True
+                                full_reply += reasoning_token_mimo25
+                                yield f"data: {json.dumps({'thinking_token': reasoning_token_mimo25}, ensure_ascii=False)}\n\n"
+                            if token:
+                                if thinking_open_mimo25:
+                                    full_reply += "</think>"
+                                    thinking_open_mimo25 = False
+                                full_reply += token
+                                yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
+                        except (json.JSONDecodeError, KeyError, TypeError, IndexError) as parse_err:
+                            logger.debug(f"⚠️ [MIMO25] skipped unparsable stream chunk: {parse_err}")
+                            continue
+                except (requests.exceptions.RequestException, ConnectionError, OSError) as e:
+                    logger.warning(f"⚠️ [MIMO25] stream network error: {e}")
+                except Exception as e:
+                    _log_unexpected("MIMO25 stream", e)
+
+                if thinking_open_mimo25:
+                    full_reply += "</think>"
+
+                if full_reply.strip():
+                    active_memory.append({"role": "assistant", "content": full_reply})
+                    if not ghost_mode and len(user_memory[session_id]) > 40:
+                        user_memory[session_id] = user_memory[session_id][-40:]
+                yield "data: [DONE]\n\n"
+
+            return StreamingResponse(
+                generate_mimo25(),
                 media_type="text/event-stream",
                 headers=_rl({
                     "Cache-Control": "no-cache",
