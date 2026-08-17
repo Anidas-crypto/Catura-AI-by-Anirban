@@ -864,7 +864,7 @@ def share_page(slug: str):
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.453"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.454"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -874,7 +874,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.453", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.454", "timestamp": datetime.utcnow().isoformat()}
 
 # ── 🧠 MEMORY MODELS ────────────────────────────────────────────────────────
 from pydantic import BaseModel as _MemBaseModel
@@ -1073,7 +1073,7 @@ async def mcp_handshake_and_list_tools(url: str, headers: dict | None = None):
     init_result, err = await _mcp_rpc(url, "initialize", {
         "protocolVersion": _MCP_PROTOCOL_VERSION,
         "capabilities": {},
-        "clientInfo": {"name": "Catura AI", "version": "0.0.453"},
+        "clientInfo": {"name": "Catura AI", "version": "0.0.454"},
     }, headers)
     if err:
         return None, err
@@ -4638,6 +4638,23 @@ def call_zai_stream(messages, api_key):
 # ✅ HELPER: Call NaraRouter — agnes-2.5-flash, ling-3.0-flash-free, qwen-3.8-max-free
 # OpenAI-compatible endpoint at router.bynara.id (NARAROUTER_API_KEY)
 # ============================================================
+class _FakeStreamResponse:
+    """
+    Minimal shim exposing only `.iter_lines()`, so it can stand in for a
+    `requests.Response` wherever code only ever calls `.iter_lines()` on the
+    object `call_nararouter_stream` returns (every NaraRouter model handler
+    below does exactly that — none of them touch any other Response
+    attribute). Used to replay a *non-streamed* JSON completion as a single
+    synthetic SSE frame — see the Content-Type check in
+    `call_nararouter_stream` for why this exists.
+    """
+    def __init__(self, lines):
+        self._lines = lines
+
+    def iter_lines(self):
+        return iter(self._lines)
+
+
 def call_nararouter_stream(messages, api_key, model_id, max_tokens=32768):
     """
     Dedicated NaraRouter streaming function.
@@ -4670,6 +4687,61 @@ def call_nararouter_stream(messages, api_key, model_id, max_tokens=32768):
             except (ValueError, KeyError, AttributeError):
                 err_msg = f"HTTP {resp.status_code}"
             return None, err_msg
+
+        # ── Fallback for NaraRouter models that ignore "stream": True ──────
+        # Root cause of the "qwen-3.8-max-free works in Colab / OpenAI SDK
+        # but fails with an empty reply through this backend" bug:
+        #
+        # The OpenAI SDK (used in the Colab test) auto-detects whether the
+        # response it got back is a real SSE stream or one complete JSON
+        # object, and handles either transparently. This backend, on the
+        # other hand, always assumes the body is SSE and only ever looks
+        # for lines starting with "data: " (see every `generate_<model>()`
+        # function below). Some NaraRouter-hosted models — apparently
+        # qwen-3.8-max-free is one of them, while agnes-2.5-flash is not —
+        # silently ignore "stream": true on the free tier and send back a
+        # single, complete `application/json` completion instead of an
+        # `text/event-stream` body. None of its lines start with "data: ",
+        # so the parser skips every single one, the request "succeeds"
+        # with a 200, and the handler ends up with an empty `full_reply`
+        # and no error to report — which is exactly the generic
+        # "⚠️ No response received. Please try again." the frontend shows,
+        # since no `data: {'error': ...}` event was ever sent.
+        #
+        # Fix: detect a non-SSE Content-Type and re-wrap the JSON body we
+        # already received as one synthetic SSE chunk, so every existing
+        # handler keeps working completely unchanged.
+        content_type = resp.headers.get("Content-Type", "")
+        if "text/event-stream" not in content_type:
+            try:
+                body = resp.json()
+                choice = (body.get("choices") or [{}])[0]
+                message = choice.get("message") or {}
+                fake_chunk = {
+                    "choices": [{
+                        "delta": {
+                            "content": message.get("content", "") or "",
+                            "reasoning_content": message.get("reasoning_content", "") or "",
+                        },
+                        "finish_reason": choice.get("finish_reason") or "stop",
+                    }]
+                }
+                fake_lines = [
+                    f"data: {json.dumps(fake_chunk, ensure_ascii=False)}".encode("utf-8"),
+                    b"data: [DONE]",
+                ]
+                logger.info(
+                    f"ℹ️ [call_nararouter_stream] {model_id} returned non-streamed "
+                    f"'{content_type}' instead of SSE — replayed as a single chunk"
+                )
+                return _FakeStreamResponse(fake_lines), None
+            except (ValueError, KeyError, IndexError, TypeError) as e:
+                logger.warning(
+                    f"⚠️ [call_nararouter_stream] {model_id} sent an unrecognized "
+                    f"non-streaming response body: {e}"
+                )
+                return None, f"{model_id} returned an unrecognized response format"
+
         return resp, None
     except requests.exceptions.Timeout:
         return None, "Request timed out"
@@ -6574,7 +6646,7 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                                 full_reply += token
                                 yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
                         except (json.JSONDecodeError, KeyError, TypeError, IndexError) as parse_err:
-                            logger.debug(f"⚠️ [AGNES] skipped unparsable stream chunk: {parse_err}")
+                            logger.warning(f"⚠️ [AGNES] skipped unparsable stream chunk: {parse_err}")
                             continue
                 except (requests.exceptions.RequestException, ConnectionError, OSError) as e:
                     logger.warning(f"⚠️ [AGNES] stream network error: {e}")
@@ -6588,6 +6660,14 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                     active_memory.append({"role": "assistant", "content": full_reply})
                     if not ghost_mode and len(user_memory[session_id]) > 40:
                         user_memory[session_id] = user_memory[session_id][-40:]
+                else:
+                    # Stream ended with zero tokens and no explicit error was
+                    # raised above (e.g. an unrecognized upstream response
+                    # shape slipped past every parser). Surface *something*
+                    # actionable instead of silently falling through to the
+                    # frontend's generic "No response received" message.
+                    logger.warning("⚠️ [AGNES] stream ended with an empty reply and no error")
+                    yield f"data: {json.dumps({'error': 'Agnes returned an empty response. Please try again.'})}\n\n"
                 yield "data: [DONE]\n\n"
 
             return StreamingResponse(
@@ -6670,7 +6750,7 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                                 full_reply += token
                                 yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
                         except (json.JSONDecodeError, KeyError, TypeError, IndexError) as parse_err:
-                            logger.debug(f"⚠️ [LING 3.0] skipped unparsable stream chunk: {parse_err}")
+                            logger.warning(f"⚠️ [LING 3.0] skipped unparsable stream chunk: {parse_err}")
                             continue
                 except (requests.exceptions.RequestException, ConnectionError, OSError) as e:
                     logger.warning(f"⚠️ [LING 3.0] stream network error: {e}")
@@ -6684,6 +6764,14 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                     active_memory.append({"role": "assistant", "content": full_reply})
                     if not ghost_mode and len(user_memory[session_id]) > 40:
                         user_memory[session_id] = user_memory[session_id][-40:]
+                else:
+                    # Stream ended with zero tokens and no explicit error was
+                    # raised above (e.g. an unrecognized upstream response
+                    # shape slipped past every parser). Surface *something*
+                    # actionable instead of silently falling through to the
+                    # frontend's generic "No response received" message.
+                    logger.warning("⚠️ [LING 3.0] stream ended with an empty reply and no error")
+                    yield f"data: {json.dumps({'error': 'Ling 3.0 returned an empty response. Please try again.'})}\n\n"
                 yield "data: [DONE]\n\n"
 
             return StreamingResponse(
@@ -6766,7 +6854,7 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                                 full_reply += token
                                 yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
                         except (json.JSONDecodeError, KeyError, TypeError, IndexError) as parse_err:
-                            logger.debug(f"⚠️ [QWEN38] skipped unparsable stream chunk: {parse_err}")
+                            logger.warning(f"⚠️ [QWEN38] skipped unparsable stream chunk: {parse_err}")
                             continue
                 except (requests.exceptions.RequestException, ConnectionError, OSError) as e:
                     logger.warning(f"⚠️ [QWEN38] stream network error: {e}")
@@ -6780,6 +6868,14 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                     active_memory.append({"role": "assistant", "content": full_reply})
                     if not ghost_mode and len(user_memory[session_id]) > 40:
                         user_memory[session_id] = user_memory[session_id][-40:]
+                else:
+                    # Stream ended with zero tokens and no explicit error was
+                    # raised above (e.g. an unrecognized upstream response
+                    # shape slipped past every parser). Surface *something*
+                    # actionable instead of silently falling through to the
+                    # frontend's generic "No response received" message.
+                    logger.warning("⚠️ [QWEN 3.8 MAX] stream ended with an empty reply and no error")
+                    yield f"data: {json.dumps({'error': 'Qwen 3.8 Max returned an empty response. Please try again.'})}\n\n"
                 yield "data: [DONE]\n\n"
 
             return StreamingResponse(
@@ -9081,7 +9177,7 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                                 full_reply += token
                                 yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
                         except (json.JSONDecodeError, KeyError, TypeError, IndexError) as parse_err:
-                            logger.debug(f"⚠️ [AGNES] skipped unparsable stream chunk: {parse_err}")
+                            logger.warning(f"⚠️ [AGNES] skipped unparsable stream chunk: {parse_err}")
                             continue
                 except (requests.exceptions.RequestException, ConnectionError, OSError) as e:
                     logger.warning(f"⚠️ [AGNES] stream network error: {e}")
@@ -9095,6 +9191,14 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                     active_memory.append({"role": "assistant", "content": full_reply})
                     if not ghost_mode and len(user_memory[session_id]) > 40:
                         user_memory[session_id] = user_memory[session_id][-40:]
+                else:
+                    # Stream ended with zero tokens and no explicit error was
+                    # raised above (e.g. an unrecognized upstream response
+                    # shape slipped past every parser). Surface *something*
+                    # actionable instead of silently falling through to the
+                    # frontend's generic "No response received" message.
+                    logger.warning("⚠️ [AGNES] stream ended with an empty reply and no error")
+                    yield f"data: {json.dumps({'error': 'Agnes returned an empty response. Please try again.'})}\n\n"
                 yield "data: [DONE]\n\n"
 
             return StreamingResponse(
@@ -9177,7 +9281,7 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                                 full_reply += token
                                 yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
                         except (json.JSONDecodeError, KeyError, TypeError, IndexError) as parse_err:
-                            logger.debug(f"⚠️ [LING 3.0] skipped unparsable stream chunk: {parse_err}")
+                            logger.warning(f"⚠️ [LING 3.0] skipped unparsable stream chunk: {parse_err}")
                             continue
                 except (requests.exceptions.RequestException, ConnectionError, OSError) as e:
                     logger.warning(f"⚠️ [LING 3.0] stream network error: {e}")
@@ -9191,6 +9295,14 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                     active_memory.append({"role": "assistant", "content": full_reply})
                     if not ghost_mode and len(user_memory[session_id]) > 40:
                         user_memory[session_id] = user_memory[session_id][-40:]
+                else:
+                    # Stream ended with zero tokens and no explicit error was
+                    # raised above (e.g. an unrecognized upstream response
+                    # shape slipped past every parser). Surface *something*
+                    # actionable instead of silently falling through to the
+                    # frontend's generic "No response received" message.
+                    logger.warning("⚠️ [LING 3.0] stream ended with an empty reply and no error")
+                    yield f"data: {json.dumps({'error': 'Ling 3.0 returned an empty response. Please try again.'})}\n\n"
                 yield "data: [DONE]\n\n"
 
             return StreamingResponse(
@@ -9273,7 +9385,7 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                                 full_reply += token
                                 yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
                         except (json.JSONDecodeError, KeyError, TypeError, IndexError) as parse_err:
-                            logger.debug(f"⚠️ [QWEN38] skipped unparsable stream chunk: {parse_err}")
+                            logger.warning(f"⚠️ [QWEN38] skipped unparsable stream chunk: {parse_err}")
                             continue
                 except (requests.exceptions.RequestException, ConnectionError, OSError) as e:
                     logger.warning(f"⚠️ [QWEN38] stream network error: {e}")
@@ -9287,6 +9399,14 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                     active_memory.append({"role": "assistant", "content": full_reply})
                     if not ghost_mode and len(user_memory[session_id]) > 40:
                         user_memory[session_id] = user_memory[session_id][-40:]
+                else:
+                    # Stream ended with zero tokens and no explicit error was
+                    # raised above (e.g. an unrecognized upstream response
+                    # shape slipped past every parser). Surface *something*
+                    # actionable instead of silently falling through to the
+                    # frontend's generic "No response received" message.
+                    logger.warning("⚠️ [QWEN 3.8 MAX] stream ended with an empty reply and no error")
+                    yield f"data: {json.dumps({'error': 'Qwen 3.8 Max returned an empty response. Please try again.'})}\n\n"
                 yield "data: [DONE]\n\n"
 
             return StreamingResponse(
