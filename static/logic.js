@@ -5899,7 +5899,7 @@ const MODEL_ICONS = {
     laguna_s:       'poolside.ico',
     ling:           'ling.png',
     mercury2:       'Mercury.png',
-    qwen38:         'agnes-.jpg',
+    qwen38:         'qwen.png',
     minimax_m3:     'minimax.png',
     mistral_large:  'mistral.png',
     mistral_medium: 'mistral.png',
