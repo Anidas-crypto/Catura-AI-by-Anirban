@@ -864,7 +864,7 @@ def share_page(slug: str):
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.455"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.456"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -874,7 +874,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.455", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.456", "timestamp": datetime.utcnow().isoformat()}
 
 # ── 🧠 MEMORY MODELS ────────────────────────────────────────────────────────
 from pydantic import BaseModel as _MemBaseModel
@@ -1073,7 +1073,7 @@ async def mcp_handshake_and_list_tools(url: str, headers: dict | None = None):
     init_result, err = await _mcp_rpc(url, "initialize", {
         "protocolVersion": _MCP_PROTOCOL_VERSION,
         "capabilities": {},
-        "clientInfo": {"name": "Catura AI", "version": "0.0.455"},
+        "clientInfo": {"name": "Catura AI", "version": "0.0.456"},
     }, headers)
     if err:
         return None, err
@@ -4502,19 +4502,19 @@ def call_poolside_laguna_s_stream(messages, api_key):
 
 # ============================================================
 # ✅ HELPER: Call Groq for Sambhav — completely independent of Nivo
-# Uses llama-3.3-70b-versatile via Groq API (GROQ_API_KEY)
+# Uses qwen/qwen3.6-27b via Groq API (GROQ_API_KEY)
 # ============================================================
 def call_sambhav_groq_stream(messages, api_key, max_completion_tokens=12000):
     """
     Dedicated Groq streaming function for Sambhav.
     Completely separate from call_groq_stream — does NOT share state or signature.
-    Uses llama-3.3-70b-versatile via Groq's OpenAI-compatible endpoint.
+    Uses qwen/qwen3.6-27b via Groq's OpenAI-compatible endpoint.
 
     ⚠️ TPM FIX (was: max_completion_tokens=32768):
     Groq's tokens-per-minute rate limit is enforced against the REQUESTED
     token budget (prompt tokens + max_completion_tokens), not just what the
     model actually ends up generating — the API reserves that capacity up
-    front. On the free tier (12000 TPM for llama-3.3-70b-versatile), asking
+    front. On the free tier (12000 TPM for qwen/qwen3.6-27b), asking
     for 32768 completion tokens alone guarantees a
     "Request too large ... Limit 12000, Requested ~34000" error on
     basically every call, even a one-word "hi". Dropped the default to
@@ -4537,7 +4537,7 @@ def call_sambhav_groq_stream(messages, api_key, max_completion_tokens=12000):
                 "Content-Type": "application/json",
             },
             json={
-                "model": "llama-3.3-70b-versatile",
+                "model": "qwen/qwen3.6-27b",
                 "messages": messages,
                 "stream": True,
                 "temperature": 0.4,
@@ -5152,7 +5152,7 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
         model_pools = {
             "dagr":    ["openai/gpt-oss-20b:free", "openai/gpt-oss-120b:free"],
             "apep":    ["openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"],
-            "sambhav": [],  # Routed via Groq API (llama-3.3-70b-versatile) — see call_sambhav_groq_stream()
+            "sambhav": [],  # Routed via Groq API (qwen/qwen3.6-27b) — see call_sambhav_groq_stream()
             "nivo":    [],  # Routed via Groq API (GROQ_API_KEY) — see generate_nivo()
             "glm":     [],  # Routed via Z.ai API (ZAI_API_KEY) — glm-4.7-flash (free)
             "minimax_m3": [],  # Routed via NVIDIA NIM API (NVIDIA_API_KEY) — minimaxai/minimax-m3
@@ -7764,7 +7764,7 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
         model_pools = {
             "dagr":    ["openai/gpt-oss-20b:free", "openai/gpt-oss-120b:free"],
             "apep":    ["openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"],
-            "sambhav": [],  # Routed via Groq API (llama-3.3-70b-versatile) — see call_sambhav_groq_stream()
+            "sambhav": [],  # Routed via Groq API (qwen/qwen3.6-27b) — see call_sambhav_groq_stream()
             "nivo":    [],  # Routed via Groq API (GROQ_API_KEY)
             "glm":     [],  # Routed via Z.ai API (ZAI_API_KEY) — glm-4.7-flash (free)
             "minimax_m3": [],  # Routed via NVIDIA NIM API (NVIDIA_API_KEY) — minimaxai/minimax-m3
@@ -9881,7 +9881,7 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                          "Set-Cookie": build_session_cookie(session_id)})
             )
 
-        # ── SAMBHAV: llama-3.3-70b-versatile via Groq API (GET handler) ──
+        # ── SAMBHAV: qwen/qwen3.6-27b via Groq API (GET handler) ──
         if model_key == "sambhav":
             sambhav_groq_key_get = os.getenv("GROQ_API_KEY", "")
 
