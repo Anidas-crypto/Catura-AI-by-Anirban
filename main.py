@@ -864,7 +864,7 @@ def share_page(slug: str):
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.456"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.457"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -874,7 +874,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.456", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.457", "timestamp": datetime.utcnow().isoformat()}
 
 # ── 🧠 MEMORY MODELS ────────────────────────────────────────────────────────
 from pydantic import BaseModel as _MemBaseModel
@@ -1073,7 +1073,7 @@ async def mcp_handshake_and_list_tools(url: str, headers: dict | None = None):
     init_result, err = await _mcp_rpc(url, "initialize", {
         "protocolVersion": _MCP_PROTOCOL_VERSION,
         "capabilities": {},
-        "clientInfo": {"name": "Catura AI", "version": "0.0.456"},
+        "clientInfo": {"name": "Catura AI", "version": "0.0.457"},
     }, headers)
     if err:
         return None, err
@@ -4339,7 +4339,7 @@ def call_gemma_google_stream(messages, system_prompt, model_id):
 # ============================================================
 def call_groq_stream(messages, api_key):
     """
-    Calls Groq API with streaming using llama-3.3-70b-versatile model.
+    Calls Groq API with streaming using qwen/qwen3.6-27b model.
     Uses GROQ_API_KEY set on Render. Completely isolated from all
     other models — does NOT touch OPENROUTER_API_KEY or GEMINI_API_KEY.
     Groq has a generous free tier with very fast inference.
@@ -4354,7 +4354,7 @@ def call_groq_stream(messages, api_key):
                 "Content-Type": "application/json",
             },
             json={
-                "model": "llama-3.3-70b-versatile",
+                "model": "qwen/qwen3.6-27b",
                 "messages": messages,
                 "stream": True,
                 "temperature": 0.3,
@@ -4991,7 +4991,7 @@ async def generate_title(request: Request):
                     "Content-Type": "application/json",
                 },
                 json={
-                    "model": "llama-3.3-70b-versatile",
+                    "model": "qwen/qwen3.6-27b",
                     "messages": [
                         {"role": "system", "content": system_prompt},
                         {"role": "user",   "content": message}
@@ -5914,7 +5914,7 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
         messages_base = [{"role": "system", "content": system_prompt}] + active_memory[-20:]
         api_key  = os.getenv("OPENROUTER_API_KEY")
 
-        # ── SAMBHAV: llama-3.3-70b-versatile via Groq API ──
+        # ── SAMBHAV: qwen/qwen3.6-27b via Groq API ──
         if model_key == "sambhav":
             sambhav_groq_key = os.getenv("GROQ_API_KEY", "")
 
