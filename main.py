@@ -864,7 +864,7 @@ def share_page(slug: str):
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.457"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.458"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -874,7 +874,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.457", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.458", "timestamp": datetime.utcnow().isoformat()}
 
 # ── 🧠 MEMORY MODELS ────────────────────────────────────────────────────────
 from pydantic import BaseModel as _MemBaseModel
@@ -1073,7 +1073,7 @@ async def mcp_handshake_and_list_tools(url: str, headers: dict | None = None):
     init_result, err = await _mcp_rpc(url, "initialize", {
         "protocolVersion": _MCP_PROTOCOL_VERSION,
         "capabilities": {},
-        "clientInfo": {"name": "Catura AI", "version": "0.0.457"},
+        "clientInfo": {"name": "Catura AI", "version": "0.0.458"},
     }, headers)
     if err:
         return None, err
@@ -4354,7 +4354,7 @@ def call_groq_stream(messages, api_key):
                 "Content-Type": "application/json",
             },
             json={
-                "model": "qwen/qwen3.6-27b",
+                "model": "groq/compound",
                 "messages": messages,
                 "stream": True,
                 "temperature": 0.3,
