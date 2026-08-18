@@ -1586,10 +1586,16 @@ function formatMessage(rawText, ctx) {
     const totalCodeBlocks = (rawText.match(/```/g) || []).length >> 1;
     let codeIndex = 0;
     const codeBlocks = [];
+    const codeFileMetas = []; // {id, language} — used below to build the download section
+    // Per-message filename counter, kept alive on ctx across re-renders of the
+    // SAME streaming message so filenames stay stable while it streams in.
+    const fnCounts = ctx ? (ctx.__fnCounts || (ctx.__fnCounts = {})) : {};
     let text = rawText.replace(/```([\w+\-#. ]*)\n?([\s\S]*?)```/g, (_match, lang, code) => {
         const language = lang.trim() || "text";
         const isLastOfStream = codeIndex === totalCodeBlocks - 1;
-        codeBlocks.push(renderCodeArtifactBlock(code.replace(/\n+$/,""), language, ctx, codeIndex, isLastOfStream));
+        const block = renderCodeArtifactBlock(code.replace(/\n+$/,""), language, ctx, codeIndex, isLastOfStream, fnCounts);
+        codeBlocks.push(block.html);
+        codeFileMetas.push({ id: block.id, language });
         codeIndex++;
         return `\x00CODE${codeBlocks.length - 1}\x00`;
     });
@@ -1784,6 +1790,15 @@ function formatMessage(rawText, ctx) {
     html = html.replace(/<\/ol>\s*<ol>/g, "");
     html = html.replace(/<\/ul>\s*<ul>/g, "");
 
+    // ── STEP 8: Download section — Claude-style "here are your files" list ─
+    // Only once the message has actually finished (never mid-stream, so the
+    // file list doesn't pop in and shuffle around while code is still being
+    // written), and only when there's at least one code block to offer.
+    const isStillStreaming = !!(ctx && ctx.streaming);
+    if (!isStillStreaming && codeFileMetas.length > 0) {
+        html += renderCodeDownloadSection(codeFileMetas);
+    }
+
     return html;
 }
 
@@ -1866,26 +1881,65 @@ function escapeArtifactCode(code) {
     return code.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+// ── Download support: language → sensible default filename ─────────────────
+const LANG_FILE_EXT = {
+    html: "html", htm: "html", css: "css", scss: "scss", sass: "sass", less: "less",
+    js: "js", javascript: "js", mjs: "js", jsx: "jsx", ts: "ts", typescript: "ts", tsx: "tsx",
+    py: "py", python: "py", java: "java", c: "c", cpp: "cpp", "c++": "cpp", cs: "cs", csharp: "cs",
+    go: "go", golang: "go", rs: "rs", rust: "rs", rb: "rb", ruby: "rb", php: "php",
+    swift: "swift", kt: "kt", kotlin: "kt", sh: "sh", bash: "sh", shell: "sh",
+    xml: "xml", yaml: "yaml", yml: "yaml", toml: "toml", md: "md", markdown: "md",
+    sql: "sql", json: "json", dockerfile: "Dockerfile", text: "txt", txt: "txt"
+};
+const LANG_DEFAULT_BASENAME = {
+    html: "index", css: "style", scss: "style", js: "script", jsx: "App", ts: "script",
+    tsx: "App", py: "main", java: "Main", c: "main", cpp: "main", cs: "Program",
+    go: "main", rs: "main", rb: "main", php: "index", swift: "main", kt: "Main",
+    sh: "script", xml: "data", yaml: "config", toml: "config", md: "README",
+    sql: "query", json: "data", text: "file"
+};
+
+// Picks a filename for a code artifact, keeping a running counter per
+// language so multiple blocks of the same type in one message don't collide
+// (script.js, script2.js, script3.js ...). `seenCounts` is a plain object
+// the caller keeps alive across all blocks of a single message.
+function pickArtifactFilename(language, seenCounts) {
+    const key = (language || "text").toLowerCase();
+    const ext = LANG_FILE_EXT[key] || (key.length <= 5 ? key : "txt");
+    const base = LANG_DEFAULT_BASENAME[key] || "file";
+    seenCounts[key] = (seenCounts[key] || 0) + 1;
+    const n = seenCounts[key];
+    const name = n === 1 ? base : `${base}${n}`;
+    return ext === "Dockerfile" ? "Dockerfile" : `${name}.${ext}`;
+}
+
 // Builds the collapsed "pencil / writing" row shown inline in the chat.
 // ctx (optional): { streamId, streaming, isLastOfStream } — used while a
 // message is actively streaming so the SAME artifact id survives every
 // re-render (the whole message HTML gets rebuilt on every tick), which is
 // what lets the inline dropdown stay open/closed correctly mid-stream.
-function renderCodeArtifactBlock(code, language, ctx, codeIndex, isLastOfStream) {
+function renderCodeArtifactBlock(code, language, ctx, codeIndex, isLastOfStream, fnCounts) {
     const id = (ctx && ctx.streamId) ? `${ctx.streamId}-code-${codeIndex}` : `artifact-${Date.now()}-${_codeArtifactSeq++}`;
     const lineCount = code.length ? code.split("\n").length : 0;
     const isStreaming = !!(ctx && ctx.streaming && isLastOfStream);
+
+    // Reuse the existing filename across re-renders of the same artifact id
+    // (streaming re-renders the whole message repeatedly) — only assign a
+    // fresh one the first time this id is created.
+    const existing = window.__codeArtifacts[id];
+    const filename = (existing && existing.filename) || pickArtifactFilename(language, fnCounts || {});
 
     window.__codeArtifacts[id] = {
         code,
         language: language || "text",
         streaming: isStreaming,
-        streamId: ctx ? ctx.streamId : null
+        streamId: ctx ? ctx.streamId : null,
+        filename
     };
 
     const isExpanded = window.__inlineOpenId === id;
 
-    return `<div class="code-artifact${isExpanded ? ' expanded' : ''}" id="${id}">
+    const html = `<div class="code-artifact${isExpanded ? ' expanded' : ''}" id="${id}">
         <div class="code-artifact-row" onclick="handleCodeArtifactClick('${id}')" role="button" tabindex="0">
             ${isStreaming
                 ? `<span class="code-artifact-live-dot" aria-hidden="true"></span>`
@@ -1904,6 +1958,8 @@ function renderCodeArtifactBlock(code, language, ctx, codeIndex, isLastOfStream)
         </div>
         <div class="code-artifact-inline-body"><pre><code>${escapeArtifactCode(code)}</code></pre></div>
     </div>`;
+
+    return { html, id, filename };
 }
 
 // Click behaviour differs by state, matching Claude/GLM:
@@ -2028,6 +2084,129 @@ function toggleCodeArtifactExpand() {
     if (nowExpanded) {
         panel.style.flex = "";
         if (app) app.style.flex = "";
+    }
+}
+
+// ============================
+// 📥 CODE DOWNLOAD SECTION — "here are your files" list + zip export
+// ============================
+window.__codeGroups = window.__codeGroups || {}; // groupId -> [artifactId, ...]
+let _codeGroupSeq = 0;
+
+// Small file-type icon (matches the "</> " code-tile look) vs a plain
+// document icon for non-code / markup-ish languages, mirroring the
+// reference design (code icon for HTML/CSS, document icon for plain text).
+const CODE_ICON_LANGS = new Set(["html","htm","css","scss","sass","less","js","javascript","mjs","jsx","ts","typescript","tsx","json","xml"]);
+function codeDownloadIcon(language) {
+    const key = (language || "text").toLowerCase();
+    if (CODE_ICON_LANGS.has(key)) {
+        return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`;
+    }
+    return `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><polyline points="14 2 14 8 20 8"/></svg>`;
+}
+
+function downloadIconSVG() {
+    return `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
+}
+
+// Builds the file-list card shown after a finished code answer. One row per
+// code block in the message, each with its own Download button, plus a
+// "Download all" button (zipped when there's more than one file) — so the
+// user never has to manually create files or copy/paste code by hand.
+function renderCodeDownloadSection(fileMetas) {
+    const groupId = `dlgrp-${Date.now()}-${_codeGroupSeq++}`;
+    window.__codeGroups[groupId] = fileMetas.map(m => m.id);
+
+    const rows = fileMetas.map(({ id, language }) => {
+        const entry = window.__codeArtifacts[id];
+        const filename = entry ? entry.filename : "file.txt";
+        const title = filename.replace(/\.[^.]+$/, "") || filename;
+        return `<div class="code-dl-row">
+            <div class="code-dl-icon">${codeDownloadIcon(language)}</div>
+            <div class="code-dl-info">
+                <div class="code-dl-name">${title.charAt(0).toUpperCase() + title.slice(1)}</div>
+                <div class="code-dl-sub">Code &middot; ${langDisplayName(language)}</div>
+            </div>
+            <button type="button" class="code-dl-btn" onclick="downloadCodeArtifactFile('${id}')">${downloadIconSVG()}<span>Download</span></button>
+        </div>`;
+    }).join("");
+
+    const allBtn = fileMetas.length > 1
+        ? `<button type="button" class="code-dl-all-btn" onclick="downloadCodeArtifactGroup('${groupId}', this)">${downloadIconSVG()}<span>Download all</span></button>`
+        : "";
+
+    return `<div class="code-dl-section" id="${groupId}">${rows}${allBtn}</div>`;
+}
+
+// Downloads a single artifact as its own file.
+function downloadCodeArtifactFile(id) {
+    const entry = window.__codeArtifacts[id];
+    if (!entry) return;
+    const blob = new Blob([entry.code], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = entry.filename || "file.txt";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+// Downloads every file in a message together — as a single .zip when JSZip
+// is available (so it works exactly like "download and run": unzip and the
+// project's already laid out with the right filenames), falling back to
+// sequential individual downloads if JSZip failed to load.
+async function downloadCodeArtifactGroup(groupId, btn) {
+    const ids = window.__codeGroups[groupId] || [];
+    const files = ids.map(id => window.__codeArtifacts[id]).filter(Boolean);
+    if (!files.length) return;
+
+    const originalHTML = btn ? btn.innerHTML : null;
+    if (btn) { btn.disabled = true; btn.innerHTML = `<span>Preparing…</span>`; }
+
+    try {
+        if (typeof JSZip !== "undefined") {
+            const zip = new JSZip();
+            const usedNames = new Set();
+            files.forEach(f => {
+                let name = f.filename || "file.txt";
+                // Guard against duplicate names inside the zip itself.
+                let n = 1;
+                while (usedNames.has(name)) {
+                    const dot = (f.filename || "file.txt").lastIndexOf(".");
+                    name = dot > -1
+                        ? `${(f.filename).slice(0, dot)}-${++n}${(f.filename).slice(dot)}`
+                        : `${f.filename}-${++n}`;
+                }
+                usedNames.add(name);
+                zip.file(name, f.code);
+            });
+            const blob = await zip.generateAsync({ type: "blob" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "catura-project.zip";
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 4000);
+        } else {
+            // Fallback: trigger each file download individually, spaced out
+            // slightly so the browser doesn't block them as a popup flood.
+            for (let i = 0; i < ids.length; i++) {
+                setTimeout(() => downloadCodeArtifactFile(ids[i]), i * 250);
+            }
+        }
+    } catch (err) {
+        console.error("Zip download failed:", err);
+        showToast && showToast("Couldn't build the zip — downloading files separately");
+        ids.forEach((id, i) => setTimeout(() => downloadCodeArtifactFile(id), i * 250));
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalHTML || `${downloadIconSVG()}<span>Download all</span>`;
+        }
     }
 }
 
