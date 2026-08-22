@@ -864,7 +864,7 @@ def share_page(slug: str):
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.460"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.461"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -874,7 +874,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.460", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.461", "timestamp": datetime.utcnow().isoformat()}
 
 # ── 🧠 MEMORY MODELS ────────────────────────────────────────────────────────
 from pydantic import BaseModel as _MemBaseModel
@@ -1073,7 +1073,7 @@ async def mcp_handshake_and_list_tools(url: str, headers: dict | None = None):
     init_result, err = await _mcp_rpc(url, "initialize", {
         "protocolVersion": _MCP_PROTOCOL_VERSION,
         "capabilities": {},
-        "clientInfo": {"name": "Catura AI", "version": "0.0.460"},
+        "clientInfo": {"name": "Catura AI", "version": "0.0.461"},
     }, headers)
     if err:
         return None, err
@@ -5160,6 +5160,7 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
             "agnes":      [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — agnes-2.5-flash
             "stepfun3":   [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — ling-3.0-flash-free (was stepfun-3.7-flash)
             "qwen38":     [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — qwen-3.8-max-free
+            "musespark":  [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — muse-spark-1.2-contributor-free
             "mistral_large":  [],  # Routed via Mistral API (MISTRAL_API_KEY) — mistral-large-latest
             "mistral_medium": [],  # Routed via Mistral API (MISTRAL_API_KEY) — mistral-medium-latest
             "mistral_small":  [],  # Routed via Mistral API (MISTRAL_API_KEY) — mistral-small-latest
@@ -5581,6 +5582,26 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                 "You are knowledgeable about technology, science, finance, history, culture, and everyday topics. "
                 "For coding questions, write clean, well-commented code. "
                 "If asked what model or AI you are, say you are Catura AI Qwen 3.8 Max and cannot share "
+                "details about the underlying technology. "
+                "If asked who made you, say 'I was created by Anirban.' "
+                "Never make up facts. If you don't know something, say so honestly."
+                + NO_TOOL_CALL_RULE
+            ),
+            "musespark": (
+                "Your name is Catura (pronounced kuh-CHUR-uh) Muse Spark Model. You are a highly capable "
+                "AI assistant created by Anirban — an independent developer based in India. "
+                "You are Catura AI Muse Spark, built for fast, efficient, and high-quality responses. "
+                "You are clear, direct, and helpful. You speak like a knowledgeable friend — "
+                "never robotic, never sycophantic. "
+                "Never start a response with 'Certainly!', 'Of course!', 'Great question!', "
+                "'Absolutely!', or similar hollow openers. Just answer directly. "
+                "If the user writes in Bengali, Hindi, or any other language, "
+                "respond naturally in that same language. Match the user's language automatically. "
+                "Keep answers concise unless the user explicitly asks for detail. "
+                "Use bullet points or headers only when they genuinely improve clarity. "
+                "You are knowledgeable about technology, science, finance, history, culture, and everyday topics. "
+                "For coding questions, write clean, well-commented code. "
+                "If asked what model or AI you are, say you are Catura AI Muse Spark and cannot share "
                 "details about the underlying technology. "
                 "If asked who made you, say 'I was created by Anirban.' "
                 "Never make up facts. If you don't know something, say so honestly."
@@ -6887,6 +6908,110 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                 })
             )
 
+        # ── MUSESPARK: NaraRouter API (NARAROUTER_API_KEY) — muse-spark-1.2-contributor-free ──
+        if model_key == "musespark":
+            nara_key_musespark   = os.getenv("NARAROUTER_API_KEY", "")
+            musespark_system     = system_prompts.get("musespark", system_prompts["dagr"])
+
+            def generate_musespark():
+                full_reply = ""
+                thinking_open_musespark = False  # tracks whether <think> has been opened in full_reply
+
+                tool_result_musespark = None
+                if intent != "general" and not file_urls:
+                    yield f"data: {json.dumps({'status': 'tool_running', 'intent': intent})}\n\n"
+                    tool_result_musespark = run_tool(intent, prompt)
+
+                final_system_musespark = musespark_system
+                tool_context_musespark = build_tool_context(tool_result_musespark)
+                if tool_context_musespark:
+                    final_system_musespark += "\n\n" + tool_context_musespark
+
+                if tool_result_musespark:
+                    badge_payload = json.dumps({"tool_used": tool_result_musespark.get("tool", ""), "intent": intent})
+                    yield f"data: {badge_payload}\n\n"
+                    sp = build_sources_payload(tool_result_musespark)
+                    if sp:
+                        yield f"data: {sp}\n\n"
+
+                musespark_messages = (
+                    [{"role": "system", "content": final_system_musespark}]
+                    + active_memory[-20:]
+                )
+                resp, err = call_nararouter_stream(musespark_messages, nara_key_musespark, "muse-spark-1.2-contributor-free", max_tokens=16000)
+
+                if resp is None:
+                    yield f"data: {json.dumps({'error': f'Muse Spark unavailable: {err}'})}\n\n"
+                    yield "data: [DONE]\n\n"
+                    return
+
+                try:
+                    for line in resp.iter_lines():
+                        if not line:
+                            continue
+                        decoded = line.decode("utf-8")
+                        if not decoded.startswith("data: "):
+                            continue
+                        payload = decoded[6:]
+                        if payload.strip() == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(payload)
+                            if "error" in chunk:
+                                logger.warning(f"⚠️ [MUSESPARK] mid-stream error: {chunk['error']}")
+                                break
+                            choices = chunk.get("choices")
+                            if not choices:
+                                continue
+                            delta_musespark = choices[0].get("delta") or {}
+                            reasoning_token_musespark = delta_musespark.get("reasoning_content") or ""
+                            token = delta_musespark.get("content") or ""
+                            if reasoning_token_musespark:
+                                if not thinking_open_musespark:
+                                    full_reply += "<think>"
+                                    thinking_open_musespark = True
+                                full_reply += reasoning_token_musespark
+                                yield f"data: {json.dumps({'thinking_token': reasoning_token_musespark}, ensure_ascii=False)}\n\n"
+                            if token:
+                                if thinking_open_musespark:
+                                    full_reply += "</think>"
+                                    thinking_open_musespark = False
+                                full_reply += token
+                                yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
+                        except (json.JSONDecodeError, KeyError, TypeError, IndexError) as parse_err:
+                            logger.warning(f"⚠️ [MUSESPARK] skipped unparsable stream chunk: {parse_err}")
+                            continue
+                except (requests.exceptions.RequestException, ConnectionError, OSError) as e:
+                    logger.warning(f"⚠️ [MUSESPARK] stream network error: {e}")
+                except Exception as e:
+                    _log_unexpected("MUSESPARK stream", e)
+
+                if thinking_open_musespark:
+                    full_reply += "</think>"
+
+                if full_reply.strip():
+                    active_memory.append({"role": "assistant", "content": full_reply})
+                    if not ghost_mode and len(user_memory[session_id]) > 40:
+                        user_memory[session_id] = user_memory[session_id][-40:]
+                else:
+                    # Stream ended with zero tokens and no explicit error was
+                    # raised above (e.g. an unrecognized upstream response
+                    # shape slipped past every parser). Surface *something*
+                    # actionable instead of silently falling through to the
+                    # frontend's generic "No response received" message.
+                    logger.warning("⚠️ [MUSE SPARK] stream ended with an empty reply and no error")
+                    yield f"data: {json.dumps({'error': 'Muse Spark returned an empty response. Please try again.'})}\n\n"
+                yield "data: [DONE]\n\n"
+
+            return StreamingResponse(
+                generate_musespark(),
+                media_type="text/event-stream",
+                headers=_rl({
+                    "Cache-Control": "no-cache",
+                    "Set-Cookie": build_session_cookie(session_id),
+                })
+            )
+
         # ── GLM-5.2: NVIDIA NIM API (NVIDIA_API_KEY) — z-ai/glm-5.2 ──
         if model_key == "glm52":
             nvidia_key_g52   = os.getenv("NVIDIA_API_KEY", "")
@@ -7772,6 +7897,7 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
             "agnes":      [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — agnes-2.5-flash
             "stepfun3":   [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — ling-3.0-flash-free (was stepfun-3.7-flash)
             "qwen38":     [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — qwen-3.8-max-free
+            "musespark":  [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — muse-spark-1.2-contributor-free
             "mistral_large":  [],  # Routed via Mistral API (MISTRAL_API_KEY) — mistral-large-latest
             "mistral_medium": [],  # Routed via Mistral API (MISTRAL_API_KEY) — mistral-medium-latest
             "mistral_small":  [],  # Routed via Mistral API (MISTRAL_API_KEY) — mistral-small-latest
@@ -8380,6 +8506,26 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                 "You are knowledgeable about technology, science, finance, history, culture, and everyday topics. "
                 "For coding questions, write clean, well-commented code. "
                 "If asked what model or AI you are, say you are Catura AI Qwen 3.8 Max and cannot share "
+                "details about the underlying technology. "
+                "If asked who made you, say 'I was created by Anirban.' "
+                "Never make up facts. If you don't know something, say so honestly."
+                + NO_TOOL_CALL_RULE
+            ),
+            "musespark": (
+                "Your name is Catura (pronounced kuh-CHUR-uh) Muse Spark Model. You are a highly capable "
+                "AI assistant created by Anirban — an independent developer based in India. "
+                "You are Catura AI Muse Spark, built for fast, efficient, and high-quality responses. "
+                "You are clear, direct, and helpful. You speak like a knowledgeable friend — "
+                "never robotic, never sycophantic. "
+                "Never start a response with 'Certainly!', 'Of course!', 'Great question!', "
+                "'Absolutely!', or similar hollow openers. Just answer directly. "
+                "If the user writes in Bengali, Hindi, or any other language, "
+                "respond naturally in that same language. Match the user's language automatically. "
+                "Keep answers concise unless the user explicitly asks for detail. "
+                "Use bullet points or headers only when they genuinely improve clarity. "
+                "You are knowledgeable about technology, science, finance, history, culture, and everyday topics. "
+                "For coding questions, write clean, well-commented code. "
+                "If asked what model or AI you are, say you are Catura AI Muse Spark and cannot share "
                 "details about the underlying technology. "
                 "If asked who made you, say 'I was created by Anirban.' "
                 "Never make up facts. If you don't know something, say so honestly."
@@ -9411,6 +9557,110 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
 
             return StreamingResponse(
                 generate_qwen38(),
+                media_type="text/event-stream",
+                headers=_rl({
+                    "Cache-Control": "no-cache",
+                    "Set-Cookie": build_session_cookie(session_id),
+                })
+            )
+
+        # ── MUSESPARK: NaraRouter API (NARAROUTER_API_KEY) — muse-spark-1.2-contributor-free ──
+        if model_key == "musespark":
+            nara_key_musespark   = os.getenv("NARAROUTER_API_KEY", "")
+            musespark_system     = system_prompts.get("musespark", system_prompts["dagr"])
+
+            def generate_musespark():
+                full_reply = ""
+                thinking_open_musespark = False  # tracks whether <think> has been opened in full_reply
+
+                tool_result_musespark = None
+                if intent != "general" and not file_urls:
+                    yield f"data: {json.dumps({'status': 'tool_running', 'intent': intent})}\n\n"
+                    tool_result_musespark = run_tool(intent, prompt)
+
+                final_system_musespark = musespark_system
+                tool_context_musespark = build_tool_context(tool_result_musespark)
+                if tool_context_musespark:
+                    final_system_musespark += "\n\n" + tool_context_musespark
+
+                if tool_result_musespark:
+                    badge_payload = json.dumps({"tool_used": tool_result_musespark.get("tool", ""), "intent": intent})
+                    yield f"data: {badge_payload}\n\n"
+                    sp = build_sources_payload(tool_result_musespark)
+                    if sp:
+                        yield f"data: {sp}\n\n"
+
+                musespark_messages = (
+                    [{"role": "system", "content": final_system_musespark}]
+                    + active_memory[-20:]
+                )
+                resp, err = call_nararouter_stream(musespark_messages, nara_key_musespark, "muse-spark-1.2-contributor-free", max_tokens=16000)
+
+                if resp is None:
+                    yield f"data: {json.dumps({'error': f'Muse Spark unavailable: {err}'})}\n\n"
+                    yield "data: [DONE]\n\n"
+                    return
+
+                try:
+                    for line in resp.iter_lines():
+                        if not line:
+                            continue
+                        decoded = line.decode("utf-8")
+                        if not decoded.startswith("data: "):
+                            continue
+                        payload = decoded[6:]
+                        if payload.strip() == "[DONE]":
+                            break
+                        try:
+                            chunk = json.loads(payload)
+                            if "error" in chunk:
+                                logger.warning(f"⚠️ [MUSESPARK] mid-stream error: {chunk['error']}")
+                                break
+                            choices = chunk.get("choices")
+                            if not choices:
+                                continue
+                            delta_musespark = choices[0].get("delta") or {}
+                            reasoning_token_musespark = delta_musespark.get("reasoning_content") or ""
+                            token = delta_musespark.get("content") or ""
+                            if reasoning_token_musespark:
+                                if not thinking_open_musespark:
+                                    full_reply += "<think>"
+                                    thinking_open_musespark = True
+                                full_reply += reasoning_token_musespark
+                                yield f"data: {json.dumps({'thinking_token': reasoning_token_musespark}, ensure_ascii=False)}\n\n"
+                            if token:
+                                if thinking_open_musespark:
+                                    full_reply += "</think>"
+                                    thinking_open_musespark = False
+                                full_reply += token
+                                yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
+                        except (json.JSONDecodeError, KeyError, TypeError, IndexError) as parse_err:
+                            logger.warning(f"⚠️ [MUSESPARK] skipped unparsable stream chunk: {parse_err}")
+                            continue
+                except (requests.exceptions.RequestException, ConnectionError, OSError) as e:
+                    logger.warning(f"⚠️ [MUSESPARK] stream network error: {e}")
+                except Exception as e:
+                    _log_unexpected("MUSESPARK stream", e)
+
+                if thinking_open_musespark:
+                    full_reply += "</think>"
+
+                if full_reply.strip():
+                    active_memory.append({"role": "assistant", "content": full_reply})
+                    if not ghost_mode and len(user_memory[session_id]) > 40:
+                        user_memory[session_id] = user_memory[session_id][-40:]
+                else:
+                    # Stream ended with zero tokens and no explicit error was
+                    # raised above (e.g. an unrecognized upstream response
+                    # shape slipped past every parser). Surface *something*
+                    # actionable instead of silently falling through to the
+                    # frontend's generic "No response received" message.
+                    logger.warning("⚠️ [MUSE SPARK] stream ended with an empty reply and no error")
+                    yield f"data: {json.dumps({'error': 'Muse Spark returned an empty response. Please try again.'})}\n\n"
+                yield "data: [DONE]\n\n"
+
+            return StreamingResponse(
+                generate_musespark(),
                 media_type="text/event-stream",
                 headers=_rl({
                     "Cache-Control": "no-cache",
