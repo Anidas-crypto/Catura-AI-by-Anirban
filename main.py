@@ -864,7 +864,7 @@ def share_page(slug: str):
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.461"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.462"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -874,7 +874,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.461", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.462", "timestamp": datetime.utcnow().isoformat()}
 
 # ── 🧠 MEMORY MODELS ────────────────────────────────────────────────────────
 from pydantic import BaseModel as _MemBaseModel
@@ -1073,7 +1073,7 @@ async def mcp_handshake_and_list_tools(url: str, headers: dict | None = None):
     init_result, err = await _mcp_rpc(url, "initialize", {
         "protocolVersion": _MCP_PROTOCOL_VERSION,
         "capabilities": {},
-        "clientInfo": {"name": "Catura AI", "version": "0.0.461"},
+        "clientInfo": {"name": "Catura AI", "version": "0.0.462"},
     }, headers)
     if err:
         return None, err
@@ -4655,28 +4655,44 @@ class _FakeStreamResponse:
         return iter(self._lines)
 
 
-def call_nararouter_stream(messages, api_key, model_id, max_tokens=32768):
+def call_nararouter_stream(messages, api_key, model_id, max_tokens=32768, enable_thinking=False):
     """
     Dedicated NaraRouter streaming function.
     Shared by all NaraRouter-hosted models (Agnes 2.5 Flash, Ling 3.0 Flash,
-    Qwen 3.8 Max, etc.) via model_id param. OpenAI-compatible chat completions endpoint.
+    Qwen 3.8 Max, Muse Spark, etc.) via model_id param. OpenAI-compatible chat completions endpoint.
+
+    enable_thinking: some NaraRouter-hosted models (e.g. muse-spark-1.2-contributor-free)
+    are hybrid-reasoning models served off a vLLM/SGLang-style stack — they only run the
+    thinking pass and emit `reasoning_content` deltas when explicitly told to via the
+    standard `chat_template_kwargs.enable_thinking` field. Without it they silently answer
+    directly with zero reasoning tokens (no error, just an empty thinking stream). Agnes
+    and Qwen 3.8 Max reason unprompted and don't need this flag, so it defaults to False
+    and is opt-in per model.
     """
     if not api_key:
         return None, "NARAROUTER_API_KEY not set in environment variables"
     try:
+        payload = {
+            "model": model_id,
+            "messages": messages,
+            "stream": True,
+            "temperature": 0.7,
+            "max_tokens": max_tokens,
+        }
+        if enable_thinking:
+            payload["chat_template_kwargs"] = {"enable_thinking": True}
+            # Also set the OpenRouter-style top-level flag some NaraRouter models
+            # look for instead of/in addition to chat_template_kwargs — harmless
+            # if the backend ignores unknown fields.
+            payload["reasoning"] = {"enabled": True}
+
         resp = _http.post(
             "https://router.bynara.id/v1/chat/completions",
             headers={
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
             },
-            json={
-                "model": model_id,
-                "messages": messages,
-                "stream": True,
-                "temperature": 0.7,
-                "max_tokens": max_tokens,
-            },
+            json=payload,
             stream=True,
             timeout=(10, 120),
         )
@@ -6938,7 +6954,7 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                     [{"role": "system", "content": final_system_musespark}]
                     + active_memory[-20:]
                 )
-                resp, err = call_nararouter_stream(musespark_messages, nara_key_musespark, "muse-spark-1.2-contributor-free", max_tokens=16000)
+                resp, err = call_nararouter_stream(musespark_messages, nara_key_musespark, "muse-spark-1.2-contributor-free", max_tokens=16000, enable_thinking=True)
 
                 if resp is None:
                     yield f"data: {json.dumps({'error': f'Muse Spark unavailable: {err}'})}\n\n"
@@ -9594,7 +9610,7 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                     [{"role": "system", "content": final_system_musespark}]
                     + active_memory[-20:]
                 )
-                resp, err = call_nararouter_stream(musespark_messages, nara_key_musespark, "muse-spark-1.2-contributor-free", max_tokens=16000)
+                resp, err = call_nararouter_stream(musespark_messages, nara_key_musespark, "muse-spark-1.2-contributor-free", max_tokens=16000, enable_thinking=True)
 
                 if resp is None:
                     yield f"data: {json.dumps({'error': f'Muse Spark unavailable: {err}'})}\n\n"
