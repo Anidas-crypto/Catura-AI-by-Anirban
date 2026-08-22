@@ -864,7 +864,7 @@ def share_page(slug: str):
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.462"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.463"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -874,7 +874,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.462", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.463", "timestamp": datetime.utcnow().isoformat()}
 
 # ── 🧠 MEMORY MODELS ────────────────────────────────────────────────────────
 from pydantic import BaseModel as _MemBaseModel
@@ -1073,7 +1073,7 @@ async def mcp_handshake_and_list_tools(url: str, headers: dict | None = None):
     init_result, err = await _mcp_rpc(url, "initialize", {
         "protocolVersion": _MCP_PROTOCOL_VERSION,
         "capabilities": {},
-        "clientInfo": {"name": "Catura AI", "version": "0.0.462"},
+        "clientInfo": {"name": "Catura AI", "version": "0.0.463"},
     }, headers)
     if err:
         return None, err
@@ -4971,6 +4971,53 @@ def call_inception_stream(messages, api_key, model_id="mercury-2", reasoning_eff
 # 🏷️ TITLE GENERATION ENDPOINT
 # Generates a short, descriptive chat title from the first message
 # ============================================================
+_TITLE_THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.IGNORECASE | re.DOTALL)
+_TITLE_STRAY_TAG_RE   = re.compile(r"</?think>", re.IGNORECASE)
+
+
+def _sanitize_generated_title(raw: str) -> str:
+    """
+    Defensive cleanup applied to whatever the title model returns, before it
+    is ever shown to the user or saved to Supabase.
+
+    Some Groq/OpenRouter models — especially reasoning-tuned ones like
+    "groq/compound" — emit their internal chain-of-thought directly inside
+    the `content` field itself, wrapped in <think>...</think>, instead of a
+    separate `reasoning_content` field. If that ever gets fed straight into
+    a chat title with a naive `[:60]` slice, the visible title becomes
+    literally "<think> Here's a thinking..." — which is exactly the bug
+    this function exists to prevent, regardless of which model is used.
+    """
+    if not raw:
+        return ""
+    # Drop any complete <think>...</think> block entirely.
+    cleaned = _TITLE_THINK_BLOCK_RE.sub("", raw)
+    # Drop any stray/unclosed <think> or </think> tag and everything after
+    # an unclosed opening tag (truncated reasoning with no closing tag yet).
+    if "<think>" in cleaned.lower():
+        cleaned = re.split(r"<think>", cleaned, flags=re.IGNORECASE)[0]
+    cleaned = _TITLE_STRAY_TAG_RE.sub("", cleaned)
+    # Strip markdown emphasis, quotes, and surrounding whitespace/punctuation.
+    cleaned = cleaned.replace("**", "").replace("*", "").replace("`", "")
+    cleaned = cleaned.strip().strip('"\'').strip()
+    # A generated title should be one line — if the model still rambled,
+    # keep only the first non-empty line.
+    for line in cleaned.splitlines():
+        line = line.strip()
+        if line:
+            cleaned = line
+            break
+    return cleaned
+
+
+def _fallback_title(message: str) -> str:
+    """Smart truncation used only when the AI title call is unavailable/fails."""
+    words = message.split()
+    if not words:
+        return "New Chat"
+    return " ".join(words[:6])[:60]
+
+
 @app.post("/generate-title")
 @limiter.limit("30/minute")
 async def generate_title(request: Request):
@@ -4980,23 +5027,45 @@ async def generate_title(request: Request):
         if not message:
             return JSONResponse({"title": "New Chat"})
 
+        # ── Claude/ChatGPT-style title generation ───────────────────────────
+        # Rather than mechanically summarising or truncating the raw text,
+        # the model is asked to first recognise *what kind* of message this
+        # is (a factual question, a how-to request, a debugging/error report,
+        # creative writing, advice, a comparison/decision, casual small talk,
+        # a translation, a math problem, etc.) and then produce a short label
+        # for that specific kind of conversation — the same way Claude.ai and
+        # ChatGPT name conversations, not a keyword-stuffed search query.
         system_prompt = (
-            "You are a chat title generator. "
-            "Given the user's first message, produce a SHORT (2–5 words) descriptive title "
-            "that captures the TOPIC — like a Google search query or a chapter heading. "
-            "Examples: 'Browser Caching Issue', 'What is DNS', 'Python List Sorting', "
-            "'Resume Writing Tips', 'Photosynthesis Explained', 'Fix FastAPI CORS Error', "
-            "'How Black Holes Form', 'Best Laptops Under 50000'. "
-            "Rules: No quotes, no punctuation at the end, Title Case, no filler words like "
-            "'Question about' or 'Help with'. Return ONLY the title, nothing else. "
-            "Never return the user's message verbatim — always summarise into a topic label."
+            "You are a title generator for an AI chat app, in the same style as Claude.ai "
+            "and ChatGPT's conversation titles.\n\n"
+            "Read the user's first message and first silently identify what KIND of message "
+            "it is — for example: a factual/informational question, a how-to or tutorial "
+            "request, a coding or debugging request, an error/bug report, a creative writing "
+            "request, personal or professional advice, a comparison or decision between "
+            "options, a translation request, a math or calculation problem, research or "
+            "analysis, or plain casual small talk/greeting.\n\n"
+            "Then write a SHORT title (2–6 words, Title Case, no ending punctuation, no "
+            "quotes) that names the actual topic or task the way a person would label that "
+            "conversation afterwards — not a rephrasing of the question, not a generic "
+            "category name, and never the user's message verbatim.\n\n"
+            "Examples, matched to message type:\n"
+            "  'What causes lightning?' -> How Lightning Forms\n"
+            "  'How do I center a div in CSS?' -> Centering A Div In CSS\n"
+            "  'My FastAPI app throws a 422 error on POST' -> Fixing FastAPI 422 Error\n"
+            "  'Write a short poem about the ocean' -> Ocean Poem\n"
+            "  'Should I learn React or Vue first?' -> React Vs Vue Decision\n"
+            "  'Help me write a resignation email' -> Resignation Email Draft\n"
+            "  'Translate this paragraph to French' -> French Translation\n"
+            "  'What's 15% of 340?' -> Percentage Calculation\n"
+            "  'hey' or 'hello' or 'how are you' -> Casual Greeting\n"
+            "  'who are you' or 'what model is this' -> Model Identity Question\n\n"
+            "Rules: Return ONLY the title text, nothing else — no labels, no explanation, "
+            "no markdown, no thinking, no preamble. Do not wrap it in quotes."
         )
 
         groq_key = os.getenv("GROQ_API_KEY", "")
         if not groq_key:
-            # Fallback: smart truncation if no API key
-            words = message.split()
-            return JSONResponse({"title": " ".join(words[:5]) if words else "New Chat"})
+            return JSONResponse({"title": _fallback_title(message)})
 
         import httpx as _title_httpx
         async with _title_httpx.AsyncClient(timeout=8.0) as client:
@@ -5007,35 +5076,42 @@ async def generate_title(request: Request):
                     "Content-Type": "application/json",
                 },
                 json={
-                    "model": "groq/compound",
+                    # Plain fast instruct model, currently live on Groq's
+                    # catalog (verified against Groq's model list — Llama
+                    # 3.3 70B Versatile and older Llama models have since
+                    # been decommissioned by Groq, same as groq/compound was
+                    # before it). gpt-oss models support "reasoning_effort";
+                    # pinned to "low" to keep responses terse and reduce the
+                    # chance of any chain-of-thought leaking into `content`
+                    # — the sanitizer below strips it either way as backup.
+                    "model": "openai/gpt-oss-20b",
                     "messages": [
                         {"role": "system", "content": system_prompt},
-                        {"role": "user",   "content": message}
+                        {"role": "user",   "content": message[:2000]}
                     ],
-                    "max_tokens": 30,
-                    "temperature": 1,
+                    "max_tokens": 20,
+                    "temperature": 0.4,
+                    "reasoning_effort": "low",
                     "stream": False,
                 },
             )
 
         if resp.status_code == 200:
             data  = resp.json()
-            title = (
+            raw_title = (
                 data.get("choices", [{}])[0]
                     .get("message", {})
                     .get("content", "")
-                    .strip()
-                    .strip('"\'')
             )
-            # Strip any accidental markdown bold/italic
-            title = title.replace("**", "").replace("*", "").strip()
+            title = _sanitize_generated_title(raw_title)
             if title:
                 logger.info(f"✅ [Title] Generated: '{title}' for: '{message[:50]}'")
                 return JSONResponse({"title": title[:60]})
+            logger.warning(f"⚠️ [Title] Sanitized title was empty (raw: '{raw_title[:80]}') — using fallback")
+        else:
+            logger.warning(f"⚠️ [Title] Groq returned {resp.status_code} — using fallback")
 
-        logger.warning(f"⚠️ [Title] Groq returned {resp.status_code} — using fallback")
-        words = message.split()
-        return JSONResponse({"title": " ".join(words[:5]) if words else "New Chat"})
+        return JSONResponse({"title": _fallback_title(message)})
 
     except requests.exceptions.RequestException as e:
         logger.warning(f"⚠️ [Title] network error: {e}")
