@@ -864,7 +864,7 @@ def share_page(slug: str):
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.463"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.464"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -874,7 +874,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.463", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.464", "timestamp": datetime.utcnow().isoformat()}
 
 # ── 🧠 MEMORY MODELS ────────────────────────────────────────────────────────
 from pydantic import BaseModel as _MemBaseModel
@@ -1073,7 +1073,7 @@ async def mcp_handshake_and_list_tools(url: str, headers: dict | None = None):
     init_result, err = await _mcp_rpc(url, "initialize", {
         "protocolVersion": _MCP_PROTOCOL_VERSION,
         "capabilities": {},
-        "clientInfo": {"name": "Catura AI", "version": "0.0.463"},
+        "clientInfo": {"name": "Catura AI", "version": "0.0.464"},
     }, headers)
     if err:
         return None, err
@@ -4770,13 +4770,13 @@ def call_nararouter_stream(messages, api_key, model_id, max_tokens=32768, enable
 
 
 # ============================================================
-# ✅ HELPER: Call NVIDIA NIM API — z-ai/glm-5.2, minimaxai/minimax-m3
+# ✅ HELPER: Call NVIDIA NIM API — minimaxai/minimax-m3
 # OpenAI-compatible endpoint at integrate.api.nvidia.com (NVIDIA_API_KEY)
 # ============================================================
 def call_nvidia_stream(messages, api_key, model_id, temperature=1.0, template_kwargs=None, max_tokens=16384):
     """
     Dedicated NVIDIA NIM streaming function.
-    Shared by all NVIDIA-hosted reasoning models (MiniMax M3, GLM-5.2,
+    Shared by all NVIDIA-hosted reasoning models (MiniMax M3,
     etc.) via model_id param.
 
     Thinking mode: NVIDIA NIM serves these as open-weight reasoning models on
@@ -4787,12 +4787,6 @@ def call_nvidia_stream(messages, api_key, model_id, temperature=1.0, template_kw
       - MiniMax M3   -> {"thinking_mode": "enabled"}  (NOT "thinking": true —
         that key is not recognized by MiniMax's chat template, so thinking
         never actually turned on and the model answered directly.)
-      - GLM-5.2      -> {"thinking": true} (GLM already reasons by default,
-        but the real bug here was max_tokens=16384 being too small: a 744B
-        reasoning model can easily spend the entire budget on the hidden
-        <think> trace and hit the token cap before ever emitting the final
-        'content' delta — which looks exactly like "takes minutes and never
-        replies". Fixed by giving GLM-5.2 a much larger max_tokens budget.
 
     Callers pass their own template_kwargs and max_tokens so each model gets
     the settings it actually needs instead of one-size-fits-all.
@@ -5248,7 +5242,6 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
             "nivo":    [],  # Routed via Groq API (GROQ_API_KEY) — see generate_nivo()
             "glm":     [],  # Routed via Z.ai API (ZAI_API_KEY) — glm-4.7-flash (free)
             "minimax_m3": [],  # Routed via NVIDIA NIM API (NVIDIA_API_KEY) — minimaxai/minimax-m3
-            "glm52":      [],  # Routed via NVIDIA NIM API (NVIDIA_API_KEY) — z-ai/glm-5.2
             "agnes":      [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — agnes-2.5-flash
             "stepfun3":   [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — ling-3.0-flash-free (was stepfun-3.7-flash)
             "qwen38":     [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — qwen-3.8-max-free
@@ -5694,26 +5687,6 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                 "You are knowledgeable about technology, science, finance, history, culture, and everyday topics. "
                 "For coding questions, write clean, well-commented code. "
                 "If asked what model or AI you are, say you are Catura AI Muse Spark and cannot share "
-                "details about the underlying technology. "
-                "If asked who made you, say 'I was created by Anirban.' "
-                "Never make up facts. If you don't know something, say so honestly."
-                + NO_TOOL_CALL_RULE
-            ),
-            "glm52": (
-                "Your name is Catura (pronounced kuh-CHUR-uh) GLM-5.2 Model. You are a highly capable "
-                "AI assistant created by Anirban — an independent developer based in India. "
-                "You are Catura AI GLM-5.2, built for fast, efficient, and high-quality responses. "
-                "You are clear, direct, and helpful. You speak like a knowledgeable friend — "
-                "never robotic, never sycophantic. "
-                "Never start a response with 'Certainly!', 'Of course!', 'Great question!', "
-                "'Absolutely!', or similar hollow openers. Just answer directly. "
-                "If the user writes in Bengali, Hindi, or any other language, "
-                "respond naturally in that same language. Match the user's language automatically. "
-                "Keep answers concise unless the user explicitly asks for detail. "
-                "Use bullet points or headers only when they genuinely improve clarity. "
-                "You are knowledgeable about technology, science, finance, history, culture, and everyday topics. "
-                "For coding questions, write clean, well-commented code. "
-                "If asked what model or AI you are, say you are Catura AI GLM-5.2 and cannot share "
                 "details about the underlying technology. "
                 "If asked who made you, say 'I was created by Anirban.' "
                 "Never make up facts. If you don't know something, say so honestly."
@@ -7104,102 +7077,6 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                 })
             )
 
-        # ── GLM-5.2: NVIDIA NIM API (NVIDIA_API_KEY) — z-ai/glm-5.2 ──
-        if model_key == "glm52":
-            nvidia_key_g52   = os.getenv("NVIDIA_API_KEY", "")
-            glm52_system     = system_prompts.get("glm52", system_prompts["dagr"])
-
-            def generate_glm52():
-                full_reply = ""
-                thinking_open_g52 = False  # tracks whether <think> has been opened in full_reply
-
-                tool_result_g52 = None
-                if intent != "general" and not file_urls:
-                    yield f"data: {json.dumps({'status': 'tool_running', 'intent': intent})}\n\n"
-                    tool_result_g52 = run_tool(intent, prompt)
-
-                final_system_g52 = glm52_system
-                tool_context_g52 = build_tool_context(tool_result_g52)
-                if tool_context_g52:
-                    final_system_g52 += "\n\n" + tool_context_g52
-
-                if tool_result_g52:
-                    badge_payload = json.dumps({"tool_used": tool_result_g52.get("tool", ""), "intent": intent})
-                    yield f"data: {badge_payload}\n\n"
-                    sp = build_sources_payload(tool_result_g52)
-                    if sp:
-                        yield f"data: {sp}\n\n"
-
-                glm52_messages = (
-                    [{"role": "system", "content": final_system_g52}]
-                    + active_memory[-20:]
-                )
-                resp, err = call_nvidia_stream(glm52_messages, nvidia_key_g52, "z-ai/glm-5.2", temperature=1.0, template_kwargs={"thinking": True}, max_tokens=32000)
-
-                if resp is None:
-                    yield f"data: {json.dumps({'error': f'GLM-5.2 unavailable: {err}'})}\n\n"
-                    yield "data: [DONE]\n\n"
-                    return
-
-                try:
-                    for line in resp.iter_lines():
-                        if not line:
-                            continue
-                        decoded = line.decode("utf-8")
-                        if not decoded.startswith("data: "):
-                            continue
-                        payload = decoded[6:]
-                        if payload.strip() == "[DONE]":
-                            break
-                        try:
-                            chunk = json.loads(payload)
-                            if "error" in chunk:
-                                logger.warning(f"⚠️ [GLM52] mid-stream error: {chunk['error']}")
-                                break
-                            choices = chunk.get("choices")
-                            if not choices:
-                                continue
-                            delta_g52 = choices[0].get("delta") or {}
-                            reasoning_token_g52 = delta_g52.get("reasoning_content") or ""
-                            token = delta_g52.get("content") or ""
-                            if reasoning_token_g52:
-                                if not thinking_open_g52:
-                                    full_reply += "<think>"
-                                    thinking_open_g52 = True
-                                full_reply += reasoning_token_g52
-                                yield f"data: {json.dumps({'thinking_token': reasoning_token_g52}, ensure_ascii=False)}\n\n"
-                            if token:
-                                if thinking_open_g52:
-                                    full_reply += "</think>"
-                                    thinking_open_g52 = False
-                                full_reply += token
-                                yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
-                        except (json.JSONDecodeError, KeyError, TypeError, IndexError) as parse_err:
-                            logger.debug(f"⚠️ [GLM52] skipped unparsable stream chunk: {parse_err}")
-                            continue
-                except (requests.exceptions.RequestException, ConnectionError, OSError) as e:
-                    logger.warning(f"⚠️ [GLM52] stream network error: {e}")
-                except Exception as e:
-                    _log_unexpected("GLM52 stream", e)
-
-                if thinking_open_g52:
-                    full_reply += "</think>"
-
-                if full_reply.strip():
-                    active_memory.append({"role": "assistant", "content": full_reply})
-                    if not ghost_mode and len(user_memory[session_id]) > 40:
-                        user_memory[session_id] = user_memory[session_id][-40:]
-                yield "data: [DONE]\n\n"
-
-            return StreamingResponse(
-                generate_glm52(),
-                media_type="text/event-stream",
-                headers=_rl({
-                    "Cache-Control": "no-cache",
-                    "Set-Cookie": build_session_cookie(session_id),
-                })
-            )
-
         # ── MISTRAL LARGE: Mistral API (MISTRAL_API_KEY) — mistral-large-latest ──
         if model_key == "mistral_large":
             mlarge_key    = os.getenv("MISTRAL_API_KEY", "")
@@ -7985,7 +7862,6 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
             "nivo":    [],  # Routed via Groq API (GROQ_API_KEY)
             "glm":     [],  # Routed via Z.ai API (ZAI_API_KEY) — glm-4.7-flash (free)
             "minimax_m3": [],  # Routed via NVIDIA NIM API (NVIDIA_API_KEY) — minimaxai/minimax-m3
-            "glm52":      [],  # Routed via NVIDIA NIM API (NVIDIA_API_KEY) — z-ai/glm-5.2
             "agnes":      [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — agnes-2.5-flash
             "stepfun3":   [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — ling-3.0-flash-free (was stepfun-3.7-flash)
             "qwen38":     [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — qwen-3.8-max-free
@@ -8618,26 +8494,6 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                 "You are knowledgeable about technology, science, finance, history, culture, and everyday topics. "
                 "For coding questions, write clean, well-commented code. "
                 "If asked what model or AI you are, say you are Catura AI Muse Spark and cannot share "
-                "details about the underlying technology. "
-                "If asked who made you, say 'I was created by Anirban.' "
-                "Never make up facts. If you don't know something, say so honestly."
-                + NO_TOOL_CALL_RULE
-            ),
-            "glm52": (
-                "Your name is Catura (pronounced kuh-CHUR-uh) GLM-5.2 Model. You are a highly capable "
-                "AI assistant created by Anirban — an independent developer based in India. "
-                "You are Catura AI GLM-5.2, built for fast, efficient, and high-quality responses. "
-                "You are clear, direct, and helpful. You speak like a knowledgeable friend — "
-                "never robotic, never sycophantic. "
-                "Never start a response with 'Certainly!', 'Of course!', 'Great question!', "
-                "'Absolutely!', or similar hollow openers. Just answer directly. "
-                "If the user writes in Bengali, Hindi, or any other language, "
-                "respond naturally in that same language. Match the user's language automatically. "
-                "Keep answers concise unless the user explicitly asks for detail. "
-                "Use bullet points or headers only when they genuinely improve clarity. "
-                "You are knowledgeable about technology, science, finance, history, culture, and everyday topics. "
-                "For coding questions, write clean, well-commented code. "
-                "If asked what model or AI you are, say you are Catura AI GLM-5.2 and cannot share "
                 "details about the underlying technology. "
                 "If asked who made you, say 'I was created by Anirban.' "
                 "Never make up facts. If you don't know something, say so honestly."
@@ -9758,79 +9614,6 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                     "Cache-Control": "no-cache",
                     "Set-Cookie": build_session_cookie(session_id),
                 })
-            )
-
-        # ── GLM-5.2: NVIDIA NIM API — isolated from all other models ──
-        if model_key == "glm52":
-            nvidia_key_g52_get = os.getenv("NVIDIA_API_KEY", "")
-            glm52_system_get   = system_prompts.get("glm52", system_prompts["dagr"])
-
-            def generate_glm52_get():
-                full_reply = ""
-                thinking_open_g52g = False
-                if tool_result:
-                    yield f"data: {json.dumps({'tool_used': tool_result.get('tool', ''), 'intent': intent})}\n\n"
-                    sp = build_sources_payload(tool_result)
-                    if sp:
-                        yield f"data: {sp}\n\n"
-
-                glm52_msgs_get = [{"role": "system", "content": glm52_system_get}] + active_memory[-20:]
-                resp, err = call_nvidia_stream(glm52_msgs_get, nvidia_key_g52_get, "z-ai/glm-5.2", temperature=1.0, template_kwargs={"thinking": True}, max_tokens=32000)
-                if resp is None:
-                    yield f"data: {json.dumps({'error': f'GLM-5.2 unavailable: {err}'})}\n\n"
-                    yield "data: [DONE]\n\n"
-                    return
-                try:
-                    for line in resp.iter_lines():
-                        if not line:
-                            continue
-                        decoded = line.decode("utf-8")
-                        if not decoded.startswith("data: "):
-                            continue
-                        payload = decoded[6:]
-                        if payload.strip() == "[DONE]":
-                            break
-                        try:
-                            chunk = json.loads(payload)
-                            if "error" in chunk:
-                                break
-                            choices = chunk.get("choices")
-                            if not choices:
-                                continue
-                            delta_g52g = choices[0].get("delta") or {}
-                            reasoning_token_g52g = delta_g52g.get("reasoning_content") or ""
-                            token = delta_g52g.get("content") or ""
-                            if reasoning_token_g52g:
-                                if not thinking_open_g52g:
-                                    full_reply += "<think>"
-                                    thinking_open_g52g = True
-                                full_reply += reasoning_token_g52g
-                                yield f"data: {json.dumps({'thinking_token': reasoning_token_g52g}, ensure_ascii=False)}\n\n"
-                            if token:
-                                if thinking_open_g52g:
-                                    full_reply += "</think>"
-                                    thinking_open_g52g = False
-                                full_reply += token
-                                yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
-                        except (json.JSONDecodeError, KeyError, TypeError, IndexError) as parse_err:
-                            logger.debug(f"⚠️ [GLM52 GET] skipped unparsable stream chunk: {parse_err}")
-                            continue
-                except (requests.exceptions.RequestException, ConnectionError, OSError) as e:
-                    logger.warning(f"⚠️ [GLM52 GET] stream network error: {e}")
-                except Exception as e:
-                    _log_unexpected("GLM52 GET stream", e)
-                if thinking_open_g52g:
-                    full_reply += "</think>"
-                if full_reply.strip():
-                    active_memory.append({"role": "assistant", "content": full_reply})
-                    if not ghost_mode and len(user_memory[session_id]) > 40:
-                        user_memory[session_id] = user_memory[session_id][-40:]
-                yield "data: [DONE]\n\n"
-
-            return StreamingResponse(
-                generate_glm52_get(), media_type="text/event-stream",
-                headers=_rl({"Cache-Control": "no-cache",
-                         "Set-Cookie": build_session_cookie(session_id)})
             )
 
         # ── MISTRAL LARGE: Mistral API (MISTRAL_API_KEY) — mistral-large-latest ──
