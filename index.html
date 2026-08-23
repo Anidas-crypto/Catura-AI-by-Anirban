@@ -144,7 +144,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
-    <link rel="stylesheet" href="static/style.css?v=0.0.467">   <!-- this is CSS linking section -->
+    <link rel="stylesheet" href="static/style.css?v=0.0.468">   <!-- this is CSS linking section -->
     
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#000000" />
@@ -695,8 +695,8 @@
                     </div>
                     <div class="model-option" data-model="ox_alpha_bynara" data-name="OX Alpha Bynara" onclick="selectModel('ox_alpha_bynara', 'OX Alpha Bynara', event)">
                         <div class="model-option-info">
-                            <div class="model-option-name">OX Alpha Bynara</div>
-                            <div class="model-option-desc">Full reasoning &amp; tool use · Agnes 2.5 Flash via NaraRouter</div>
+                            <div class="model-option-name">OX Alpha</div>
+                            <div class="model-option-desc">Full coding agent &amp; tool use · by NaraRouter</div>
                         </div>
                         <div class="model-option-check">✓</div>
                     </div>
@@ -906,18 +906,18 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
     
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <script src="static/firebase-config.js?v=0.0.467"></script>
-    <script src="static/live-sync.js?v=0.0.467"></script>
-    <script src="static/logic.js?v=0.0.467"></script>
-    <script src="static/feedback.js?v=0.0.467"></script>
-    <script src="static/file-upload.js?v=0.0.467"></script>
+    <script src="static/firebase-config.js?v=0.0.468"></script>
+    <script src="static/live-sync.js?v=0.0.468"></script>
+    <script src="static/logic.js?v=0.0.468"></script>
+    <script src="static/feedback.js?v=0.0.468"></script>
+    <script src="static/file-upload.js?v=0.0.468"></script>
 
     <script>
         console.log('🚀 Catura AI v27.0.5 loaded');
         
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js?v=0.0.467')
+                navigator.serviceWorker.register('/service-worker.js?v=0.0.468')
                     .then(() => console.log('✅ Catura AI PWA Ready - v27.0.5'))
                     .catch((err) => console.log('❌ SW Error:', err));
             });
