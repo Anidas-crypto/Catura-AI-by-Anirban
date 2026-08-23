@@ -864,7 +864,7 @@ def share_page(slug: str):
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.464"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.465"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -874,7 +874,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.464", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.465", "timestamp": datetime.utcnow().isoformat()}
 
 # ── 🧠 MEMORY MODELS ────────────────────────────────────────────────────────
 from pydantic import BaseModel as _MemBaseModel
@@ -1073,7 +1073,7 @@ async def mcp_handshake_and_list_tools(url: str, headers: dict | None = None):
     init_result, err = await _mcp_rpc(url, "initialize", {
         "protocolVersion": _MCP_PROTOCOL_VERSION,
         "capabilities": {},
-        "clientInfo": {"name": "Catura AI", "version": "0.0.464"},
+        "clientInfo": {"name": "Catura AI", "version": "0.0.465"},
     }, headers)
     if err:
         return None, err
@@ -4383,7 +4383,7 @@ def call_groq_stream(messages, api_key):
 
 # ============================================================
 # ✅ HELPER: Call Poolside API for Laguna — uses POOLSIDE_API_KEY
-# Laguna M.1 via Poolside's OpenAI-compatible endpoint
+# Laguna XS 2.1 / S 2.1 via Poolside's OpenAI-compatible endpoint
 # ============================================================
 def _call_poolside_with_fallback(messages, api_key, model_candidates, label):
     """
@@ -4471,15 +4471,6 @@ def _call_poolside_with_fallback(messages, api_key, model_candidates, label):
             return None, last_err
 
     return None, last_err or f"{label} unavailable: all model id candidates failed"
-
-
-def call_poolside_stream(messages, api_key):
-    """Laguna M.1 via Poolside. Tries known model-id spellings in order."""
-    return _call_poolside_with_fallback(
-        messages, api_key,
-        ["poolside/laguna-m.1", "poolside/Laguna-M.1"],
-        "Laguna",
-    )
 
 
 def call_poolside_laguna_core_stream(messages, api_key):
@@ -5250,7 +5241,6 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
             "mistral_medium": [],  # Routed via Mistral API (MISTRAL_API_KEY) — mistral-medium-latest
             "mistral_small":  [],  # Routed via Mistral API (MISTRAL_API_KEY) — mistral-small-latest
             "mercury2": [],  # Routed via Inception Labs API (INCEPTION_API_KEY) — mercury-2
-            "laguna":      [],  # Routed via Poolside API (POOLSIDE_API_KEY) — Laguna M.1
             "laguna_core": [],  # Routed via Poolside API (POOLSIDE_API_KEY) — Laguna XS.2.1
             "laguna_s":    [],  # Routed via Poolside API (POOLSIDE_API_KEY) — Laguna S.2.1
             "cohere":       ["cohere/north-mini-code:free"],
@@ -5772,39 +5762,6 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                 "Never make up facts. If you don't know something, say so honestly."
                 + NO_TOOL_CALL_RULE
             ),
-            "laguna": (
-                # ── Identity ──
-                "Your name is Catura (pronounced kuh-CHUR-uh) Laguna Model. You are a highly capable "
-                "AI assistant created by Anirban — an independent developer based in India. "
-                "You are Catura AI Laguna, designed for precise, high-quality responses. "
-
-                # ── Personality & tone ──
-                "You are thoughtful, clear, and direct. You speak like a knowledgeable friend — "
-                "helpful, intelligent, and never robotic or sycophantic. "
-                "Never start a response with 'Certainly!', 'Of course!', 'Great question!', "
-                "'Absolutely!', or similar hollow openers. Just answer directly. "
-
-                # ── Language behaviour ──
-                "If the user writes in Bengali, Hindi, or any other language, "
-                "respond naturally in that same language. Match the user's language automatically. "
-
-                # ── Response style ──
-                "Keep answers concise unless the user explicitly asks for detail or a long explanation. "
-                "Use bullet points, numbered lists, or headers only when they genuinely improve clarity. "
-                "For simple questions, give simple answers. Don't pad responses. "
-
-                # ── Identity rules ──
-                "If asked what model or AI you are, say you are Catura AI Laguna and cannot share "
-                "details about the underlying technology. "
-                "If asked who made you, say 'I was created by Anirban.' "
-
-                # ── Hard rules ──
-                "Never make up facts. If you don't know something, say so honestly. "
-                "Never say 'I don't have real-time data' — if live data is provided in context, use it; "
-                "otherwise give your best knowledge-based answer."
-                + FORMATTING_RULES
-                + NO_TOOL_CALL_RULE
-            ),
             # ── LAGUNA CORE — Laguna XS.2.1 via Poolside (POOLSIDE_API_KEY) ──
             "laguna_core": (
                 # ── Identity ──
@@ -6078,102 +6035,6 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
 
             return StreamingResponse(
                 generate_sambhav(),
-                media_type="text/event-stream",
-                headers=_rl({
-                    "Cache-Control": "no-cache",
-                    "Set-Cookie": build_session_cookie(session_id),
-                })
-            )
-
-        # ── LAGUNA: Poolside API (POOLSIDE_API_KEY) — isolated from all other models ──
-        if model_key == "laguna":
-            poolside_key = os.getenv("POOLSIDE_API_KEY", "")
-            laguna_system = system_prompts.get("laguna", system_prompts["dagr"])
-
-            def generate_laguna():
-                full_reply = ""
-                thinking_open = False  # tracks whether <think> has been opened in full_reply
-
-                tool_result_l = None
-                if intent != "general" and not file_urls:
-                    yield f"data: {json.dumps({'status': 'tool_running', 'intent': intent})}\n\n"
-                    tool_result_l = run_tool(intent, prompt)
-
-                final_system_l = laguna_system
-                tool_context_l = build_tool_context(tool_result_l)
-                if tool_context_l:
-                    final_system_l += "\n\n" + tool_context_l
-
-                if tool_result_l:
-                    badge_payload = json.dumps({"tool_used": tool_result_l.get("tool", ""), "intent": intent})
-                    yield f"data: {badge_payload}\n\n"
-                    sp = build_sources_payload(tool_result_l)
-                    if sp:
-                        yield f"data: {sp}\n\n"
-
-                laguna_messages = (
-                    [{"role": "system", "content": final_system_l}]
-                    + active_memory[-20:]
-                )
-
-                resp, err = call_poolside_stream(laguna_messages, poolside_key)
-                if resp is None:
-                    yield f"data: {json.dumps({'error': f'Laguna unavailable: {err}'})}\n\n"
-                    yield "data: [DONE]\n\n"
-                    return
-
-                try:
-                    for line in resp.iter_lines():
-                        if not line:
-                            continue
-                        decoded = line.decode("utf-8")
-                        if not decoded.startswith("data: "):
-                            continue
-                        payload = decoded[6:]
-                        if payload.strip() == "[DONE]":
-                            break
-                        try:
-                            chunk = json.loads(payload)
-                            if "error" in chunk:
-                                logger.warning(f"⚠️ [Laguna] mid-stream error: {chunk['error']}")
-                                break
-                            choices = chunk.get("choices")
-                            if not choices:
-                                continue
-                            delta = choices[0].get("delta") or {}
-                            reasoning_token = delta.get("reasoning_content") or ""
-                            token = delta.get("content") or ""
-                            if reasoning_token:
-                                if not thinking_open:
-                                    full_reply += "<think>"
-                                    thinking_open = True
-                                full_reply += reasoning_token
-                                yield f"data: {json.dumps({'thinking_token': reasoning_token}, ensure_ascii=False)}\n\n"
-                            if token:
-                                if thinking_open:
-                                    full_reply += "</think>"
-                                    thinking_open = False
-                                full_reply += token
-                                yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
-                        except (json.JSONDecodeError, KeyError, TypeError, IndexError) as parse_err:
-                            logger.debug(f"⚠️ [Laguna] skipped unparsable stream chunk: {parse_err}")
-                            continue
-                except (requests.exceptions.RequestException, ConnectionError, OSError) as e:
-                    logger.warning(f"⚠️ [Laguna] stream network error: {e}")
-                except Exception as e:
-                    _log_unexpected("Laguna stream", e)
-
-                if thinking_open:
-                    full_reply += "</think>"
-
-                if full_reply.strip():
-                    active_memory.append({"role": "assistant", "content": full_reply})
-                    if not ghost_mode and len(user_memory[session_id]) > 40:
-                        user_memory[session_id] = user_memory[session_id][-40:]
-                yield "data: [DONE]\n\n"
-
-            return StreamingResponse(
-                generate_laguna(),
                 media_type="text/event-stream",
                 headers=_rl({
                     "Cache-Control": "no-cache",
@@ -7870,7 +7731,6 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
             "mistral_medium": [],  # Routed via Mistral API (MISTRAL_API_KEY) — mistral-medium-latest
             "mistral_small":  [],  # Routed via Mistral API (MISTRAL_API_KEY) — mistral-small-latest
             "mercury2": [],  # Routed via Inception Labs API (INCEPTION_API_KEY) — mercury-2
-            "laguna":      [],  # Routed via Poolside API (POOLSIDE_API_KEY) — Laguna M.1
             "laguna_core": [],  # Routed via Poolside API (POOLSIDE_API_KEY) — Laguna XS.2.1
             "laguna_s":    [],  # Routed via Poolside API (POOLSIDE_API_KEY) — Laguna S.2.1
             "cohere":     ["cohere/north-mini-code:free"], 
@@ -8579,22 +8439,6 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                 "Never make up facts. If you don't know something, say so honestly."
                 + NO_TOOL_CALL_RULE
             ),
-            "laguna": (
-                # ── Identity ──
-                "Your name is Catura (pronounced kuh-CHUR-uh) Laguna Model. You are a highly capable "
-                "AI assistant created by Anirban — an independent developer based in India. "
-                "You are Catura AI Laguna, designed for precise, high-quality responses. "
-                "You are thoughtful, clear, and direct. Never start with 'Certainly!', 'Of course!', "
-                "'Great question!', 'Absolutely!', or similar hollow openers. Just answer directly. "
-                "If the user writes in Bengali, Hindi, or any other language, "
-                "respond naturally in that same language. Match the user's language automatically. "
-                "Keep answers concise unless the user explicitly asks for detail. "
-                "If asked what model or AI you are, say you are Catura AI Laguna and cannot share "
-                "details about the underlying technology. "
-                "If asked who made you, say 'I was created by Anirban.' "
-                "Never make up facts. If you don't know something, say so honestly."
-                + NO_TOOL_CALL_RULE
-            ),
             # ── LAGUNA CORE — Laguna XS.2.1 via Poolside (POOLSIDE_API_KEY) ──
             "laguna_core": (
                 "Your name is Catura (pronounced kuh-CHUR-uh) Laguna Core Model. You are a highly capable "
@@ -8745,79 +8589,6 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
         # nivo, etc. all pull from this same dict).
         system_prompts = {k: v + UI_DESIGN_RULES for k, v in system_prompts.items()}
         system_prompt = system_prompts.get(model_key, system_prompts["dagr"])
-
-        # ── LAGUNA: Poolside API (POOLSIDE_API_KEY) — GET handler ──
-        if model_key == "laguna":
-            poolside_key_get = os.getenv("POOLSIDE_API_KEY", "")
-            laguna_system_get = system_prompts.get("laguna", system_prompts["dagr"])
-            laguna_messages_get = [{"role": "system", "content": laguna_system_get}] + active_memory[-20:]
-
-            def generate_laguna_get():
-                full_reply = ""
-                thinking_open = False
-                if tool_result:
-                    yield f"data: {json.dumps({'tool_used': tool_result.get('tool', ''), 'intent': intent})}\n\n"
-                    sp = build_sources_payload(tool_result)
-                    if sp:
-                        yield f"data: {sp}\n\n"
-
-                resp, err = call_poolside_stream(laguna_messages_get, poolside_key_get)
-                if resp is None:
-                    yield f"data: {json.dumps({'error': f'Laguna unavailable: {err}'})}\n\n"
-                    yield "data: [DONE]\n\n"
-                    return
-                try:
-                    for line in resp.iter_lines():
-                        if not line:
-                            continue
-                        decoded = line.decode("utf-8")
-                        if not decoded.startswith("data: "):
-                            continue
-                        payload = decoded[6:]
-                        if payload.strip() == "[DONE]":
-                            break
-                        try:
-                            chunk = json.loads(payload)
-                            if "error" in chunk:
-                                break
-                            choices = chunk.get("choices")
-                            if not choices:
-                                continue
-                            delta = choices[0].get("delta") or {}
-                            reasoning_token = delta.get("reasoning_content") or ""
-                            token = delta.get("content") or ""
-                            if reasoning_token:
-                                if not thinking_open:
-                                    full_reply += "<think>"
-                                    thinking_open = True
-                                full_reply += reasoning_token
-                                yield f"data: {json.dumps({'thinking_token': reasoning_token}, ensure_ascii=False)}\n\n"
-                            if token:
-                                if thinking_open:
-                                    full_reply += "</think>"
-                                    thinking_open = False
-                                full_reply += token
-                                yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
-                        except (json.JSONDecodeError, KeyError, TypeError, IndexError) as parse_err:
-                            logger.debug(f"⚠️ [Laguna GET] skipped unparsable stream chunk: {parse_err}")
-                            continue
-                except (requests.exceptions.RequestException, ConnectionError, OSError) as e:
-                    logger.warning(f"⚠️ [Laguna GET] stream network error: {e}")
-                except Exception as e:
-                    _log_unexpected("Laguna GET stream", e)
-                if thinking_open:
-                    full_reply += "</think>"
-                if full_reply.strip():
-                    active_memory.append({"role": "assistant", "content": full_reply})
-                    if not ghost_mode and len(user_memory[session_id]) > 40:
-                        user_memory[session_id] = user_memory[session_id][-40:]
-                yield "data: [DONE]\n\n"
-
-            return StreamingResponse(
-                generate_laguna_get(), media_type="text/event-stream",
-                headers=_rl({"Cache-Control": "no-cache",
-                         "Set-Cookie": build_session_cookie(session_id)})
-            )
 
         # ── LAGUNA CORE: Poolside API (POOLSIDE_API_KEY) — Laguna XS.2.1 — GET handler ──
         if model_key == "laguna_core":
