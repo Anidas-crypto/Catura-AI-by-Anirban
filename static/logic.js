@@ -6067,7 +6067,7 @@ const MODEL_ICONS = {
     sambhav:        'meta.png',
     gemini35flash:  'gemini.png',
     agnes:          'agnes-.jpg',
-    ox_alpha_bynara: 'ox-alpha',
+    ox_alpha_bynara: 'ox-alpha.png',
     apep:           'openai.png',
     cohere:         'Cohere.png',
     gemma:          'google.png',
