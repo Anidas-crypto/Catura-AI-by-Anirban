@@ -6074,7 +6074,6 @@ const MODEL_ICONS = {
     glm:            'GLM.png',
     laguna_core:    'poolside.ico',
     laguna_s:       'poolside.ico',
-    ling:           'ling.png',
     mercury2:       'Mercury.png',
     qwen38:         'qwen.png',
     musespark:      'meta.png',
@@ -6086,7 +6085,6 @@ const MODEL_ICONS = {
     n_nano:         'nvidia.png',
     nivo:           'groq.png',
     omni:           'nvidia.png',
-    stepfun3:       'ling.png',
     claude_puter:   'claude.png',
     gpt5_puter:     'openai.png',
     gemini_puter:   'gemini.png',
@@ -6150,7 +6148,7 @@ window.toggleModelSelector = function (e) {
             dropdown.classList.add('open');
             btn.classList.add('open');
 
-            const moreModels = ['apep', 'gemma', 'gemma4', 'nivo', 'laguna_core', 'laguna_s', 'laguna_lite', 'nemotron','omni','glm','cohere','minimax_m3','ling','agnes','stepfun3','qwen38','musespark'];
+            const moreModels = ['apep', 'gemma', 'gemma4', 'nivo', 'laguna_core', 'laguna_s', 'laguna_lite', 'nemotron','omni','glm','cohere','minimax_m3','agnes','qwen38','musespark'];
             const puterModelsList = ['claude_puter','gpt5_puter','gemini_puter'];
             if (moreModels.includes(selectedModel)) {
                 requestAnimationFrame(() => {
@@ -6198,7 +6196,7 @@ window.toggleModelSelector = function (e) {
             dropdown.classList.add('open');
             btn.classList.add('open');
 
-            const moreModels = ['apep', 'gemma', 'gemma4', 'nivo', 'laguna_core', 'laguna_s', 'laguna_lite','nemotron','omni', 'cohere','glm','minimax_m3','ling','agnes','stepfun3','qwen38','musespark'];
+            const moreModels = ['apep', 'gemma', 'gemma4', 'nivo', 'laguna_core', 'laguna_s', 'laguna_lite','nemotron','omni', 'cohere','glm','minimax_m3','agnes','qwen38','musespark'];
             const puterModelsList = ['claude_puter','gpt5_puter','gemini_puter'];
             if (moreModels.includes(selectedModel)) {
                 requestAnimationFrame(() => {

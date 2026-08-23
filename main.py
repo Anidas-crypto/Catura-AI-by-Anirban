@@ -864,7 +864,7 @@ def share_page(slug: str):
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.465"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.466"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -874,7 +874,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.465", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.466", "timestamp": datetime.utcnow().isoformat()}
 
 # ── 🧠 MEMORY MODELS ────────────────────────────────────────────────────────
 from pydantic import BaseModel as _MemBaseModel
@@ -1073,7 +1073,7 @@ async def mcp_handshake_and_list_tools(url: str, headers: dict | None = None):
     init_result, err = await _mcp_rpc(url, "initialize", {
         "protocolVersion": _MCP_PROTOCOL_VERSION,
         "capabilities": {},
-        "clientInfo": {"name": "Catura AI", "version": "0.0.465"},
+        "clientInfo": {"name": "Catura AI", "version": "0.0.466"},
     }, headers)
     if err:
         return None, err
@@ -5234,7 +5234,6 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
             "glm":     [],  # Routed via Z.ai API (ZAI_API_KEY) — glm-4.7-flash (free)
             "minimax_m3": [],  # Routed via NVIDIA NIM API (NVIDIA_API_KEY) — minimaxai/minimax-m3
             "agnes":      [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — agnes-2.5-flash
-            "stepfun3":   [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — ling-3.0-flash-free (was stepfun-3.7-flash)
             "qwen38":     [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — qwen-3.8-max-free
             "musespark":  [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — muse-spark-1.2-contributor-free
             "mistral_large":  [],  # Routed via Mistral API (MISTRAL_API_KEY) — mistral-large-latest
@@ -5246,7 +5245,6 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
             "cohere":       ["cohere/north-mini-code:free"],
             "n_nano":  ["nvidia/nemotron-nano-12b-v2-vl:free"],
             "omni":    ["nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"],
-            "ling":    ["inclusionai/ling-3.0-tiny:free"],  # OpenRouter — hybrid reasoning/thinking model
         }
         model_key  = model.strip()
         model_pool = model_pools.get(model_key, model_pools["dagr"])
@@ -5622,26 +5620,6 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                 "Never make up facts. If you don't know something, say so honestly."
                 + NO_TOOL_CALL_RULE
             ),
-            "stepfun3": (
-                "Your name is Catura (pronounced kuh-CHUR-uh) Ling Model. You are a highly capable "
-                "AI assistant created by Anirban — an independent developer based in India. "
-                "You are Catura AI Ling, built for fast, efficient, and high-quality responses. "
-                "You are clear, direct, and helpful. You speak like a knowledgeable friend — "
-                "never robotic, never sycophantic. "
-                "Never start a response with 'Certainly!', 'Of course!', 'Great question!', "
-                "'Absolutely!', or similar hollow openers. Just answer directly. "
-                "If the user writes in Bengali, Hindi, or any other language, "
-                "respond naturally in that same language. Match the user's language automatically. "
-                "Keep answers concise unless the user explicitly asks for detail. "
-                "Use bullet points or headers only when they genuinely improve clarity. "
-                "You are knowledgeable about technology, science, finance, history, culture, and everyday topics. "
-                "For coding questions, write clean, well-commented code. "
-                "If asked what model or AI you are, say you are Catura AI Ling and cannot share "
-                "details about the underlying technology. "
-                "If asked who made you, say 'I was created by Anirban.' "
-                "Never make up facts. If you don't know something, say so honestly."
-                + NO_TOOL_CALL_RULE
-            ),
             "qwen38": (
                 "Your name is Catura (pronounced kuh-CHUR-uh) Qwen 3.8 Max Model. You are a highly capable "
                 "AI assistant created by Anirban — an independent developer based in India. "
@@ -5873,18 +5851,6 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                 "Match the user's language automatically. "
                 "Never make up facts. If asked who made you, say 'I was created by Anirban.' "
                 "If asked which model you are, what AI you are, or which version is running, always say: 'I am Catura AI Nemotron Nano.' Never mention Dagr, Apep, Sambhav, Gemma, Gemma4, Cohere, or Nemotron."
-                + FORMATTING_RULES
-                + NO_TOOL_CALL_RULE
-            ),
-            "ling":(
-                "Your name is Catura (pronounced kuh-CHUR-uh) Ling Model. You are a highly capable "
-                "AI assistant created by Anirban — an independent developer based in India. "
-                "You are Catura AI Ling, built for hybrid reasoning and production-scale agentic tasks — "
-                "you switch into a deeper thinking mode for hard problems and answer instantly for simple ones. "
-                "Speak clearly and helpfully. Never start with 'Certainly!', 'Great question!', or similar openers. "
-                "Match the user's language automatically. "
-                "Never make up facts. If asked who made you, say 'I was created by Anirban.' "
-                "If asked which model you are, what AI you are, or which version is running, always say: 'I am Catura AI Ling.' Never mention Dagr, Apep, Sambhav, Gemma, Gemma4, Cohere, Nemotron, Nemotron Nano, or Omni."
                 + FORMATTING_RULES
                 + NO_TOOL_CALL_RULE
             ),
@@ -6619,110 +6585,6 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
 
             return StreamingResponse(
                 generate_agnes(),
-                media_type="text/event-stream",
-                headers=_rl({
-                    "Cache-Control": "no-cache",
-                    "Set-Cookie": build_session_cookie(session_id),
-                })
-            )
-
-        # ── STEPFUN3 (key kept for compat): NaraRouter API (NARAROUTER_API_KEY) — ling-3.0-flash-free (was stepfun-3.7-flash) ──
-        if model_key == "stepfun3":
-            nara_key_stepfun3   = os.getenv("NARAROUTER_API_KEY", "")
-            stepfun3_system     = system_prompts.get("stepfun3", system_prompts["dagr"])
-
-            def generate_stepfun3():
-                full_reply = ""
-                thinking_open_stepfun3 = False  # tracks whether <think> has been opened in full_reply
-
-                tool_result_stepfun3 = None
-                if intent != "general" and not file_urls:
-                    yield f"data: {json.dumps({'status': 'tool_running', 'intent': intent})}\n\n"
-                    tool_result_stepfun3 = run_tool(intent, prompt)
-
-                final_system_stepfun3 = stepfun3_system
-                tool_context_stepfun3 = build_tool_context(tool_result_stepfun3)
-                if tool_context_stepfun3:
-                    final_system_stepfun3 += "\n\n" + tool_context_stepfun3
-
-                if tool_result_stepfun3:
-                    badge_payload = json.dumps({"tool_used": tool_result_stepfun3.get("tool", ""), "intent": intent})
-                    yield f"data: {badge_payload}\n\n"
-                    sp = build_sources_payload(tool_result_stepfun3)
-                    if sp:
-                        yield f"data: {sp}\n\n"
-
-                stepfun3_messages = (
-                    [{"role": "system", "content": final_system_stepfun3}]
-                    + active_memory[-20:]
-                )
-                resp, err = call_nararouter_stream(stepfun3_messages, nara_key_stepfun3, "ling-3.0-flash-free", max_tokens=16000)
-
-                if resp is None:
-                    yield f"data: {json.dumps({'error': f'Ling 3.0 unavailable: {err}'})}\n\n"
-                    yield "data: [DONE]\n\n"
-                    return
-
-                try:
-                    for line in resp.iter_lines():
-                        if not line:
-                            continue
-                        decoded = line.decode("utf-8")
-                        if not decoded.startswith("data: "):
-                            continue
-                        payload = decoded[6:]
-                        if payload.strip() == "[DONE]":
-                            break
-                        try:
-                            chunk = json.loads(payload)
-                            if "error" in chunk:
-                                logger.warning(f"⚠️ [LING 3.0] mid-stream error: {chunk['error']}")
-                                break
-                            choices = chunk.get("choices")
-                            if not choices:
-                                continue
-                            delta_stepfun3 = choices[0].get("delta") or {}
-                            reasoning_token_stepfun3 = delta_stepfun3.get("reasoning_content") or ""
-                            token = delta_stepfun3.get("content") or ""
-                            if reasoning_token_stepfun3:
-                                if not thinking_open_stepfun3:
-                                    full_reply += "<think>"
-                                    thinking_open_stepfun3 = True
-                                full_reply += reasoning_token_stepfun3
-                                yield f"data: {json.dumps({'thinking_token': reasoning_token_stepfun3}, ensure_ascii=False)}\n\n"
-                            if token:
-                                if thinking_open_stepfun3:
-                                    full_reply += "</think>"
-                                    thinking_open_stepfun3 = False
-                                full_reply += token
-                                yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
-                        except (json.JSONDecodeError, KeyError, TypeError, IndexError) as parse_err:
-                            logger.warning(f"⚠️ [LING 3.0] skipped unparsable stream chunk: {parse_err}")
-                            continue
-                except (requests.exceptions.RequestException, ConnectionError, OSError) as e:
-                    logger.warning(f"⚠️ [LING 3.0] stream network error: {e}")
-                except Exception as e:
-                    _log_unexpected("LING 3.0 stream", e)
-
-                if thinking_open_stepfun3:
-                    full_reply += "</think>"
-
-                if full_reply.strip():
-                    active_memory.append({"role": "assistant", "content": full_reply})
-                    if not ghost_mode and len(user_memory[session_id]) > 40:
-                        user_memory[session_id] = user_memory[session_id][-40:]
-                else:
-                    # Stream ended with zero tokens and no explicit error was
-                    # raised above (e.g. an unrecognized upstream response
-                    # shape slipped past every parser). Surface *something*
-                    # actionable instead of silently falling through to the
-                    # frontend's generic "No response received" message.
-                    logger.warning("⚠️ [LING 3.0] stream ended with an empty reply and no error")
-                    yield f"data: {json.dumps({'error': 'Ling 3.0 returned an empty response. Please try again.'})}\n\n"
-                yield "data: [DONE]\n\n"
-
-            return StreamingResponse(
-                generate_stepfun3(),
                 media_type="text/event-stream",
                 headers=_rl({
                     "Cache-Control": "no-cache",
@@ -7724,7 +7586,6 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
             "glm":     [],  # Routed via Z.ai API (ZAI_API_KEY) — glm-4.7-flash (free)
             "minimax_m3": [],  # Routed via NVIDIA NIM API (NVIDIA_API_KEY) — minimaxai/minimax-m3
             "agnes":      [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — agnes-2.5-flash
-            "stepfun3":   [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — ling-3.0-flash-free (was stepfun-3.7-flash)
             "qwen38":     [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — qwen-3.8-max-free
             "musespark":  [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — muse-spark-1.2-contributor-free
             "mistral_large":  [],  # Routed via Mistral API (MISTRAL_API_KEY) — mistral-large-latest
@@ -7737,7 +7598,6 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
             "nemotron":["nvidia/nemotron-3-ultra-550b-a55b:free"],
             "n_nano":["nvidia/nemotron-nano-12b-v2-vl:free"],
             "omni": ["nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"],
-            "ling": ["inclusionai/ling-3.0-tiny:free"],  # OpenRouter — hybrid reasoning/thinking model
         }
         model_key  = model.strip()
         model_pool = model_pools.get(model_key, model_pools["dagr"])
@@ -8299,26 +8159,6 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                 "Never make up facts. If you don't know something, say so honestly."
                 + NO_TOOL_CALL_RULE
             ),
-            "stepfun3": (
-                "Your name is Catura (pronounced kuh-CHUR-uh) Ling Model. You are a highly capable "
-                "AI assistant created by Anirban — an independent developer based in India. "
-                "You are Catura AI Ling, built for fast, efficient, and high-quality responses. "
-                "You are clear, direct, and helpful. You speak like a knowledgeable friend — "
-                "never robotic, never sycophantic. "
-                "Never start a response with 'Certainly!', 'Of course!', 'Great question!', "
-                "'Absolutely!', or similar hollow openers. Just answer directly. "
-                "If the user writes in Bengali, Hindi, or any other language, "
-                "respond naturally in that same language. Match the user's language automatically. "
-                "Keep answers concise unless the user explicitly asks for detail. "
-                "Use bullet points or headers only when they genuinely improve clarity. "
-                "You are knowledgeable about technology, science, finance, history, culture, and everyday topics. "
-                "For coding questions, write clean, well-commented code. "
-                "If asked what model or AI you are, say you are Catura AI Ling and cannot share "
-                "details about the underlying technology. "
-                "If asked who made you, say 'I was created by Anirban.' "
-                "Never make up facts. If you don't know something, say so honestly."
-                + NO_TOOL_CALL_RULE
-            ),
             "qwen38": (
                 "Your name is Catura (pronounced kuh-CHUR-uh) Qwen 3.8 Max Model. You are a highly capable "
                 "AI assistant created by Anirban — an independent developer based in India. "
@@ -8562,22 +8402,6 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                 "respond naturally in that same language. Match the user's language automatically. "
                 "Keep answers concise unless the user explicitly asks for detail. "
                 "If asked what model or AI you are, say you are Catura AI Nemotron Omni and cannot share "
-                "details about the underlying technology. "
-                "If asked who made you, say 'I was created by Anirban.' "
-                "Never make up facts. If you don't know something, say so honestly."
-                + NO_TOOL_CALL_RULE
-            ),
-            "ling":(
-                "Your name is Catura (pronounced kuh-CHUR-uh) Ling Model. You are a highly capable "
-                "AI assistant created by Anirban — an independent developer based in India. "
-                "You are Catura AI Ling, built for hybrid reasoning and production-scale agentic tasks — "
-                "you switch into a deeper thinking mode for hard problems and answer instantly for simple ones. "
-                "You are thoughtful, clear, and direct. Never start with 'Certainly!', 'Of course!', "
-                "'Great question!', 'Absolutely!', or similar hollow openers. Just answer directly. "
-                "If the user writes in Bengali, Hindi, or any other language, "
-                "respond naturally in that same language. Match the user's language automatically. "
-                "Keep answers concise unless the user explicitly asks for detail. "
-                "If asked what model or AI you are, say you are Catura AI Ling and cannot share "
                 "details about the underlying technology. "
                 "If asked who made you, say 'I was created by Anirban.' "
                 "Never make up facts. If you don't know something, say so honestly."
@@ -9068,110 +8892,6 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
 
             return StreamingResponse(
                 generate_agnes(),
-                media_type="text/event-stream",
-                headers=_rl({
-                    "Cache-Control": "no-cache",
-                    "Set-Cookie": build_session_cookie(session_id),
-                })
-            )
-
-        # ── STEPFUN3 (key kept for compat): NaraRouter API (NARAROUTER_API_KEY) — ling-3.0-flash-free (was stepfun-3.7-flash) ──
-        if model_key == "stepfun3":
-            nara_key_stepfun3   = os.getenv("NARAROUTER_API_KEY", "")
-            stepfun3_system     = system_prompts.get("stepfun3", system_prompts["dagr"])
-
-            def generate_stepfun3():
-                full_reply = ""
-                thinking_open_stepfun3 = False  # tracks whether <think> has been opened in full_reply
-
-                tool_result_stepfun3 = None
-                if intent != "general" and not file_urls:
-                    yield f"data: {json.dumps({'status': 'tool_running', 'intent': intent})}\n\n"
-                    tool_result_stepfun3 = run_tool(intent, prompt)
-
-                final_system_stepfun3 = stepfun3_system
-                tool_context_stepfun3 = build_tool_context(tool_result_stepfun3)
-                if tool_context_stepfun3:
-                    final_system_stepfun3 += "\n\n" + tool_context_stepfun3
-
-                if tool_result_stepfun3:
-                    badge_payload = json.dumps({"tool_used": tool_result_stepfun3.get("tool", ""), "intent": intent})
-                    yield f"data: {badge_payload}\n\n"
-                    sp = build_sources_payload(tool_result_stepfun3)
-                    if sp:
-                        yield f"data: {sp}\n\n"
-
-                stepfun3_messages = (
-                    [{"role": "system", "content": final_system_stepfun3}]
-                    + active_memory[-20:]
-                )
-                resp, err = call_nararouter_stream(stepfun3_messages, nara_key_stepfun3, "ling-3.0-flash-free", max_tokens=16000)
-
-                if resp is None:
-                    yield f"data: {json.dumps({'error': f'Ling 3.0 unavailable: {err}'})}\n\n"
-                    yield "data: [DONE]\n\n"
-                    return
-
-                try:
-                    for line in resp.iter_lines():
-                        if not line:
-                            continue
-                        decoded = line.decode("utf-8")
-                        if not decoded.startswith("data: "):
-                            continue
-                        payload = decoded[6:]
-                        if payload.strip() == "[DONE]":
-                            break
-                        try:
-                            chunk = json.loads(payload)
-                            if "error" in chunk:
-                                logger.warning(f"⚠️ [LING 3.0] mid-stream error: {chunk['error']}")
-                                break
-                            choices = chunk.get("choices")
-                            if not choices:
-                                continue
-                            delta_stepfun3 = choices[0].get("delta") or {}
-                            reasoning_token_stepfun3 = delta_stepfun3.get("reasoning_content") or ""
-                            token = delta_stepfun3.get("content") or ""
-                            if reasoning_token_stepfun3:
-                                if not thinking_open_stepfun3:
-                                    full_reply += "<think>"
-                                    thinking_open_stepfun3 = True
-                                full_reply += reasoning_token_stepfun3
-                                yield f"data: {json.dumps({'thinking_token': reasoning_token_stepfun3}, ensure_ascii=False)}\n\n"
-                            if token:
-                                if thinking_open_stepfun3:
-                                    full_reply += "</think>"
-                                    thinking_open_stepfun3 = False
-                                full_reply += token
-                                yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
-                        except (json.JSONDecodeError, KeyError, TypeError, IndexError) as parse_err:
-                            logger.warning(f"⚠️ [LING 3.0] skipped unparsable stream chunk: {parse_err}")
-                            continue
-                except (requests.exceptions.RequestException, ConnectionError, OSError) as e:
-                    logger.warning(f"⚠️ [LING 3.0] stream network error: {e}")
-                except Exception as e:
-                    _log_unexpected("LING 3.0 stream", e)
-
-                if thinking_open_stepfun3:
-                    full_reply += "</think>"
-
-                if full_reply.strip():
-                    active_memory.append({"role": "assistant", "content": full_reply})
-                    if not ghost_mode and len(user_memory[session_id]) > 40:
-                        user_memory[session_id] = user_memory[session_id][-40:]
-                else:
-                    # Stream ended with zero tokens and no explicit error was
-                    # raised above (e.g. an unrecognized upstream response
-                    # shape slipped past every parser). Surface *something*
-                    # actionable instead of silently falling through to the
-                    # frontend's generic "No response received" message.
-                    logger.warning("⚠️ [LING 3.0] stream ended with an empty reply and no error")
-                    yield f"data: {json.dumps({'error': 'Ling 3.0 returned an empty response. Please try again.'})}\n\n"
-                yield "data: [DONE]\n\n"
-
-            return StreamingResponse(
-                generate_stepfun3(),
                 media_type="text/event-stream",
                 headers=_rl({
                     "Cache-Control": "no-cache",
