@@ -144,7 +144,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
-    <link rel="stylesheet" href="static/style.css?v=0.0.474">   <!-- this is CSS linking section -->
+    <link rel="stylesheet" href="static/style.css?v=0.0.475">   <!-- this is CSS linking section -->
     
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#000000" />
@@ -630,10 +630,10 @@
                         </div>
                         <div class="model-option-check">✓</div>
                     </div>
-                    <div class="model-option" data-model="minimax_m3" data-name="MiniMax M3" onclick="selectModel('minimax_m3', 'MiniMax M3', event)">
+                    <div class="model-option" data-model="kimi_k3" data-name="Kimi K3" onclick="selectModel('kimi_k3', 'Kimi K3', event)">
                         <div class="model-option-info">
-                            <div class="model-option-name">MiniMax M3</div>
-                            <div class="model-option-desc">Fast reasoning · MiniMax M3 via NVIDIA NIM</div>
+                            <div class="model-option-name">Kimi K3</div>
+                            <div class="model-option-desc">Max reasoning · vision & file understanding · Kimi K3 via NVIDIA NIM</div>
                         </div>
                         <div class="model-option-check">✓</div>
                     </div>
@@ -906,18 +906,18 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
     
     <!-- ✅ CACHE BUSTING - VERSION PARAMETER -->
-    <script src="static/firebase-config.js?v=0.0.474"></script>
-    <script src="static/live-sync.js?v=0.0.474"></script>
-    <script src="static/logic.js?v=0.0.474"></script>
-    <script src="static/feedback.js?v=0.0.474"></script>
-    <script src="static/file-upload.js?v=0.0.474"></script>
+    <script src="static/firebase-config.js?v=0.0.475"></script>
+    <script src="static/live-sync.js?v=0.0.475"></script>
+    <script src="static/logic.js?v=0.0.475"></script>
+    <script src="static/feedback.js?v=0.0.475"></script>
+    <script src="static/file-upload.js?v=0.0.475"></script>
 
     <script>
         console.log('🚀 Catura AI v27.0.5 loaded');
         
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js?v=0.0.474')
+                navigator.serviceWorker.register('/service-worker.js?v=0.0.475')
                     .then(() => console.log('✅ Catura AI PWA Ready - v27.0.5'))
                     .catch((err) => console.log('❌ SW Error:', err));
             });

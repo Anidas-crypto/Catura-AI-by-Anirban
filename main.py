@@ -864,7 +864,7 @@ def share_page(slug: str):
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.474"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.475"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -874,7 +874,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.474", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.475", "timestamp": datetime.utcnow().isoformat()}
 
 # ── 🧠 MEMORY MODELS ────────────────────────────────────────────────────────
 from pydantic import BaseModel as _MemBaseModel
@@ -1073,7 +1073,7 @@ async def mcp_handshake_and_list_tools(url: str, headers: dict | None = None):
     init_result, err = await _mcp_rpc(url, "initialize", {
         "protocolVersion": _MCP_PROTOCOL_VERSION,
         "capabilities": {},
-        "clientInfo": {"name": "Catura AI", "version": "0.0.474"},
+        "clientInfo": {"name": "Catura AI", "version": "0.0.475"},
     }, headers)
     if err:
         return None, err
@@ -4761,26 +4761,32 @@ def call_nararouter_stream(messages, api_key, model_id, max_tokens=32768, enable
 
 
 # ============================================================
-# ✅ HELPER: Call NVIDIA NIM API — minimaxai/minimax-m3
+# ✅ HELPER: Call NVIDIA NIM API — moonshotai/kimi-k3
 # OpenAI-compatible endpoint at integrate.api.nvidia.com (NVIDIA_API_KEY)
 # ============================================================
-def call_nvidia_stream(messages, api_key, model_id, temperature=1.0, template_kwargs=None, max_tokens=16384):
+def call_nvidia_stream(messages, api_key, model_id, temperature=1.0, template_kwargs=None, max_tokens=16384,
+                        extra_params=None, vision_images=None):
     """
     Dedicated NVIDIA NIM streaming function.
-    Shared by all NVIDIA-hosted reasoning models (MiniMax M3,
-    etc.) via model_id param.
+    Shared by all NVIDIA-hosted reasoning models (Kimi K3, etc.) via the
+    model_id param.
 
-    Thinking mode: NVIDIA NIM serves these as open-weight reasoning models on
-    a vLLM/SGLang-style stack, and the exact chat_template_kwargs field that
-    switches reasoning on is MODEL-SPECIFIC — it is NOT the same key for every
-    model family, which is why a single hardcoded kwarg broke thinking for
-    some models and silently ate the whole token budget on others:
-      - MiniMax M3   -> {"thinking_mode": "enabled"}  (NOT "thinking": true —
-        that key is not recognized by MiniMax's chat template, so thinking
-        never actually turned on and the model answered directly.)
+    Reasoning control: NVIDIA NIM serves these as open-weight reasoning
+    models on a vLLM/SGLang-style stack, and the field that controls
+    reasoning depth is MODEL-SPECIFIC:
+      - Kimi K3 -> top-level {"reasoning_effort": "max"} (thinking is always
+        on for K3; "max" pushes it to the deepest/most thorough setting —
+        this is NOT a chat_template_kwargs field like some other models use.)
 
-    Callers pass their own template_kwargs and max_tokens so each model gets
-    the settings it actually needs instead of one-size-fits-all.
+    Callers pass their own template_kwargs (chat_template_kwargs, for models
+    that use that mechanism), extra_params (any other top-level fields such
+    as reasoning_effort), and max_tokens so each model gets the settings it
+    actually needs instead of one-size-fits-all.
+
+    vision_images: optional list of {"mime":…, "b64":…} dicts. When present,
+    they're appended as OpenAI-style image_url content blocks to the last
+    user message so native-multimodal models (Kimi K3 natively understands
+    text, images, and video frames) can see attached images/files.
 
     Reasoning is streamed back in the 'reasoning_content' delta field (same
     shape used elsewhere in this app), separate from the final answer's
@@ -4789,6 +4795,26 @@ def call_nvidia_stream(messages, api_key, model_id, temperature=1.0, template_kw
     if not api_key:
         return None, "NVIDIA_API_KEY not set in environment variables"
     try:
+        if vision_images:
+            last_user_idx = None
+            for i in range(len(messages) - 1, -1, -1):
+                if messages[i].get("role") == "user":
+                    last_user_idx = i
+                    break
+            if last_user_idx is not None:
+                original_content = messages[last_user_idx].get("content", "")
+                content_blocks = []
+                for img in vision_images:
+                    content_blocks.append({
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{img['mime']};base64,{img['b64']}"}
+                    })
+                text_str = original_content if isinstance(original_content, str) else ""
+                if not text_str:
+                    text_str = "Please analyse this image/file in detail."
+                content_blocks.append({"type": "text", "text": text_str})
+                messages[last_user_idx]["content"] = content_blocks
+
         payload = {
             "model": model_id,
             "messages": messages,
@@ -4798,6 +4824,8 @@ def call_nvidia_stream(messages, api_key, model_id, temperature=1.0, template_kw
         }
         if template_kwargs:
             payload["chat_template_kwargs"] = template_kwargs
+        if extra_params:
+            payload.update(extra_params)
         resp = _http.post(
             "https://integrate.api.nvidia.com/v1/chat/completions",
             headers={
@@ -5232,7 +5260,7 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
             "sambhav": [],  # Routed via Groq API (qwen/qwen3.6-27b) — see call_sambhav_groq_stream()
             "nivo":    [],  # Routed via Groq API (GROQ_API_KEY) — see generate_nivo()
             "glm":     [],  # Routed via Z.ai API (ZAI_API_KEY) — glm-4.7-flash (free)
-            "minimax_m3": [],  # Routed via NVIDIA NIM API (NVIDIA_API_KEY) — minimaxai/minimax-m3
+            "kimi_k3": [],  # Routed via NVIDIA NIM API (NVIDIA_API_KEY) — moonshotai/kimi-k3
             "agnes":      [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — agnes-2.5-flash
             "ox_alpha_bynara": [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — agnes-2.5-flash (full reasoning enabled)
             "deepseek":     [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — deepseek-v4-flash
@@ -5581,10 +5609,12 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                 + FORMATTING_RULES
                 + NO_TOOL_CALL_RULE
             ),
-            "minimax_m3": (
-                "Your name is Catura (pronounced kuh-CHUR-uh) MiniMax Model. You are a highly capable "
+            "kimi_k3": (
+                "Your name is Catura (pronounced kuh-CHUR-uh) Kimi Model. You are a highly capable "
                 "AI assistant created by Anirban — an independent developer based in India. "
-                "You are Catura AI MiniMax, built for fast, efficient, and high-quality responses. "
+                "You are Catura AI Kimi, built for deep reasoning, long-horizon problem solving, and "
+                "high-quality multimodal responses — you can understand attached images, video frames, "
+                "and files in addition to text. "
                 "You are clear, direct, and helpful. You speak like a knowledgeable friend — "
                 "never robotic, never sycophantic. "
                 "Never start a response with 'Certainly!', 'Of course!', 'Great question!', "
@@ -5595,7 +5625,7 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                 "Use bullet points or headers only when they genuinely improve clarity. "
                 "You are knowledgeable about technology, science, finance, history, culture, and everyday topics. "
                 "For coding questions, write clean, well-commented code. "
-                "If asked what model or AI you are, say you are Catura AI MiniMax and cannot share "
+                "If asked what model or AI you are, say you are Catura AI Kimi and cannot share "
                 "details about the underlying technology. "
                 "If asked who made you, say 'I was created by Anirban.' "
                 "Never make up facts. If you don't know something, say so honestly."
@@ -6415,40 +6445,47 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                 })
             )
 
-        # ── MINIMAX M3: NVIDIA NIM API (NVIDIA_API_KEY) — minimaxai/minimax-m3 ──
-        if model_key == "minimax_m3":
-            nvidia_key_mm     = os.getenv("NVIDIA_API_KEY", "")
-            minimax_system    = system_prompts.get("minimax_m3", system_prompts["dagr"])
+        # ── KIMI K3: NVIDIA NIM API (NVIDIA_API_KEY) — moonshotai/kimi-k3 ──
+        if model_key == "kimi_k3":
+            nvidia_key_k3     = os.getenv("NVIDIA_API_KEY", "")
+            kimi_k3_system    = system_prompts.get("kimi_k3", system_prompts["dagr"])
 
-            def generate_minimax_m3():
+            def generate_kimi_k3():
                 full_reply = ""
-                thinking_open_mm = False  # tracks whether <think> has been opened in full_reply
+                thinking_open_k3 = False  # tracks whether <think> has been opened in full_reply
 
-                tool_result_mm = None
+                tool_result_k3 = None
                 if intent != "general" and not file_urls:
                     yield f"data: {json.dumps({'status': 'tool_running', 'intent': intent})}\n\n"
-                    tool_result_mm = run_tool(intent, prompt)
+                    tool_result_k3 = run_tool(intent, prompt)
 
-                final_system_mm = minimax_system
-                tool_context_mm = build_tool_context(tool_result_mm)
-                if tool_context_mm:
-                    final_system_mm += "\n\n" + tool_context_mm
+                final_system_k3 = kimi_k3_system
+                tool_context_k3 = build_tool_context(tool_result_k3)
+                if tool_context_k3:
+                    final_system_k3 += "\n\n" + tool_context_k3
 
-                if tool_result_mm:
-                    badge_payload = json.dumps({"tool_used": tool_result_mm.get("tool", ""), "intent": intent})
+                if tool_result_k3:
+                    badge_payload = json.dumps({"tool_used": tool_result_k3.get("tool", ""), "intent": intent})
                     yield f"data: {badge_payload}\n\n"
-                    sp = build_sources_payload(tool_result_mm)
+                    sp = build_sources_payload(tool_result_k3)
                     if sp:
                         yield f"data: {sp}\n\n"
 
-                minimax_messages = (
-                    [{"role": "system", "content": final_system_mm}]
+                kimi_k3_messages = (
+                    [{"role": "system", "content": final_system_k3}]
                     + active_memory[-20:]
                 )
-                resp, err = call_nvidia_stream(minimax_messages, nvidia_key_mm, "minimaxai/minimax-m3", temperature=1.0, template_kwargs={"thinking_mode": "enabled"}, max_tokens=16000)
+                # Kimi K3 is natively multimodal (text, image, video frames) — pass
+                # through any attached images/files so the model can actually see
+                # them, and force reasoning_effort to "max" for the deepest thinking.
+                resp, err = call_nvidia_stream(
+                    kimi_k3_messages, nvidia_key_k3, "moonshotai/kimi-k3",
+                    temperature=1.0, extra_params={"reasoning_effort": "max"},
+                    max_tokens=16000, vision_images=vision_images_for_prompt,
+                )
 
                 if resp is None:
-                    yield f"data: {json.dumps({'error': f'MiniMax unavailable: {err}'})}\n\n"
+                    yield f"data: {json.dumps({'error': f'Kimi K3 unavailable: {err}'})}\n\n"
                     yield "data: [DONE]\n\n"
                     return
 
@@ -6465,35 +6502,35 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                         try:
                             chunk = json.loads(payload)
                             if "error" in chunk:
-                                logger.warning(f"⚠️ [MINIMAX_M3] mid-stream error: {chunk['error']}")
+                                logger.warning(f"⚠️ [KIMI_K3] mid-stream error: {chunk['error']}")
                                 break
                             choices = chunk.get("choices")
                             if not choices:
                                 continue
-                            delta_mm = choices[0].get("delta") or {}
-                            reasoning_token_mm = delta_mm.get("reasoning_content") or ""
-                            token = delta_mm.get("content") or ""
-                            if reasoning_token_mm:
-                                if not thinking_open_mm:
+                            delta_k3 = choices[0].get("delta") or {}
+                            reasoning_token_k3 = delta_k3.get("reasoning_content") or ""
+                            token = delta_k3.get("content") or ""
+                            if reasoning_token_k3:
+                                if not thinking_open_k3:
                                     full_reply += "<think>"
-                                    thinking_open_mm = True
-                                full_reply += reasoning_token_mm
-                                yield f"data: {json.dumps({'thinking_token': reasoning_token_mm}, ensure_ascii=False)}\n\n"
+                                    thinking_open_k3 = True
+                                full_reply += reasoning_token_k3
+                                yield f"data: {json.dumps({'thinking_token': reasoning_token_k3}, ensure_ascii=False)}\n\n"
                             if token:
-                                if thinking_open_mm:
+                                if thinking_open_k3:
                                     full_reply += "</think>"
-                                    thinking_open_mm = False
+                                    thinking_open_k3 = False
                                 full_reply += token
                                 yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
                         except (json.JSONDecodeError, KeyError, TypeError, IndexError) as parse_err:
-                            logger.debug(f"⚠️ [MINIMAX_M3] skipped unparsable stream chunk: {parse_err}")
+                            logger.debug(f"⚠️ [KIMI_K3] skipped unparsable stream chunk: {parse_err}")
                             continue
                 except (requests.exceptions.RequestException, ConnectionError, OSError) as e:
-                    logger.warning(f"⚠️ [MINIMAX_M3] stream network error: {e}")
+                    logger.warning(f"⚠️ [KIMI_K3] stream network error: {e}")
                 except Exception as e:
-                    _log_unexpected("MINIMAX_M3 stream", e)
+                    _log_unexpected("KIMI_K3 stream", e)
 
-                if thinking_open_mm:
+                if thinking_open_k3:
                     full_reply += "</think>"
 
                 if full_reply.strip():
@@ -6503,7 +6540,7 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                 yield "data: [DONE]\n\n"
 
             return StreamingResponse(
-                generate_minimax_m3(),
+                generate_kimi_k3(),
                 media_type="text/event-stream",
                 headers=_rl({
                     "Cache-Control": "no-cache",
@@ -7711,7 +7748,7 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
             "sambhav": [],  # Routed via Groq API (qwen/qwen3.6-27b) — see call_sambhav_groq_stream()
             "nivo":    [],  # Routed via Groq API (GROQ_API_KEY)
             "glm":     [],  # Routed via Z.ai API (ZAI_API_KEY) — glm-4.7-flash (free)
-            "minimax_m3": [],  # Routed via NVIDIA NIM API (NVIDIA_API_KEY) — minimaxai/minimax-m3
+            "kimi_k3": [],  # Routed via NVIDIA NIM API (NVIDIA_API_KEY) — moonshotai/kimi-k3
             "agnes":      [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — agnes-2.5-flash
             "ox_alpha_bynara": [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — agnes-2.5-flash (full reasoning enabled)
             "deepseek":     [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — deepseek-v4-flash
@@ -8247,10 +8284,12 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                 "Never make up facts. If you don't know something, say so honestly."
                 + NO_TOOL_CALL_RULE
             ),
-            "minimax_m3": (
-                "Your name is Catura (pronounced kuh-CHUR-uh) MiniMax Model. You are a highly capable "
+            "kimi_k3": (
+                "Your name is Catura (pronounced kuh-CHUR-uh) Kimi Model. You are a highly capable "
                 "AI assistant created by Anirban — an independent developer based in India. "
-                "You are Catura AI MiniMax, built for fast, efficient, and high-quality responses. "
+                "You are Catura AI Kimi, built for deep reasoning, long-horizon problem solving, and "
+                "high-quality multimodal responses — you can understand attached images, video frames, "
+                "and files in addition to text. "
                 "You are clear, direct, and helpful. You speak like a knowledgeable friend — "
                 "never robotic, never sycophantic. "
                 "Never start a response with 'Certainly!', 'Of course!', 'Great question!', "
@@ -8261,7 +8300,7 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                 "Use bullet points or headers only when they genuinely improve clarity. "
                 "You are knowledgeable about technology, science, finance, history, culture, and everyday topics. "
                 "For coding questions, write clean, well-commented code. "
-                "If asked what model or AI you are, say you are Catura AI MiniMax and cannot share "
+                "If asked what model or AI you are, say you are Catura AI Kimi and cannot share "
                 "details about the underlying technology. "
                 "If asked who made you, say 'I was created by Anirban.' "
                 "Never make up facts. If you don't know something, say so honestly."
@@ -8872,24 +8911,27 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                          "Set-Cookie": build_session_cookie(session_id)})
             )
 
-        # ── MINIMAX M3: NVIDIA NIM API — isolated from all other models ──
-        if model_key == "minimax_m3":
-            nvidia_key_mm_get  = os.getenv("NVIDIA_API_KEY", "")
-            minimax_system_get = system_prompts.get("minimax_m3", system_prompts["dagr"])
+        # ── KIMI K3: NVIDIA NIM API — isolated from all other models ──
+        if model_key == "kimi_k3":
+            nvidia_key_k3_get  = os.getenv("NVIDIA_API_KEY", "")
+            kimi_k3_system_get = system_prompts.get("kimi_k3", system_prompts["dagr"])
 
-            def generate_minimax_m3_get():
+            def generate_kimi_k3_get():
                 full_reply = ""
-                thinking_open_mmg = False
+                thinking_open_k3g = False
                 if tool_result:
                     yield f"data: {json.dumps({'tool_used': tool_result.get('tool', ''), 'intent': intent})}\n\n"
                     sp = build_sources_payload(tool_result)
                     if sp:
                         yield f"data: {sp}\n\n"
 
-                minimax_msgs_get = [{"role": "system", "content": minimax_system_get}] + active_memory[-20:]
-                resp, err = call_nvidia_stream(minimax_msgs_get, nvidia_key_mm_get, "minimaxai/minimax-m3", temperature=1.0, template_kwargs={"thinking_mode": "enabled"}, max_tokens=16000)
+                kimi_k3_msgs_get = [{"role": "system", "content": kimi_k3_system_get}] + active_memory[-20:]
+                resp, err = call_nvidia_stream(
+                    kimi_k3_msgs_get, nvidia_key_k3_get, "moonshotai/kimi-k3",
+                    temperature=1.0, extra_params={"reasoning_effort": "max"}, max_tokens=16000,
+                )
                 if resp is None:
-                    yield f"data: {json.dumps({'error': f'MiniMax unavailable: {err}'})}\n\n"
+                    yield f"data: {json.dumps({'error': f'Kimi K3 unavailable: {err}'})}\n\n"
                     yield "data: [DONE]\n\n"
                     return
                 try:
@@ -8909,29 +8951,29 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                             choices = chunk.get("choices")
                             if not choices:
                                 continue
-                            delta_mmg = choices[0].get("delta") or {}
-                            reasoning_token_mmg = delta_mmg.get("reasoning_content") or ""
-                            token = delta_mmg.get("content") or ""
-                            if reasoning_token_mmg:
-                                if not thinking_open_mmg:
+                            delta_k3g = choices[0].get("delta") or {}
+                            reasoning_token_k3g = delta_k3g.get("reasoning_content") or ""
+                            token = delta_k3g.get("content") or ""
+                            if reasoning_token_k3g:
+                                if not thinking_open_k3g:
                                     full_reply += "<think>"
-                                    thinking_open_mmg = True
-                                full_reply += reasoning_token_mmg
-                                yield f"data: {json.dumps({'thinking_token': reasoning_token_mmg}, ensure_ascii=False)}\n\n"
+                                    thinking_open_k3g = True
+                                full_reply += reasoning_token_k3g
+                                yield f"data: {json.dumps({'thinking_token': reasoning_token_k3g}, ensure_ascii=False)}\n\n"
                             if token:
-                                if thinking_open_mmg:
+                                if thinking_open_k3g:
                                     full_reply += "</think>"
-                                    thinking_open_mmg = False
+                                    thinking_open_k3g = False
                                 full_reply += token
                                 yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
                         except (json.JSONDecodeError, KeyError, TypeError, IndexError) as parse_err:
-                            logger.debug(f"⚠️ [MINIMAX_M3 GET] skipped unparsable stream chunk: {parse_err}")
+                            logger.debug(f"⚠️ [KIMI_K3 GET] skipped unparsable stream chunk: {parse_err}")
                             continue
                 except (requests.exceptions.RequestException, ConnectionError, OSError) as e:
-                    logger.warning(f"⚠️ [MINIMAX_M3 GET] stream network error: {e}")
+                    logger.warning(f"⚠️ [KIMI_K3 GET] stream network error: {e}")
                 except Exception as e:
-                    _log_unexpected("MINIMAX_M3 GET stream", e)
-                if thinking_open_mmg:
+                    _log_unexpected("KIMI_K3 GET stream", e)
+                if thinking_open_k3g:
                     full_reply += "</think>"
                 if full_reply.strip():
                     active_memory.append({"role": "assistant", "content": full_reply})
@@ -8940,7 +8982,7 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                 yield "data: [DONE]\n\n"
 
             return StreamingResponse(
-                generate_minimax_m3_get(), media_type="text/event-stream",
+                generate_kimi_k3_get(), media_type="text/event-stream",
                 headers=_rl({"Cache-Control": "no-cache",
                          "Set-Cookie": build_session_cookie(session_id)})
             )
