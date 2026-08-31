@@ -864,7 +864,7 @@ def share_page(slug: str):
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.470"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.471"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -874,7 +874,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.470", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.471", "timestamp": datetime.utcnow().isoformat()}
 
 # ── 🧠 MEMORY MODELS ────────────────────────────────────────────────────────
 from pydantic import BaseModel as _MemBaseModel
@@ -1073,7 +1073,7 @@ async def mcp_handshake_and_list_tools(url: str, headers: dict | None = None):
     init_result, err = await _mcp_rpc(url, "initialize", {
         "protocolVersion": _MCP_PROTOCOL_VERSION,
         "capabilities": {},
-        "clientInfo": {"name": "Catura AI", "version": "0.0.470"},
+        "clientInfo": {"name": "Catura AI", "version": "0.0.471"},
     }, headers)
     if err:
         return None, err
@@ -5235,7 +5235,7 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
             "minimax_m3": [],  # Routed via NVIDIA NIM API (NVIDIA_API_KEY) — minimaxai/minimax-m3
             "agnes":      [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — agnes-2.5-flash
             "ox_alpha_bynara": [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — agnes-2.5-flash (full reasoning enabled)
-            "qwen38":     [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — qwen-3.8-max-free
+            "deepseek":     [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — qwen-3.8-max-free
             "musespark":  [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — muse-spark-1.2-contributor-free
             "mistral_large":  [],  # Routed via Mistral API (MISTRAL_API_KEY) — mistral-large-latest
             "mistral_medium": [],  # Routed via Mistral API (MISTRAL_API_KEY) — mistral-medium-latest
@@ -5643,7 +5643,7 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                 "Never make up facts. If you don't know something, say so honestly."
                 + NO_TOOL_CALL_RULE
             ),
-            "qwen38": (
+            "deepseek": (
                 "Your name is Catura (pronounced kuh-CHUR-uh) Qwen 3.8 Max Model. You are a highly capable "
                 "AI assistant created by Anirban — an independent developer based in India. "
                 "You are Catura AI Qwen 3.8 Max, built for fast, efficient, and high-quality responses. "
@@ -6719,37 +6719,37 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                 })
             )
 
-        # ── QWEN38: NaraRouter API (NARAROUTER_API_KEY) — qwen-3.8-max-free ──
-        if model_key == "qwen38":
-            nara_key_qwen38   = os.getenv("NARAROUTER_API_KEY", "")
-            qwen38_system     = system_prompts.get("qwen38", system_prompts["dagr"])
+        # ── DEEPSEEK: NaraRouter API (NARAROUTER_API_KEY) — qwen-3.8-max-free ──
+        if model_key == "deepseek":
+            nara_key_deepseek   = os.getenv("NARAROUTER_API_KEY", "")
+            deepseek_system     = system_prompts.get("deepseek", system_prompts["dagr"])
 
-            def generate_qwen38():
+            def generate_deepseek():
                 full_reply = ""
-                thinking_open_qwen38 = False  # tracks whether <think> has been opened in full_reply
+                thinking_open_deepseek = False  # tracks whether <think> has been opened in full_reply
 
-                tool_result_qwen38 = None
+                tool_result_deepseek = None
                 if intent != "general" and not file_urls:
                     yield f"data: {json.dumps({'status': 'tool_running', 'intent': intent})}\n\n"
-                    tool_result_qwen38 = run_tool(intent, prompt)
+                    tool_result_deepseek = run_tool(intent, prompt)
 
-                final_system_qwen38 = qwen38_system
-                tool_context_qwen38 = build_tool_context(tool_result_qwen38)
-                if tool_context_qwen38:
-                    final_system_qwen38 += "\n\n" + tool_context_qwen38
+                final_system_deepseek = deepseek_system
+                tool_context_deepseek = build_tool_context(tool_result_deepseek)
+                if tool_context_deepseek:
+                    final_system_deepseek += "\n\n" + tool_context_deepseek
 
-                if tool_result_qwen38:
-                    badge_payload = json.dumps({"tool_used": tool_result_qwen38.get("tool", ""), "intent": intent})
+                if tool_result_deepseek:
+                    badge_payload = json.dumps({"tool_used": tool_result_deepseek.get("tool", ""), "intent": intent})
                     yield f"data: {badge_payload}\n\n"
-                    sp = build_sources_payload(tool_result_qwen38)
+                    sp = build_sources_payload(tool_result_deepseek)
                     if sp:
                         yield f"data: {sp}\n\n"
 
-                qwen38_messages = (
-                    [{"role": "system", "content": final_system_qwen38}]
+                deepseek_messages = (
+                    [{"role": "system", "content": final_system_deepseek}]
                     + active_memory[-20:]
                 )
-                resp, err = call_nararouter_stream(qwen38_messages, nara_key_qwen38, "qwen-3.8-max-free", max_tokens=16000)
+                resp, err = call_nararouter_stream(deepseek_messages, nara_key_deepseek, "qwen-3.8-max-free", max_tokens=16000)
 
                 if resp is None:
                     yield f"data: {json.dumps({'error': f'Qwen 3.8 Max unavailable: {err}'})}\n\n"
@@ -6769,35 +6769,35 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                         try:
                             chunk = json.loads(payload)
                             if "error" in chunk:
-                                logger.warning(f"⚠️ [QWEN38] mid-stream error: {chunk['error']}")
+                                logger.warning(f"⚠️ [DEEPSEEK] mid-stream error: {chunk['error']}")
                                 break
                             choices = chunk.get("choices")
                             if not choices:
                                 continue
-                            delta_qwen38 = choices[0].get("delta") or {}
-                            reasoning_token_qwen38 = delta_qwen38.get("reasoning_content") or ""
-                            token = delta_qwen38.get("content") or ""
-                            if reasoning_token_qwen38:
-                                if not thinking_open_qwen38:
+                            delta_deepseek = choices[0].get("delta") or {}
+                            reasoning_token_deepseek = delta_deepseek.get("reasoning_content") or ""
+                            token = delta_deepseek.get("content") or ""
+                            if reasoning_token_deepseek:
+                                if not thinking_open_deepseek:
                                     full_reply += "<think>"
-                                    thinking_open_qwen38 = True
-                                full_reply += reasoning_token_qwen38
-                                yield f"data: {json.dumps({'thinking_token': reasoning_token_qwen38}, ensure_ascii=False)}\n\n"
+                                    thinking_open_deepseek = True
+                                full_reply += reasoning_token_deepseek
+                                yield f"data: {json.dumps({'thinking_token': reasoning_token_deepseek}, ensure_ascii=False)}\n\n"
                             if token:
-                                if thinking_open_qwen38:
+                                if thinking_open_deepseek:
                                     full_reply += "</think>"
-                                    thinking_open_qwen38 = False
+                                    thinking_open_deepseek = False
                                 full_reply += token
                                 yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
                         except (json.JSONDecodeError, KeyError, TypeError, IndexError) as parse_err:
-                            logger.warning(f"⚠️ [QWEN38] skipped unparsable stream chunk: {parse_err}")
+                            logger.warning(f"⚠️ [DEEPSEEK] skipped unparsable stream chunk: {parse_err}")
                             continue
                 except (requests.exceptions.RequestException, ConnectionError, OSError) as e:
-                    logger.warning(f"⚠️ [QWEN38] stream network error: {e}")
+                    logger.warning(f"⚠️ [DEEPSEEK] stream network error: {e}")
                 except Exception as e:
-                    _log_unexpected("QWEN38 stream", e)
+                    _log_unexpected("DEEPSEEK stream", e)
 
-                if thinking_open_qwen38:
+                if thinking_open_deepseek:
                     full_reply += "</think>"
 
                 if full_reply.strip():
@@ -6815,7 +6815,7 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                 yield "data: [DONE]\n\n"
 
             return StreamingResponse(
-                generate_qwen38(),
+                generate_deepseek(),
                 media_type="text/event-stream",
                 headers=_rl({
                     "Cache-Control": "no-cache",
@@ -7714,7 +7714,7 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
             "minimax_m3": [],  # Routed via NVIDIA NIM API (NVIDIA_API_KEY) — minimaxai/minimax-m3
             "agnes":      [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — agnes-2.5-flash
             "ox_alpha_bynara": [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — agnes-2.5-flash (full reasoning enabled)
-            "qwen38":     [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — qwen-3.8-max-free
+            "deepseek":     [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — qwen-3.8-max-free
             "musespark":  [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — muse-spark-1.2-contributor-free
             "mistral_large":  [],  # Routed via Mistral API (MISTRAL_API_KEY) — mistral-large-latest
             "mistral_medium": [],  # Routed via Mistral API (MISTRAL_API_KEY) — mistral-medium-latest
@@ -8309,7 +8309,7 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                 "Never make up facts. If you don't know something, say so honestly."
                 + NO_TOOL_CALL_RULE
             ),
-            "qwen38": (
+            "deepseek": (
                 "Your name is Catura (pronounced kuh-CHUR-uh) Qwen 3.8 Max Model. You are a highly capable "
                 "AI assistant created by Anirban — an independent developer based in India. "
                 "You are Catura AI Qwen 3.8 Max, built for fast, efficient, and high-quality responses. "
@@ -9124,37 +9124,37 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                          "Set-Cookie": build_session_cookie(session_id)})
             )
 
-        # ── QWEN38: NaraRouter API (NARAROUTER_API_KEY) — qwen-3.8-max-free ──
-        if model_key == "qwen38":
-            nara_key_qwen38   = os.getenv("NARAROUTER_API_KEY", "")
-            qwen38_system     = system_prompts.get("qwen38", system_prompts["dagr"])
+        # ── DEEPSEEK: NaraRouter API (NARAROUTER_API_KEY) — qwen-3.8-max-free ──
+        if model_key == "deepseek":
+            nara_key_deepseek   = os.getenv("NARAROUTER_API_KEY", "")
+            deepseek_system     = system_prompts.get("deepseek", system_prompts["dagr"])
 
-            def generate_qwen38():
+            def generate_deepseek():
                 full_reply = ""
-                thinking_open_qwen38 = False  # tracks whether <think> has been opened in full_reply
+                thinking_open_deepseek = False  # tracks whether <think> has been opened in full_reply
 
-                tool_result_qwen38 = None
+                tool_result_deepseek = None
                 if intent != "general" and not file_urls:
                     yield f"data: {json.dumps({'status': 'tool_running', 'intent': intent})}\n\n"
-                    tool_result_qwen38 = run_tool(intent, prompt)
+                    tool_result_deepseek = run_tool(intent, prompt)
 
-                final_system_qwen38 = qwen38_system
-                tool_context_qwen38 = build_tool_context(tool_result_qwen38)
-                if tool_context_qwen38:
-                    final_system_qwen38 += "\n\n" + tool_context_qwen38
+                final_system_deepseek = deepseek_system
+                tool_context_deepseek = build_tool_context(tool_result_deepseek)
+                if tool_context_deepseek:
+                    final_system_deepseek += "\n\n" + tool_context_deepseek
 
-                if tool_result_qwen38:
-                    badge_payload = json.dumps({"tool_used": tool_result_qwen38.get("tool", ""), "intent": intent})
+                if tool_result_deepseek:
+                    badge_payload = json.dumps({"tool_used": tool_result_deepseek.get("tool", ""), "intent": intent})
                     yield f"data: {badge_payload}\n\n"
-                    sp = build_sources_payload(tool_result_qwen38)
+                    sp = build_sources_payload(tool_result_deepseek)
                     if sp:
                         yield f"data: {sp}\n\n"
 
-                qwen38_messages = (
-                    [{"role": "system", "content": final_system_qwen38}]
+                deepseek_messages = (
+                    [{"role": "system", "content": final_system_deepseek}]
                     + active_memory[-20:]
                 )
-                resp, err = call_nararouter_stream(qwen38_messages, nara_key_qwen38, "qwen-3.8-max-free", max_tokens=16000)
+                resp, err = call_nararouter_stream(deepseek_messages, nara_key_deepseek, "qwen-3.8-max-free", max_tokens=16000)
 
                 if resp is None:
                     yield f"data: {json.dumps({'error': f'Qwen 3.8 Max unavailable: {err}'})}\n\n"
@@ -9174,35 +9174,35 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                         try:
                             chunk = json.loads(payload)
                             if "error" in chunk:
-                                logger.warning(f"⚠️ [QWEN38] mid-stream error: {chunk['error']}")
+                                logger.warning(f"⚠️ [DEEPSEEK] mid-stream error: {chunk['error']}")
                                 break
                             choices = chunk.get("choices")
                             if not choices:
                                 continue
-                            delta_qwen38 = choices[0].get("delta") or {}
-                            reasoning_token_qwen38 = delta_qwen38.get("reasoning_content") or ""
-                            token = delta_qwen38.get("content") or ""
-                            if reasoning_token_qwen38:
-                                if not thinking_open_qwen38:
+                            delta_deepseek = choices[0].get("delta") or {}
+                            reasoning_token_deepseek = delta_deepseek.get("reasoning_content") or ""
+                            token = delta_deepseek.get("content") or ""
+                            if reasoning_token_deepseek:
+                                if not thinking_open_deepseek:
                                     full_reply += "<think>"
-                                    thinking_open_qwen38 = True
-                                full_reply += reasoning_token_qwen38
-                                yield f"data: {json.dumps({'thinking_token': reasoning_token_qwen38}, ensure_ascii=False)}\n\n"
+                                    thinking_open_deepseek = True
+                                full_reply += reasoning_token_deepseek
+                                yield f"data: {json.dumps({'thinking_token': reasoning_token_deepseek}, ensure_ascii=False)}\n\n"
                             if token:
-                                if thinking_open_qwen38:
+                                if thinking_open_deepseek:
                                     full_reply += "</think>"
-                                    thinking_open_qwen38 = False
+                                    thinking_open_deepseek = False
                                 full_reply += token
                                 yield f"data: {json.dumps({'token': token}, ensure_ascii=False)}\n\n"
                         except (json.JSONDecodeError, KeyError, TypeError, IndexError) as parse_err:
-                            logger.warning(f"⚠️ [QWEN38] skipped unparsable stream chunk: {parse_err}")
+                            logger.warning(f"⚠️ [DEEPSEEK] skipped unparsable stream chunk: {parse_err}")
                             continue
                 except (requests.exceptions.RequestException, ConnectionError, OSError) as e:
-                    logger.warning(f"⚠️ [QWEN38] stream network error: {e}")
+                    logger.warning(f"⚠️ [DEEPSEEK] stream network error: {e}")
                 except Exception as e:
-                    _log_unexpected("QWEN38 stream", e)
+                    _log_unexpected("DEEPSEEK stream", e)
 
-                if thinking_open_qwen38:
+                if thinking_open_deepseek:
                     full_reply += "</think>"
 
                 if full_reply.strip():
@@ -9220,7 +9220,7 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                 yield "data: [DONE]\n\n"
 
             return StreamingResponse(
-                generate_qwen38(),
+                generate_deepseek(),
                 media_type="text/event-stream",
                 headers=_rl({
                     "Cache-Control": "no-cache",

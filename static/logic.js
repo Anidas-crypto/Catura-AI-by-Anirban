@@ -6076,7 +6076,7 @@ const MODEL_ICONS = {
     laguna_core:    'poolside.ico',
     laguna_s:       'poolside.ico',
     mercury2:       'Mercury.png',
-    qwen38:         'qwen.png',
+    deepseek:         'qwen.png',
     musespark:      'meta.png',
     minimax_m3:     'minimax.png',
     mistral_large:  'mistral.png',
@@ -6149,7 +6149,7 @@ window.toggleModelSelector = function (e) {
             dropdown.classList.add('open');
             btn.classList.add('open');
 
-            const moreModels = ['apep', 'gemma', 'gemma4', 'nivo', 'laguna_core', 'laguna_s', 'laguna_lite', 'nemotron','omni','glm','cohere','minimax_m3','agnes','ox_alpha_bynara','qwen38','musespark'];
+            const moreModels = ['apep', 'gemma', 'gemma4', 'nivo', 'laguna_core', 'laguna_s', 'laguna_lite', 'nemotron','omni','glm','cohere','minimax_m3','agnes','ox_alpha_bynara','deepseek','musespark'];
             const puterModelsList = ['claude_puter','gpt5_puter','gemini_puter'];
             if (moreModels.includes(selectedModel)) {
                 requestAnimationFrame(() => {
@@ -6197,7 +6197,7 @@ window.toggleModelSelector = function (e) {
             dropdown.classList.add('open');
             btn.classList.add('open');
 
-            const moreModels = ['apep', 'gemma', 'gemma4', 'nivo', 'laguna_core', 'laguna_s', 'laguna_lite','nemotron','omni', 'cohere','glm','minimax_m3','agnes','ox_alpha_bynara','qwen38','musespark'];
+            const moreModels = ['apep', 'gemma', 'gemma4', 'nivo', 'laguna_core', 'laguna_s', 'laguna_lite','nemotron','omni', 'cohere','glm','minimax_m3','agnes','ox_alpha_bynara','deepseek','musespark'];
             const puterModelsList = ['claude_puter','gpt5_puter','gemini_puter'];
             if (moreModels.includes(selectedModel)) {
                 requestAnimationFrame(() => {
