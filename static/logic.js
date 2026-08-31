@@ -6063,7 +6063,7 @@ let selectedModel = 'dagr'; // Default model — options: dagr, apep, sambhav, G
 
 // ── MODEL ICONS (dropdown list only — the selector button stays plain text) ──
 const MODEL_ICONS = {
-    dagr:           'openai.png',
+    dagr:           'catura.png',
     sambhav:        'meta.png',
     gemini35flash:  'gemini.png',
     agnes:          'agnes-.jpg',
