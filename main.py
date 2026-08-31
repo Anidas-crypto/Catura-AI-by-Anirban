@@ -864,7 +864,7 @@ def share_page(slug: str):
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.473"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.474"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -874,7 +874,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.473", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.474", "timestamp": datetime.utcnow().isoformat()}
 
 # ── 🧠 MEMORY MODELS ────────────────────────────────────────────────────────
 from pydantic import BaseModel as _MemBaseModel
@@ -1073,7 +1073,7 @@ async def mcp_handshake_and_list_tools(url: str, headers: dict | None = None):
     init_result, err = await _mcp_rpc(url, "initialize", {
         "protocolVersion": _MCP_PROTOCOL_VERSION,
         "capabilities": {},
-        "clientInfo": {"name": "Catura AI", "version": "0.0.473"},
+        "clientInfo": {"name": "Catura AI", "version": "0.0.474"},
     }, headers)
     if err:
         return None, err
@@ -5227,8 +5227,8 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
             "gemini35flash": "gemini-3.5-flash-lite",
         }
         model_pools = {
-            "dagr":    ["inclusionai/ling-3.0-flash-fin:free", "openai/gpt-oss-120b:free"],
-            "apep":    ["openai/gpt-oss-120b:free", "inclusionai/ling-3.0-flash-fin:free"],
+            "dagr":    ["inclusionai/ling-3.0-flash-fin:free", "openai/minimax/minimax-m2.7:free:free"],
+            "apep":    ["openai/minimax/minimax-m2.7:free:free", "inclusionai/ling-3.0-flash-fin:free"],
             "sambhav": [],  # Routed via Groq API (qwen/qwen3.6-27b) — see call_sambhav_groq_stream()
             "nivo":    [],  # Routed via Groq API (GROQ_API_KEY) — see generate_nivo()
             "glm":     [],  # Routed via Z.ai API (ZAI_API_KEY) — glm-4.7-flash (free)
@@ -7706,8 +7706,8 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
             "gemini35flash": "gemini-3.5-flash-lite",
         }
         model_pools = {
-            "dagr":    ["inclusionai/ling-3.0-flash-fin:free", "openai/gpt-oss-120b:free"],
-            "apep":    ["openai/gpt-oss-120b:free", "inclusionai/ling-3.0-flash-fin:free"],
+            "dagr":    ["inclusionai/ling-3.0-flash-fin:free", "openai/minimax/minimax-m2.7:free:free"],
+            "apep":    ["openai/minimax/minimax-m2.7:free:free", "inclusionai/ling-3.0-flash-fin:free"],
             "sambhav": [],  # Routed via Groq API (qwen/qwen3.6-27b) — see call_sambhav_groq_stream()
             "nivo":    [],  # Routed via Groq API (GROQ_API_KEY)
             "glm":     [],  # Routed via Z.ai API (ZAI_API_KEY) — glm-4.7-flash (free)
