@@ -6076,7 +6076,7 @@ const MODEL_ICONS = {
     laguna_core:    'poolside.ico',
     laguna_s:       'poolside.ico',
     mercury2:       'Mercury.png',
-    deepseek:         'qwen.png',
+    deepseek:       'deepseek.png',
     musespark:      'meta.png',
     minimax_m3:     'minimax.png',
     mistral_large:  'mistral.png',

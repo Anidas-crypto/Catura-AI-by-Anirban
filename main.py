@@ -864,7 +864,7 @@ def share_page(slug: str):
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.471"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.472"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -874,7 +874,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.471", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.472", "timestamp": datetime.utcnow().isoformat()}
 
 # ── 🧠 MEMORY MODELS ────────────────────────────────────────────────────────
 from pydantic import BaseModel as _MemBaseModel
@@ -1073,7 +1073,7 @@ async def mcp_handshake_and_list_tools(url: str, headers: dict | None = None):
     init_result, err = await _mcp_rpc(url, "initialize", {
         "protocolVersion": _MCP_PROTOCOL_VERSION,
         "capabilities": {},
-        "clientInfo": {"name": "Catura AI", "version": "0.0.471"},
+        "clientInfo": {"name": "Catura AI", "version": "0.0.472"},
     }, headers)
     if err:
         return None, err
@@ -4626,7 +4626,7 @@ def call_zai_stream(messages, api_key):
 
 
 # ============================================================
-# ✅ HELPER: Call NaraRouter — agnes-2.5-flash, ling-3.0-flash-free, qwen-3.8-max-free
+# ✅ HELPER: Call NaraRouter — agnes-2.5-flash, ling-3.0-flash-free, deepseek-v4-flash
 # OpenAI-compatible endpoint at router.bynara.id (NARAROUTER_API_KEY)
 # ============================================================
 class _FakeStreamResponse:
@@ -4696,7 +4696,7 @@ def call_nararouter_stream(messages, api_key, model_id, max_tokens=32768, enable
             return None, err_msg
 
         # ── Fallback for NaraRouter models that ignore "stream": True ──────
-        # Root cause of the "qwen-3.8-max-free works in Colab / OpenAI SDK
+        # Root cause of the "deepseek-v4-flash works in Colab / OpenAI SDK
         # but fails with an empty reply through this backend" bug:
         #
         # The OpenAI SDK (used in the Colab test) auto-detects whether the
@@ -4705,7 +4705,7 @@ def call_nararouter_stream(messages, api_key, model_id, max_tokens=32768, enable
         # other hand, always assumes the body is SSE and only ever looks
         # for lines starting with "data: " (see every `generate_<model>()`
         # function below). Some NaraRouter-hosted models — apparently
-        # qwen-3.8-max-free is one of them, while agnes-2.5-flash is not —
+        # deepseek-v4-flash is one of them, while agnes-2.5-flash is not —
         # silently ignore "stream": true on the free tier and send back a
         # single, complete `application/json` completion instead of an
         # `text/event-stream` body. None of its lines start with "data: ",
@@ -5235,7 +5235,7 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
             "minimax_m3": [],  # Routed via NVIDIA NIM API (NVIDIA_API_KEY) — minimaxai/minimax-m3
             "agnes":      [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — agnes-2.5-flash
             "ox_alpha_bynara": [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — agnes-2.5-flash (full reasoning enabled)
-            "deepseek":     [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — qwen-3.8-max-free
+            "deepseek":     [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — deepseek-v4-flash
             "musespark":  [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — muse-spark-1.2-contributor-free
             "mistral_large":  [],  # Routed via Mistral API (MISTRAL_API_KEY) — mistral-large-latest
             "mistral_medium": [],  # Routed via Mistral API (MISTRAL_API_KEY) — mistral-medium-latest
@@ -6719,7 +6719,7 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                 })
             )
 
-        # ── DEEPSEEK: NaraRouter API (NARAROUTER_API_KEY) — qwen-3.8-max-free ──
+        # ── DEEPSEEK: NaraRouter API (NARAROUTER_API_KEY) — deepseek-v4-flash ──
         if model_key == "deepseek":
             nara_key_deepseek   = os.getenv("NARAROUTER_API_KEY", "")
             deepseek_system     = system_prompts.get("deepseek", system_prompts["dagr"])
@@ -6749,7 +6749,7 @@ async def chat_post(request: Request, auth: dict = Depends(require_auth)):
                     [{"role": "system", "content": final_system_deepseek}]
                     + active_memory[-20:]
                 )
-                resp, err = call_nararouter_stream(deepseek_messages, nara_key_deepseek, "qwen-3.8-max-free", max_tokens=16000)
+                resp, err = call_nararouter_stream(deepseek_messages, nara_key_deepseek, "deepseek-v4-flash", max_tokens=16000)
 
                 if resp is None:
                     yield f"data: {json.dumps({'error': f'Qwen 3.8 Max unavailable: {err}'})}\n\n"
@@ -7714,7 +7714,7 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
             "minimax_m3": [],  # Routed via NVIDIA NIM API (NVIDIA_API_KEY) — minimaxai/minimax-m3
             "agnes":      [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — agnes-2.5-flash
             "ox_alpha_bynara": [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — agnes-2.5-flash (full reasoning enabled)
-            "deepseek":     [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — qwen-3.8-max-free
+            "deepseek":     [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — deepseek-v4-flash
             "musespark":  [],  # Routed via NaraRouter API (NARAROUTER_API_KEY) — muse-spark-1.2-contributor-free
             "mistral_large":  [],  # Routed via Mistral API (MISTRAL_API_KEY) — mistral-large-latest
             "mistral_medium": [],  # Routed via Mistral API (MISTRAL_API_KEY) — mistral-medium-latest
@@ -9124,7 +9124,7 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                          "Set-Cookie": build_session_cookie(session_id)})
             )
 
-        # ── DEEPSEEK: NaraRouter API (NARAROUTER_API_KEY) — qwen-3.8-max-free ──
+        # ── DEEPSEEK: NaraRouter API (NARAROUTER_API_KEY) — deepseek-v4-flash ──
         if model_key == "deepseek":
             nara_key_deepseek   = os.getenv("NARAROUTER_API_KEY", "")
             deepseek_system     = system_prompts.get("deepseek", system_prompts["dagr"])
@@ -9154,7 +9154,7 @@ def chat_get(request: Request, prompt: str, model: str = "dagr"):
                     [{"role": "system", "content": final_system_deepseek}]
                     + active_memory[-20:]
                 )
-                resp, err = call_nararouter_stream(deepseek_messages, nara_key_deepseek, "qwen-3.8-max-free", max_tokens=16000)
+                resp, err = call_nararouter_stream(deepseek_messages, nara_key_deepseek, "deepseek-v4-flash", max_tokens=16000)
 
                 if resp is None:
                     yield f"data: {json.dumps({'error': f'Qwen 3.8 Max unavailable: {err}'})}\n\n"
