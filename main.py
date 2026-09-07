@@ -864,7 +864,7 @@ def share_page(slug: str):
 
 @app.get("/ping")
 def ping():
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.476"}
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat(), "version": "0.0.477"}
 
 @app.get("/google5869a60ba00ea65a.html")
 def google_verify():
@@ -874,7 +874,7 @@ def google_verify():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "version": "0.0.476", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "version": "0.0.477", "timestamp": datetime.utcnow().isoformat()}
 
 # ── 🧠 MEMORY MODELS ────────────────────────────────────────────────────────
 from pydantic import BaseModel as _MemBaseModel
@@ -1073,7 +1073,7 @@ async def mcp_handshake_and_list_tools(url: str, headers: dict | None = None):
     init_result, err = await _mcp_rpc(url, "initialize", {
         "protocolVersion": _MCP_PROTOCOL_VERSION,
         "capabilities": {},
-        "clientInfo": {"name": "Catura AI", "version": "0.0.476"},
+        "clientInfo": {"name": "Catura AI", "version": "0.0.477"},
     }, headers)
     if err:
         return None, err
@@ -4887,42 +4887,100 @@ def call_mistral_stream(messages, api_key, model_id="mistral-large-latest", reas
     """
     if not api_key:
         return None, "MISTRAL_API_KEY not set in environment variables"
-    try:
-        payload = {
-            "model": model_id,
-            "messages": messages,
-            "stream": True,
-            "temperature": 0.7,
-            "max_tokens": 16000,
-        }
-        if reasoning_effort:
-            payload["reasoning_effort"] = reasoning_effort
-        resp = _http.post(
-            "https://api.mistral.ai/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-            stream=True,
-            timeout=(10, 120),
-        )
-        if resp.status_code != 200:
+
+    payload = {
+        "model": model_id,
+        "messages": messages,
+        "stream": True,
+        "temperature": 0.7,
+        "max_tokens": 16000,
+    }
+    if reasoning_effort:
+        payload["reasoning_effort"] = reasoning_effort
+
+    # ── Retry on 429 (rate limit) with short backoff ────────────────────────
+    # Mistral's free/trial tier has tight per-minute limits, so a single 429
+    # doesn't always mean "out of quota for good" — it often clears in a few
+    # seconds. We retry up to 2 times (3 attempts total) honoring the
+    # Retry-After header when present, capped so we never block the request
+    # for more than ~6s total before giving up and surfacing the real error.
+    max_attempts = 3
+    last_err = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            resp = _http.post(
+                "https://api.mistral.ai/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+                stream=True,
+                timeout=(10, 120),
+            )
+            if resp.status_code == 200:
+                return resp, None
+
+            # Pull the real error text out of Mistral's response body instead
+            # of collapsing everything to "HTTP 429" / "HTTP 403" — this is
+            # what actually tells you WHY (invalid key, no model access,
+            # quota exceeded, no payment method on file, etc).
             try:
                 err_body = resp.json()
-                err_msg = err_body.get("error", {}).get("message", f"HTTP {resp.status_code}")
+                detail = (
+                    err_body.get("error", {}).get("message")
+                    if isinstance(err_body.get("error"), dict)
+                    else err_body.get("message") or err_body.get("error")
+                )
             except (ValueError, KeyError, AttributeError):
-                err_msg = f"HTTP {resp.status_code}"
-            return None, err_msg
-        return resp, None
-    except requests.exceptions.Timeout:
-        return None, "Request timed out"
-    except requests.exceptions.RequestException as e:
-        logger.warning(f"⚠️ [call_mistral_stream] network error: {e}")
-        return None, _client_safe_error(e, "call_mistral_stream")
-    except Exception as e:
-        _log_unexpected("call_mistral_stream", e)
-        return None, _client_safe_error(e, "call_mistral_stream")
+                detail = None
+            if not detail:
+                # Body wasn't JSON or had no message field — fall back to
+                # raw text (truncated) so nothing gets silently swallowed.
+                try:
+                    detail = resp.text[:200] or None
+                except Exception:
+                    detail = None
+
+            if resp.status_code == 429:
+                last_err = f"HTTP 429 rate limited{f': {detail}' if detail else ' (check your Mistral plan/quota at console.mistral.ai)'}"
+                if attempt < max_attempts:
+                    retry_after = resp.headers.get("Retry-After")
+                    try:
+                        delay = float(retry_after) if retry_after else 1.5 * attempt
+                    except ValueError:
+                        delay = 1.5 * attempt
+                    delay = min(delay, 5)
+                    logger.warning(
+                        f"⚠️ [call_mistral_stream] 429 on attempt {attempt}/{max_attempts} "
+                        f"for {model_id}, retrying in {delay:.1f}s"
+                    )
+                    time.sleep(delay)
+                    continue
+                return None, last_err
+
+            if resp.status_code == 403:
+                return None, (
+                    f"HTTP 403 forbidden{f': {detail}' if detail else ''} — "
+                    f"your MISTRAL_API_KEY likely doesn't have access to '{model_id}' "
+                    f"on your current Mistral plan. Check model entitlements at console.mistral.ai"
+                )
+            if resp.status_code == 401:
+                return None, f"HTTP 401 unauthorized{f': {detail}' if detail else ' — MISTRAL_API_KEY is invalid or revoked'}"
+
+            return None, f"HTTP {resp.status_code}{f': {detail}' if detail else ''}"
+
+        except requests.exceptions.Timeout:
+            last_err = "Request timed out"
+        except requests.exceptions.RequestException as e:
+            logger.warning(f"⚠️ [call_mistral_stream] network error: {e}")
+            last_err = _client_safe_error(e, "call_mistral_stream")
+            break
+        except Exception as e:
+            _log_unexpected("call_mistral_stream", e)
+            return None, _client_safe_error(e, "call_mistral_stream")
+
+    return None, last_err or "Unknown error calling Mistral API"
 
 
 # ============================================================
